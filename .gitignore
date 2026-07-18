@@ -10,3 +10,4 @@ vault.json
 # OS generated files
 .DS_Store
 *.log
+*.zip
