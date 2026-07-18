@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JENNY AI MINI HUD</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #08080e;
+      --text-main: #ffffff;
+      --text-sub: #94a3b8;
+      --border-glass: rgba(255, 255, 255, 0.12);
+      --font-orbitron: 'Orbitron', sans-serif;
+      --font-rajdhani: 'Rajdhani', sans-serif;
+      --font-code: 'Share Tech Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      background: var(--bg-dark);
+      color: var(--text-main);
+      font-family: var(--font-rajdhani);
+      width: 380px;
+      height: 520px;
+      overflow: hidden;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      border: 1px solid rgba(0, 242, 254, 0.3);
+      border-radius: 20px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.9);
+    }
+
+    /* Header Bar */
+    .mini-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border-glass);
+    }
+
+    .mini-title {
+      font-family: var(--font-orbitron);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      background: linear-gradient(90deg, #ffffff, #00f2fe, #ff007f);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-badge {
+      font-family: var(--font-code);
+      font-size: 10px;
+      color: #00f3ff;
+      background: rgba(0, 243, 255, 0.1);
+      padding: 3px 8px;
+      border-radius: 12px;
+      border: 1px solid rgba(0, 243, 255, 0.3);
+    }
+
+    /* Siri Liquid Orb Stage */
+    .orb-stage {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 10px;
+      background: rgba(15, 15, 25, 0.6);
+      border: 1px solid var(--border-glass);
+      border-radius: 16px;
+      position: relative;
+      gap: 12px;
+    }
+
+    .siri-orb-container {
+      position: relative;
+      width: 90px;
+      height: 90px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .siri-orb-glow {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,242,254,0.7) 0%, rgba(255,0,127,0.5) 50%, rgba(121,40,202,0) 75%);
+      filter: blur(14px);
+      animation: mini-glow-pulse 3s infinite ease-in-out;
+    }
+
+    @keyframes mini-glow-pulse {
+      0%, 100% { transform: scale(0.85); opacity: 0.6; }
+      50% { transform: scale(1.2); opacity: 1; }
+    }
+
+    .siri-orb-core {
+      position: relative;
+      width: 65px;
+      height: 65px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #00f2fe, #ff007f, #7928ca);
+      box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.9), 0 0 30px rgba(0, 242, 254, 0.9);
+      animation: mini-orb-morph 4s infinite alternate ease-in-out;
+    }
+
+    @keyframes mini-orb-morph {
+      0% { border-radius: 50% 50% 50% 50%; transform: rotate(0deg) scale(1); }
+      50% { border-radius: 40% 60% 60% 40%; transform: rotate(180deg) scale(1.08); }
+      100% { border-radius: 60% 40% 50% 50%; transform: rotate(360deg) scale(0.95); }
+    }
+
+    /* Wave Canvas */
+    #mini-wave-canvas {
+      width: 100%;
+      height: 40px;
+      display: block;
+    }
+
+    /* Voice Speak Button */
+    .speak-btn {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(255, 0, 127, 0.2));
+      border: 1px solid rgba(0, 242, 254, 0.5);
+      border-radius: 12px;
+      color: #ffffff;
+      font-family: var(--font-orbitron);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.2s ease;
+    }
+
+    .speak-btn:hover {
+      background: linear-gradient(135deg, rgba(0, 242, 254, 0.4), rgba(255, 0, 127, 0.4));
+      border-color: #00f2fe;
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .speak-btn.listening {
+      background: linear-gradient(135deg, rgba(255, 0, 127, 0.6), rgba(121, 40, 202, 0.6));
+      border-color: #ff007f;
+      box-shadow: 0 0 25px rgba(255, 0, 127, 0.6);
+    }
+
+    /* Response & Transcript Box */
+    .transcript-box {
+      background: rgba(10, 10, 18, 0.8);
+      border: 1px solid var(--border-glass);
+      border-radius: 12px;
+      padding: 12px;
+      flex-grow: 1;
+      overflow-y: auto;
+      font-family: var(--font-code);
+      font-size: 11px;
+      color: #cbd5e1;
+      line-height: 1.5;
+    }
+
+    .transcript-title {
+      font-family: var(--font-orbitron);
+      font-size: 10px;
+      color: #00f2fe;
+      margin-bottom: 6px;
+      letter-spacing: 1px;
+    }
+
+    /* Action Chips */
+    .chips-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .chip-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      padding: 8px;
+      color: var(--text-main);
+      font-family: var(--font-rajdhani);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .chip-btn:hover {
+      background: rgba(0, 242, 254, 0.2);
+      border-color: #00f2fe;
+      color: #ffffff;
+    }
+
+    .chip-btn i {
+      color: #00f2fe;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="mini-header">
+    <div class="mini-title">
+      <i class="fa-solid fa-compact-disc"></i> JENNY MINI HUD
+    </div>
+    <div class="status-badge" id="mini-status-tag">MAC MENU BAR</div>
+  </div>
+
+  <div class="orb-stage">
+    <div class="siri-orb-container" onclick="toggleListening()">
+      <div class="siri-orb-glow" id="mini-orb-glow"></div>
+      <div class="siri-orb-core" id="mini-orb-core"></div>
+    </div>
+    <canvas id="mini-wave-canvas" width="300" height="40"></canvas>
+  </div>
+
+  <button class="speak-btn" id="mini-speak-btn" onclick="toggleListening()">
+    <i class="fa-solid fa-microphone"></i> <span id="speak-btn-text">SPEAK TO JENNY</span>
+  </button>
+
+  <div class="transcript-box" id="mini-transcript">
+    <div class="transcript-title">[ NEURAL STREAM ]</div>
+    <div id="transcript-content">Hi! I am Jenny, your neural assistant. Click the mic button to speak to me, BOSS.</div>
+  </div>
+
+  <div class="chips-grid">
+    <button class="chip-btn" onclick="sendQuickCmd('system report')"><i class="fa-solid fa-chart-pie"></i> Reports</button>
+    <button class="chip-btn" onclick="sendQuickCmd('show todo')"><i class="fa-solid fa-list-check"></i> To-Do</button>
+    <button class="chip-btn" onclick="sendQuickCmd('countdown tracker')"><i class="fa-solid fa-stopwatch"></i> Countdowns</button>
+    <button class="chip-btn" onclick="sendQuickCmd('google api quota')"><i class="fa-solid fa-gauge-high"></i> API Quota</button>
+  </div>
+
+  <script>
+    let isListening = false;
+
+    function toggleListening() {
+      fetch('/api/toggle-mic').then(() => {
+        isListening = !isListening;
+        const btn = document.getElementById('mini-speak-btn');
+        const text = document.getElementById('speak-btn-text');
+        const tag = document.getElementById('mini-status-tag');
+        const trans = document.getElementById('transcript-content');
+
+        if (isListening) {
+          btn.classList.add('listening');
+          text.textContent = 'LISTENING...';
+          tag.textContent = 'LISTENING';
+          tag.style.color = '#ff007f';
+          trans.textContent = 'Listening to your voice command, BOSS...';
+        } else {
+          btn.classList.remove('listening');
+          text.textContent = 'SPEAK TO JENNY';
+          tag.textContent = 'READY';
+          tag.style.color = '#00f3ff';
+        }
+      });
+    }
+
+    function sendQuickCmd(cmd) {
+      document.getElementById('transcript-content').textContent = `Executing command: "${cmd}"...`;
+      fetch('/api/toggle-mic');
+    }
+
+    // 60FPS Wave animation
+    const canvas = document.getElementById('mini-wave-canvas');
+    const ctx = canvas.getContext('2d');
+    let step = 0;
+
+    function animateWave() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      step += 0.08;
+      const amp = isListening ? 12 : 3;
+      const colors = ['rgba(0, 242, 254, 0.8)', 'rgba(255, 0, 127, 0.8)', 'rgba(121, 40, 202, 0.8)'];
+
+      colors.forEach((color, i) => {
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = isListening ? 2 : 1;
+        for (let x = 0; x < canvas.width; x += 4) {
+          const y = canvas.height / 2 + Math.sin(x * 0.04 + step + i) * amp * Math.sin((x / canvas.width) * Math.PI);
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      });
+      requestAnimationFrame(animateWave);
+    }
+    animateWave();
+  </script>
+</body>
+</html>

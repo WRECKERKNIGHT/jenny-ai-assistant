@@ -1,0 +1,32 @@
+{
+  "name": "friday-assistant",
+  "version": "1.0.0",
+  "description": "Jarvis-style personal assistant FRIDAY",
+  "main": "server.js",
+  "bin": {
+    "friday-server": "./server.js",
+    "friday-cli": "./friday-cli.js"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "build-binaries": "npx pkg . --out-path dist",
+    "build-dmg": "bash build-dmg.sh"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  },
+  "pkg": {
+    "assets": [
+      "public/**/*"
+    ],
+    "targets": [
+      "node18-macos-x64",
+      "node18-win-x64"
+    ]
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  }
+}

@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+npm-cache/
+dist/
+
+# Environment and sensitive data
+.env
+vault.json
+
+# OS generated files
+.DS_Store
+*.log
