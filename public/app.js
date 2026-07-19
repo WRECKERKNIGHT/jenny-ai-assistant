@@ -2438,23 +2438,65 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('widget-tutorial').style.display = 'none';
   }
 
-  // Instant Boot & Core Visualizer Initialization
+  // Welcome Overlay click & boot initialization
   const welcomeOverlay = document.getElementById('pre-dashboard-overlay');
   if (welcomeOverlay) {
-    welcomeOverlay.remove();
+    let isBooting = false;
+    
+    function startAppBoot() {
+      if (isBooting) return;
+      isBooting = true;
+      welcomeOverlay.style.pointerEvents = 'none';
+
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+
+      initPermanentCoreVisualizer();
+      playIntroMusic();
+
+      const logsContainer = document.getElementById('welcome-boot-logs');
+      if (logsContainer) {
+        logsContainer.innerHTML = `
+          <div class="boot-line"><span class="success">[ OK ]</span> AUTHORIZATION SIGNATURE ACCEPTED.</div>
+          <div class="boot-line"><span class="loading">[ RUN ]</span> WAKING NEURAL KERNEL MATRIX v6.0...</div>
+        `;
+        setTimeout(() => {
+          logsContainer.innerHTML += `<div class="boot-line"><span class="success">[ OK ]</span> FEMALE SOUND CORE INSTANTIATED: Tia Mirza (-OUBnvvuqEKdDWtapoJFn).</div>`;
+        }, 300);
+        setTimeout(() => {
+          logsContainer.innerHTML += `<div class="boot-line"><span class="success">[ OK ]</span> ALL COGNITIVE SYNAPSE PIPES OPERATIONAL.</div>`;
+        }, 700);
+        setTimeout(() => {
+          logsContainer.innerHTML += `<div class="boot-line"><span class="success" style="color: var(--neon-cyan)">[ READY ] JENNY NEURAL MATRIX ACTIVE.</span></div>`;
+        }, 1100);
+      }
+
+      setTimeout(() => {
+        welcomeOverlay.classList.add('fade-out');
+      }, 1500);
+
+      setTimeout(() => {
+        const greetingText = "Hi, I am Jenny, your neural assistant. All systems are online and fully operational. How can I help you today, BOSS?";
+        speak(greetingText);
+        logToConsole(greetingText, "success");
+        logToMind("[Daily Initialization] " + greetingText);
+        setCoreState('idle');
+      }, 1800);
+
+      setTimeout(() => {
+        welcomeOverlay.remove();
+      }, 2200);
+    }
+
+    welcomeOverlay.addEventListener('click', startAppBoot);
+    const startBtn = document.getElementById('start-button');
+    if (startBtn) {
+      startBtn.addEventListener('click', startAppBoot);
+    }
+  } else {
+    initPermanentCoreVisualizer();
   }
-
-  // Initialize core radial visualizer loop immediately
-  initPermanentCoreVisualizer();
-
-  // Instant Greeting on App Load
-  setTimeout(() => {
-    const greetingText = "Hi, I am Jenny, your neural assistant. All systems are online and fully operational. How can I help you today, BOSS?";
-    logToConsole(greetingText, "success");
-    logToMind("[Daily Initialization] " + greetingText);
-    speak(greetingText);
-    setCoreState('idle');
-  }, 500);
 
   // Siri HUD Overlay Controller & Quick Command Executor
   window.toggleSiriHud = function(show) {
