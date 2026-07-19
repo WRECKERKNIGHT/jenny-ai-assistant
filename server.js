@@ -790,7 +790,7 @@ app.post('/api/tts', async (req, res) => {
 
   const options = {
     hostname: 'api.elevenlabs.io',
-    path: `/v1/text-to-speech/${voiceId}`,
+    path: `/v1/text-to-speech/${voiceId}?optimize_streaming_latency=3`,
     method: 'POST',
     headers: {
       'xi-api-key': elevenKey,

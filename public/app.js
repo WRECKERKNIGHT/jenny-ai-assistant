@@ -247,16 +247,30 @@ function populateVoiceList() {
   // List of high-quality female voice names
   const femaleVoiceKeywords = [
     'samantha', 'victoria', 'veena', 'siri', 'zira', 'aria', 'jenny',
-    'kate', 'serena', 'karen', 'neerja', 'kalpana', 'swara', 'hazel',
-    'fiona', 'moira', 'tessa', 'google us english', 'google uk english female', 'google हिंदी'
+  const femaleVoiceKeywords = [
+    'tia mirza', 'samantha', 'victoria', 'veena', 'zira', 'susan', 'karen', 'moira',
+    'fiona', 'tessa', 'kate', 'serena', 'kalpana', 'swara', 'hazel', 'neerja',
+    'google us english', 'google uk english female', 'google हिंदी', 'rachel', 'bella', 'elli', 'domi', 'nicole'
   ];
 
-  // Filter allowed voices strictly for US, UK, India (English/Hindi)
+  const maleVoiceKeywords = [
+    'alex', 'fred', 'daniel', 'rishi', 'david', 'mark', 'george', 'oliver',
+    'harry', 'james', 'thomas', 'guy', 'brian', 'ralph', 'albert', 'diego',
+    'jorge', 'juan', 'nicolas', 'pablo', 'paolo', 'stefano', 'viktor', 'yuri',
+    'gilles', 'jean', 'male', 'man', 'boy', 'guy', 'bad news', 'bahh', 'bells',
+    'boing', 'bubbles', 'cellos', 'deranged', 'good news', 'hysterical',
+    'pipe organ', 'trinoids', 'whisper', 'zarvox'
+  ];
+
+  // Filter allowed voices strictly for Female voices in US, UK, India (English/Hindi)
   const allowedVoices = voices.filter(v => {
     const lang = (v.lang || '').toLowerCase();
     const name = (v.name || '').toLowerCase();
     
     if (name.includes('compact')) return false;
+
+    // Filter out male voices strictly
+    if (maleVoiceKeywords.some(kw => name.includes(kw))) return false;
 
     return lang.startsWith('en-us') || lang.startsWith('en_us') ||
            lang.startsWith('en-gb') || lang.startsWith('en_gb') ||
@@ -264,31 +278,45 @@ function populateVoiceList() {
            lang.startsWith('hi') || lang.includes('hindi') || lang.includes('india');
   });
 
-  // Sort female voices first
-  allowedVoices.sort((a, b) => {
-    const aName = a.name.toLowerCase();
-    const bName = b.name.toLowerCase();
-    
-    const aIsFemale = femaleVoiceKeywords.some(kw => aName.includes(kw));
-    const bIsFemale = femaleVoiceKeywords.some(kw => bName.includes(kw));
-    
-    if (aIsFemale && !bIsFemale) return -1;
-    if (!aIsFemale && bIsFemale) return 1;
-    return aName.localeCompare(bName);
+  // Categorize into Optgroups
+  const elevenGroup = document.createElement('optgroup');
+  elevenGroup.label = '🌟 ELEVENLABS SOUND TOKENS (Pure Female Audio)';
+
+  const defaultOption = document.createElement('option');
+  defaultOption.value = 'OUBnvvuqEKdDWtapoJFn';
+  defaultOption.setAttribute('data-elevenlabs-id', 'OUBnvvuqEKdDWtapoJFn');
+  defaultOption.textContent = '👑 Tia Mirza (Locked Sound Core Token: -OUBnvvuqEKdDWtapoJFn)';
+  defaultOption.selected = true;
+  elevenGroup.appendChild(defaultOption);
+
+  const extraEleven = [
+    { name: '👩 Rachel (ElevenLabs Female)', id: '21m00Tcm4TlvDq8ikWAM' },
+    { name: '👩 Bella (ElevenLabs Female)', id: 'EXAVITQu4vr4xnSDxMaL' },
+    { name: '👩 Elli (ElevenLabs Female)', id: 'MF3mGyEYCl7XYWbV9V6O' },
+    { name: '👩 Domi (ElevenLabs Female)', id: 'AZnzlk1XvdvUeBnXmlld' },
+    { name: '👩 Nicole (ElevenLabs Female)', id: 'piTKnt1H824mU5qaGomQ' }
+  ];
+
+  extraEleven.forEach(ev => {
+    const opt = document.createElement('option');
+    opt.value = ev.id;
+    opt.setAttribute('data-elevenlabs-id', ev.id);
+    opt.textContent = ev.name;
+    elevenGroup.appendChild(opt);
   });
 
-  // Categorize into Optgroups
+  voiceSelect.appendChild(elevenGroup);
+
   const indiaGroup = document.createElement('optgroup');
-  indiaGroup.label = '🇮🇳 INDIA (Female & Natural English/Hindi)';
+  indiaGroup.label = '🇮🇳 INDIA (Female English/Hindi Browser Voices)';
 
   const usGroup = document.createElement('optgroup');
-  usGroup.label = '🇺🇸 UNITED STATES (Female & Natural English)';
+  usGroup.label = '🇺🇸 UNITED STATES (Female English Browser Voices)';
 
   const ukGroup = document.createElement('optgroup');
-  ukGroup.label = '🇬🇧 UNITED KINGDOM (Female & Natural English)';
+  ukGroup.label = '🇬🇧 UNITED KINGDOM (Female English Browser Voices)';
 
   const savedVoiceName = localStorage.getItem('friday_preferred_voice');
-  let matchedSaved = false;
 
   allowedVoices.forEach(voice => {
     const lang = (voice.lang || '').toLowerCase();
@@ -302,10 +330,9 @@ function populateVoiceList() {
     if (savedVoiceName && voice.name === savedVoiceName) {
       option.selected = true;
       selectedVoice = voice;
-      matchedSaved = true;
     }
 
-    if (lang.includes('in') || name.includes('india') || name.includes('hindi') || name.includes('veena') || name.includes('rishi')) {
+    if (lang.includes('in') || name.includes('india') || name.includes('hindi') || name.includes('veena')) {
       indiaGroup.appendChild(option);
     } else if (lang.includes('gb') || name.includes('uk')) {
       ukGroup.appendChild(option);
@@ -2463,36 +2490,40 @@ window.addEventListener('DOMContentLoaded', () => {
         welcomeInst.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> RUNNING SYSTEM INITIALIZATION SEQUENCES...';
       }
 
-      // Update logs in real-time to match accelerated boot chime
+      // Update logs in real-time for cinematic 6.0s boot sequence
       const logsContainer = document.querySelector('.welcome-boot-logs');
       if (logsContainer) {
         logsContainer.innerHTML = `
           <div class="boot-line"><span class="success">[ OK ]</span> AUTHORIZATION SIGNATURE ACCEPTED.</div>
-          <div class="boot-line"><span class="loading">[ RUN ]</span> WAKING NEURAL CORE INTERFACE...</div>
+          <div class="boot-line"><span class="loading">[ RUN ]</span> WAKING NEURAL KERNEL MATRIX v6.0...</div>
         `;
         
         setTimeout(() => {
-          logsContainer.innerHTML += `<div class="boot-line"><span class="success">[ OK ]</span> CORE COGNITIVE SYNAPSE CHANNELS ACTIVE.</div>`;
-          logsContainer.innerHTML += `<div class="boot-line"><span class="loading">[ RUN ]</span> COMPILING AUDIO CHANNELS & MEMORY PIPES...</div>`;
-        }, 500);
+          logsContainer.innerHTML += `<div class="boot-line"><span class="success">[ OK ]</span> FEMALE SOUND CORE INSTANTIATED: Tia Mirza (-OUBnvvuqEKdDWtapoJFn).</div>`;
+          logsContainer.innerHTML += `<div class="boot-line"><span class="loading">[ RUN ]</span> CALIBRATING ACOUSTIC TRANSLATION PIPES...</div>`;
+        }, 1200);
 
         setTimeout(() => {
-          logsContainer.innerHTML += `<div class="boot-line"><span class="success">[ OK ]</span> ACOUSTIC TRANSLATION CHANNELS ONLINE.</div>`;
-          logsContainer.innerHTML += `<div class="boot-line"><span class="loading">[ RUN ]</span> SYNCHRONIZING WITH macOS BRIDGE PIPES...</div>`;
-        }, 1000);
+          logsContainer.innerHTML += `<div class="boot-line"><span class="success">[ OK ]</span> MAC SPATIAL WINDOWS & GOOGLE AI MATRIX BRIDGES ONLINE.</div>`;
+          logsContainer.innerHTML += `<div class="boot-line"><span class="loading">[ RUN ]</span> INITIALIZING 60FPS SIRI ORB & WAVE VISUALIZERS...</div>`;
+        }, 2600);
 
         setTimeout(() => {
-          logsContainer.innerHTML += `<div class="boot-line"><span class="success">[ OK ]</span> LINK ESTABLISHED. ALL SYSTEMS NOMINAL.</div>`;
-          logsContainer.innerHTML += `<div class="boot-line"><span class="success" style="color: var(--neon-cyan)">[ READY ] FRIDAY CORE ACTIVE</span></div>`;
-        }, 1500);
+          logsContainer.innerHTML += `<div class="boot-line"><span class="success">[ OK ]</span> ALL COGNITIVE SYNAPSE PIPES OPERATIONAL.</div>`;
+          logsContainer.innerHTML += `<div class="boot-line"><span class="loading">[ RUN ]</span> FINALIZING SYSTEM TELEMETRY SYNC...</div>`;
+        }, 4200);
+
+        setTimeout(() => {
+          logsContainer.innerHTML += `<div class="boot-line"><span class="success" style="color: var(--neon-cyan)">[ READY ] JENNY NEURAL MATRIX ACTIVE. ALL SYSTEMS NOMINAL.</span></div>`;
+        }, 5400);
       }
 
-      // Visual transition after music completes (at 2s)
+      // Visual transition after 6 seconds
       setTimeout(() => {
         welcomeOverlay.classList.add('fade-out');
-      }, 2000);
+      }, 6000);
       
-      // Greet BOSS with First-Time-of-the-Day awareness (at 2.3s)
+      // Greet BOSS with expanded greeting (at 6.4s)
       setTimeout(() => {
         const greetingText = "Hi, I am Jenny, your neural assistant. All systems are online and fully operational. How can I help you today, BOSS?";
 
@@ -2500,11 +2531,11 @@ window.addEventListener('DOMContentLoaded', () => {
         logToConsole(greetingText, "success");
         logToMind("[Daily Initialization] " + greetingText);
         setCoreState('idle');
-      }, 2300);
+      }, 6400);
       
       setTimeout(() => {
         welcomeOverlay.remove();
-      }, 2800);
+      }, 6800);
     });
   }
 
