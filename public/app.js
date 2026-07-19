@@ -80,6 +80,7 @@ async function runBoot() {
   startOrb();
   fetchQuota();
   setInterval(fetchQuota, 60000);
+  setInterval(updateTimerDisplay, 1000);
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -375,7 +376,7 @@ function parseCommand(text) {
       'clipboard': 'clipboard', 'clip': 'clipboard', 'copy': 'clipboard',
       'settings': 'settings', 'config': 'settings', 'preferences': 'settings',
       'commands': 'commands', 'cmds': 'commands', 'help': 'commands',
-      'activity': 'activity', 'monitor': 'activity', 'pc activity': 'activity',
+      'activity': 'activity', 'monitor': 'activity', 'pc activity': 'activity', 'system monitor': 'activity',
       'emails': 'emails', 'email': 'emails', 'mail': 'emails', 'inbox': 'emails'
     };
     const matched = panelMap[panel] || panel;
@@ -395,7 +396,79 @@ function parseCommand(text) {
     return { handled: true, response: 'All panels closed.' };
   }
 
+  // Timer: "set a timer for 5 minutes", "timer 30 seconds", "alarm in 2 hours"
+  const timerMatch = t.match(/(?:set\s+)?(?:a\s+)?timer\s+(?:for\s+|in\s+)?(\d+)\s*(seconds?|minutes?|hours?|mins?|hrs?)/i)
+    || t.match(/(?:alarm|remind me)\s+(?:in\s+)?(\d+)\s*(seconds?|minutes?|hours?|mins?|hrs?)/i);
+  if (timerMatch) {
+    const num = parseInt(timerMatch[1], 10);
+    const unit = timerMatch[2].toLowerCase();
+    let secs = num;
+    if (unit.startsWith('min')) secs = num * 60;
+    else if (unit.startsWith('hour') || unit.startsWith('hr')) secs = num * 3600;
+    const label = secs >= 3600 ? `${num} hour${num > 1 ? 's' : ''}` : secs >= 60 ? `${num} min` : `${num} sec`;
+    setFrontendTimer(secs, label);
+    return { handled: true, response: `Timer set for ${label}. I'll let you know when it's up.` };
+  }
+
+  // Quick timer shortcuts
+  if (/^(?:timer|alarm|set timer)\s*$/i.test(t)) {
+    setFrontendTimer(60, '1 min');
+    return { handled: true, response: 'Setting a 1-minute timer.' };
+  }
+
+  // Briefing
+  if (/^(?:briefing|daily briefing|morning briefing|what's the status|give me a briefing)/i.test(t)) {
+    return { handled: true, response: '__FETCH_BRIEFING__' };
+  }
+
   return null;
+}
+
+// Frontend timer system
+let frontendTimers = [];
+
+function setFrontendTimer(seconds, label) {
+  const id = Date.now();
+  const endTime = Date.now() + seconds * 1000;
+  frontendTimers.push({ id, label, endTime, seconds });
+  sfx.confirm();
+  toast(`Timer "${label}" started — ${formatTimerDuration(seconds)}`, 'ok');
+
+  setTimeout(() => {
+    frontendTimers = frontendTimers.filter(t => t.id !== id);
+    toast(`Timer "${label}" is done!`, 'ok');
+    speak(`Timer's up, BOSS. ${label} is done.`);
+    sfx.confirm();
+    setTimeout(() => sfx.confirm(), 200);
+    setTimeout(() => sfx.confirm(), 400);
+  }, seconds * 1000);
+}
+
+function formatTimerDuration(secs) {
+  if (secs >= 3600) return `${Math.floor(secs/3600)}h ${Math.floor((secs%3600)/60)}m`;
+  if (secs >= 60) return `${Math.floor(secs/60)}m ${secs%60}s`;
+  return `${secs}s`;
+}
+
+function updateTimerDisplay() {
+  const pill = document.getElementById('timer-pill');
+  const display = document.getElementById('timer-display');
+  if (!pill || !display) return;
+
+  const now = Date.now();
+  const active = frontendTimers.filter(t => t.endTime > now);
+
+  if (active.length === 0) {
+    pill.classList.add('hidden');
+    return;
+  }
+
+  pill.classList.remove('hidden');
+  const next = active[0];
+  const remaining = Math.max(0, Math.ceil((next.endTime - now) / 1000));
+  const m = Math.floor(remaining / 60);
+  const s = remaining % 60;
+  display.textContent = `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 // ================================================
@@ -769,18 +842,19 @@ function loadCommandsPanel(el) {
   el.innerHTML = `
     <div class="cmd-ref-item"><div class="cc">summon activity / system / weather / emails / processes / vault / clipboard / settings / commands</div><div class="cd">Open a panel</div></div>
     <div class="cmd-ref-item"><div class="cc">close [panel] / close all</div><div class="cd">Dismiss panels</div></div>
+    <div class="cmd-ref-item"><div class="cc">set a timer for 5 minutes / timer 30 seconds</div><div class="cd">Set a timer with voice alert</div></div>
+    <div class="cmd-ref-item"><div class="cc">briefing / daily briefing</div><div class="cd">Get system + weather + time overview</div></div>
+    <div class="cmd-ref-item"><div class="cc">tell me a joke / fun fact / quote</div><div class="cd">Entertainment & motivation</div></div>
+    <div class="cmd-ref-item"><div class="cc">what is 42 * 7 / calculate 100 / 3</div><div class="cd">Quick math</div></div>
     <div class="cmd-ref-item"><div class="cc">lock pc / sleep pc / screenshot</div><div class="cd">System controls</div></div>
     <div class="cmd-ref-item"><div class="cc">volume [0-100] / mute / unmute</div><div class="cd">Audio controls</div></div>
     <div class="cmd-ref-item"><div class="cc">brightness [0-100]</div><div class="cd">Display brightness</div></div>
-    <div class="cmd-ref-item"><div class="cc">open [app name]</div><div class="cd">Launch macOS app</div></div>
+    <div class="cmd-ref-item"><div class="cc">open [app name] / close [app name]</div><div class="cd">Launch or quit macOS app</div></div>
     <div class="cmd-ref-item"><div class="cc">play / pause / next / previous</div><div class="cd">Media controls</div></div>
     <div class="cmd-ref-item"><div class="cc">shutdown / restart</div><div class="cd">Power controls</div></div>
-    <div class="cmd-ref-item"><div class="cc">screenshot</div><div class="cd">Capture screen</div></div>
-    <div class="cmd-ref-item"><div class="cc">remember [fact]</div><div class="cd">Save to vault</div></div>
-    <div class="cmd-ref-item"><div class="cc">what time is it / what's the date</div><div class="cd">Time & date</div></div>
+    <div class="cmd-ref-item"><div class="cc">remember [fact]</div><div class="cd">Save to memory vault</div></div>
     <div class="cmd-ref-item"><div class="cc">check emails / read mail</div><div class="cd">Read emails from Mail.app</div></div>
-    <div class="cmd-ref-item"><div class="cc">weather / what's the weather</div><div class="cd">Get weather info</div></div>
-    <div class="cmd-ref-item"><div class="cc">tell me about [topic]</div><div class="cd">Ask anything</div></div>
+    <div class="cmd-ref-item"><div class="cc">tell me about [topic]</div><div class="cd">Ask anything (needs Gemini API)</div></div>
   `;
 }
 
@@ -812,6 +886,26 @@ async function sendMessage(text) {
 
   const cmd = parseCommand(text);
   if (cmd) {
+    if (cmd.response === '__FETCH_BRIEFING__') {
+      const typing = addTyping();
+      try {
+        const bRes = await fetch('/api/briefing');
+        const bData = await bRes.json();
+        removeTyping();
+        if (bData.success && bData.briefing) {
+          const b = bData.briefing;
+          const briefingText = `${b.greeting}. Here's your briefing for ${b.date} at ${b.time}.\n\nWeather: ${b.weather}\nSystem: ${b.system}\nBattery: ${b.battery}\nMemories stored: ${b.vaultCount}`;
+          addAIMessage(briefingText);
+          speak(`${b.greeting}. It's ${b.time} on ${b.date}. The weather is ${b.weather}. Your system is running at ${b.system}, with battery at ${b.battery}. You have ${b.vaultCount} memories saved.`);
+        } else {
+          addAIMessage('Unable to fetch briefing data, BOSS.');
+        }
+      } catch {
+        removeTyping();
+        addAIMessage('Briefing service is unavailable right now, BOSS.');
+      }
+      return;
+    }
     setTimeout(() => addAIMessage(cmd.response), 300);
     speak(cmd.response);
     return;

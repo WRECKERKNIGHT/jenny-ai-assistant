@@ -152,6 +152,21 @@ html,body {
 }
 .quota-pill i { font-size:8px; color: var(--gold); }
 
+.timer-pill {
+  display:flex; align-items:center; gap:4px;
+  font-size:10px; color: var(--cyan);
+  background: rgba(0,229,255,0.08);
+  border:1px solid rgba(0,229,255,0.2);
+  border-radius:20px;
+  padding:3px 10px;
+  animation: timer-glow 1.5s ease-in-out infinite;
+}
+.timer-pill i { font-size:9px; }
+@keyframes timer-glow {
+  0%,100% { box-shadow: 0 0 0 rgba(0,229,255,0); }
+  50% { box-shadow: 0 0 8px rgba(0,229,255,0.2); }
+}
+
 .dot-pulse {
   width:6px; height:6px; border-radius:50%;
   background: var(--cyan);
