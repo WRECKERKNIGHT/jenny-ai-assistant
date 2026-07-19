@@ -357,6 +357,7 @@ button:active, .btn:active {
    1. INTRO OVERLAY
    ========================================================================== */
 .pre-dashboard-overlay {
+  display: none !important;
   position: fixed;
   top: 0;
   left: 0;

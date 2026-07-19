@@ -1029,19 +1029,10 @@ function logToConsole(text, type = 'system') {
 }
 
 function typewriterPrint(text, container) {
-  let idx = 0;
-  const speed = 10; // 10ms typing speed
-  
-  function type() {
-    if (idx < text.length) {
-      // Handle raw character insertion (including spaces)
-      container.textContent += text.charAt(idx);
-      idx++;
-      consoleLogs.scrollTop = consoleLogs.scrollHeight;
-      setTimeout(type, speed);
-    }
+  container.textContent = text;
+  if (consoleLogs) {
+    consoleLogs.scrollTop = consoleLogs.scrollHeight;
   }
-  type();
 }
 
 // AGENT MIND THOUGHT CONSOLE
@@ -2447,97 +2438,23 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('widget-tutorial').style.display = 'none';
   }
 
-  // Welcome Overlay click logic
+  // Instant Boot & Core Visualizer Initialization
   const welcomeOverlay = document.getElementById('pre-dashboard-overlay');
   if (welcomeOverlay) {
-    // Transition from cinematic intro to interactive mode after 3 seconds
-    setTimeout(() => {
-      const introSeq = welcomeOverlay.querySelector('.intro-sequence');
-      const interactiveEl = welcomeOverlay.querySelector('.welcome-interactive-elements');
-      
-      if (introSeq && interactiveEl) {
-        introSeq.style.transition = 'opacity 0.5s ease';
-        introSeq.style.opacity = '0';
-        setTimeout(() => {
-          introSeq.classList.add('hidden');
-          interactiveEl.classList.remove('hidden');
-          setTimeout(() => {
-            interactiveEl.classList.add('show');
-            welcomeOverlay.classList.remove('intro-mode'); // Enable click-to-start
-          }, 50);
-        }, 500);
-      }
-    }, 3000);
-
-    let isBooting = false;
-    welcomeOverlay.addEventListener('click', () => {
-      if (isBooting) return;
-      isBooting = true;
-      welcomeOverlay.style.pointerEvents = 'none'; // Disable double-clicking bugs
-      
-      if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
-      
-      // Initialize dynamic core radial visualizer loop
-      initPermanentCoreVisualizer();
-      
-      playIntroMusic();
-      
-      // Update welcome instruction
-      const welcomeInst = document.querySelector('.welcome-instruction');
-      if (welcomeInst) {
-        welcomeInst.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> RUNNING SYSTEM INITIALIZATION SEQUENCES...';
-      }
-
-      // Update logs in real-time for cinematic 6.0s boot sequence
-      const logsContainer = document.querySelector('.welcome-boot-logs');
-      if (logsContainer) {
-        logsContainer.innerHTML = `
-          <div class="boot-line"><span class="success">[ OK ]</span> AUTHORIZATION SIGNATURE ACCEPTED.</div>
-          <div class="boot-line"><span class="loading">[ RUN ]</span> WAKING NEURAL KERNEL MATRIX v6.0...</div>
-        `;
-        
-        setTimeout(() => {
-          logsContainer.innerHTML += `<div class="boot-line"><span class="success">[ OK ]</span> FEMALE SOUND CORE INSTANTIATED: Tia Mirza (-OUBnvvuqEKdDWtapoJFn).</div>`;
-          logsContainer.innerHTML += `<div class="boot-line"><span class="loading">[ RUN ]</span> CALIBRATING ACOUSTIC TRANSLATION PIPES...</div>`;
-        }, 1200);
-
-        setTimeout(() => {
-          logsContainer.innerHTML += `<div class="boot-line"><span class="success">[ OK ]</span> MAC SPATIAL WINDOWS & GOOGLE AI MATRIX BRIDGES ONLINE.</div>`;
-          logsContainer.innerHTML += `<div class="boot-line"><span class="loading">[ RUN ]</span> INITIALIZING 60FPS SIRI ORB & WAVE VISUALIZERS...</div>`;
-        }, 2600);
-
-        setTimeout(() => {
-          logsContainer.innerHTML += `<div class="boot-line"><span class="success">[ OK ]</span> ALL COGNITIVE SYNAPSE PIPES OPERATIONAL.</div>`;
-          logsContainer.innerHTML += `<div class="boot-line"><span class="loading">[ RUN ]</span> FINALIZING SYSTEM TELEMETRY SYNC...</div>`;
-        }, 4200);
-
-        setTimeout(() => {
-          logsContainer.innerHTML += `<div class="boot-line"><span class="success" style="color: var(--neon-cyan)">[ READY ] JENNY NEURAL MATRIX ACTIVE. ALL SYSTEMS NOMINAL.</span></div>`;
-        }, 5400);
-      }
-
-      // Visual transition after 6 seconds
-      setTimeout(() => {
-        welcomeOverlay.classList.add('fade-out');
-      }, 6000);
-      
-      // Greet BOSS with expanded greeting (at 6.4s)
-      setTimeout(() => {
-        const greetingText = "Hi, I am Jenny, your neural assistant. All systems are online and fully operational. How can I help you today, BOSS?";
-
-        speak(greetingText);
-        logToConsole(greetingText, "success");
-        logToMind("[Daily Initialization] " + greetingText);
-        setCoreState('idle');
-      }, 6400);
-      
-      setTimeout(() => {
-        welcomeOverlay.remove();
-      }, 6800);
-    });
+    welcomeOverlay.remove();
   }
+
+  // Initialize core radial visualizer loop immediately
+  initPermanentCoreVisualizer();
+
+  // Instant Greeting on App Load
+  setTimeout(() => {
+    const greetingText = "Hi, I am Jenny, your neural assistant. All systems are online and fully operational. How can I help you today, BOSS?";
+    logToConsole(greetingText, "success");
+    logToMind("[Daily Initialization] " + greetingText);
+    speak(greetingText);
+    setCoreState('idle');
+  }, 500);
 
   // Siri HUD Overlay Controller & Quick Command Executor
   window.toggleSiriHud = function(show) {
