@@ -33,7 +33,7 @@
     <header class="hdr">
       <div class="hdr-l">
         <span class="logo">F.R.I.D.A.Y.</span>
-        <span class="ver">v2.5</span>
+        <span class="ver">v3.0</span>
         <span class="mode-badge" id="mode-badge">OFFLINE</span>
       </div>
       <div class="hdr-r">
@@ -50,11 +50,23 @@
       </div>
     </header>
 
-    <!-- ORB STAGE -->
+    <!-- ORB STAGE — Large holographic mic button -->
     <div class="orb-stage" id="orb-stage">
-      <canvas id="orb-canvas" width="400" height="400"></canvas>
+      <canvas id="orb-canvas" width="500" height="500"></canvas>
+      <div class="orb-click-zone" id="orb-click" title="Click to talk">
+        <i class="fa-solid fa-microphone mic-icon"></i>
+      </div>
       <div class="orb-status" id="orb-status">STANDBY</div>
-      <div class="orb-label" id="orb-label">Say something or type a command</div>
+      <div class="orb-label" id="orb-label">Tap the orb or type a command</div>
+      <div class="speech-waves" id="speech-waves">
+        <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="wave-bar"></div><div class="wave-bar"></div>
+      </div>
     </div>
 
     <!-- CHAT AREA -->
@@ -66,7 +78,6 @@
     <div class="input-bar">
       <button class="mic" id="mic-btn" title="Toggle Microphone">
         <i class="fa-solid fa-microphone"></i>
-        <div class="mic-ring"></div>
       </button>
       <div class="txt-wrap">
         <input type="text" id="chat-input" placeholder="Speak or type a command..." autocomplete="off">
@@ -84,14 +95,13 @@
       <button class="dock-btn" data-panel="vault" title="Memory Vault"><i class="fa-solid fa-database"></i></button>
       <button class="dock-btn" data-panel="clipboard" title="Clipboard"><i class="fa-solid fa-clipboard"></i></button>
       <button class="dock-btn" data-panel="settings" title="Settings"><i class="fa-solid fa-gear"></i></button>
-      <button class="dock-btn" data-panel="commands" title="All Commands"><i class="fa-solid fa-terminal"></i></button>
+      <button class="dock-btn" data-panel="commands" title="Commands"><i class="fa-solid fa-terminal"></i></button>
     </nav>
 
-    <!-- PANELS (glassmorphic) -->
+    <!-- PANELS -->
     <div class="panels" id="panels"></div>
   </div>
 
-  <!-- TOASTS -->
   <div class="toasts" id="toasts"></div>
 
   <script src="app.js"></script>
