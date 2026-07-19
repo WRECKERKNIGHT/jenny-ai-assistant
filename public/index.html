@@ -23,41 +23,56 @@
     <div class="boot-logs" id="boot-logs"></div>
   </div>
 
-  <!-- MAIN APP -->
+  <!-- MAIN APP — Split Layout -->
   <div id="main-app" style="display:none">
     <div class="scanlines"></div>
     <div class="holographic"></div>
     <div class="mouse-glow" id="mouse-glow"></div>
 
-    <!-- HEADER -->
-    <header class="hdr">
-      <div class="hdr-l">
-        <span class="logo">F.R.I.D.A.Y.</span>
-        <span class="ver">v3.0</span>
-        <span class="mode-badge" id="mode-badge">OFFLINE</span>
+    <!-- LEFT PANEL — Holographic Command Center -->
+    <aside class="holo-panel" id="holo-panel">
+      <div class="holo-bg">
+        <div class="holo-grid"></div>
+        <div class="holo-glow"></div>
+        <div class="holo-scanline"></div>
       </div>
-      <div class="hdr-r">
-        <span class="quota-pill" id="quota-pill" title="Gemini API Quota">
+
+      <div class="holo-header">
+        <span class="mode-badge" id="mode-badge">OFFLINE</span>
+        <span class="quota-pill" id="quota-pill">
           <i class="fa-solid fa-bolt"></i>
           <span id="quota-rpm">--/--</span> RPM
         </span>
-        <span class="timer-pill hidden" id="timer-pill" title="Active Timer">
-          <i class="fa-solid fa-stopwatch"></i>
-          <span id="timer-display">0:00</span>
-        </span>
-        <span class="dot-pulse" id="status-dot"></span>
-        <span id="clock">00:00:00</span>
       </div>
-    </header>
 
-    <!-- ORB STAGE — Large holographic mic button -->
-    <div class="orb-stage" id="orb-stage">
-      <canvas id="orb-canvas" width="500" height="500"></canvas>
-      <div class="orb-click-zone" id="orb-click" title="Click to talk">
-        <i class="fa-solid fa-microphone mic-icon"></i>
+      <!-- ORB -->
+      <div class="holo-orb-stage" id="orb-stage">
+        <canvas id="orb-canvas" width="500" height="500"></canvas>
+        <div class="orb-click-zone" id="orb-click" title="Click to talk">
+          <i class="fa-solid fa-microphone mic-icon"></i>
+        </div>
+
+        <!-- Holographic projection lines above orb -->
+        <div class="holo-projection">
+          <div class="proj-line"></div>
+          <div class="proj-line"></div>
+          <div class="proj-line"></div>
+          <div class="proj-line"></div>
+          <div class="proj-line"></div>
+        </div>
+
+        <!-- RGB split glow -->
+        <div class="orb-rgb-glow" id="orb-rgb-glow">
+          <div class="rgb-r"></div>
+          <div class="rgb-g"></div>
+          <div class="rgb-b"></div>
+        </div>
       </div>
-      <div class="orb-status" id="orb-status">STANDBY</div>
-      <div class="orb-label" id="orb-label">Tap the orb or type a command</div>
+
+      <div class="holo-status" id="holo-status">STANDBY</div>
+      <div class="holo-label" id="holo-label">Tap the orb or type a command</div>
+
+      <!-- Speech detector waves -->
       <div class="speech-waves" id="speech-waves">
         <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
         <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
@@ -67,38 +82,60 @@
         <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
         <div class="wave-bar"></div><div class="wave-bar"></div>
       </div>
-    </div>
 
-    <!-- CHAT AREA -->
-    <main class="chat-area" id="chat-area">
-      <div class="msgs" id="msgs"></div>
+      <!-- Mic button -->
+      <button class="holo-mic-btn" id="holo-mic-btn" title="Toggle Microphone">
+        <i class="fa-solid fa-microphone"></i>
+        <div class="mic-ring-outer"></div>
+        <div class="mic-ring-inner"></div>
+      </button>
+
+      <!-- Timer pill -->
+      <div class="timer-pill hidden" id="timer-pill">
+        <i class="fa-solid fa-stopwatch"></i>
+        <span id="timer-display">0:00</span>
+      </div>
+
+      <!-- Dock -->
+      <nav class="holo-dock" id="holo-dock">
+        <button class="dock-btn" data-panel="activity" title="PC Activity"><i class="fa-solid fa-chart-line"></i></button>
+        <button class="dock-btn" data-panel="system" title="System"><i class="fa-solid fa-microchip"></i></button>
+        <button class="dock-btn" data-panel="weather" title="Weather"><i class="fa-solid fa-cloud-sun"></i></button>
+        <button class="dock-btn" data-panel="emails" title="Emails"><i class="fa-solid fa-envelope"></i></button>
+        <button class="dock-btn" data-panel="processes" title="Processes"><i class="fa-solid fa-list-ol"></i></button>
+        <button class="dock-btn" data-panel="vault" title="Vault"><i class="fa-solid fa-database"></i></button>
+        <button class="dock-btn" data-panel="clipboard" title="Clipboard"><i class="fa-solid fa-clipboard"></i></button>
+        <button class="dock-btn" data-panel="settings" title="Settings"><i class="fa-solid fa-gear"></i></button>
+        <button class="dock-btn" data-panel="commands" title="Commands"><i class="fa-solid fa-terminal"></i></button>
+      </nav>
+    </aside>
+
+    <!-- RIGHT PANEL — Chat & Output -->
+    <main class="chat-panel" id="chat-panel">
+      <header class="hdr">
+        <div class="hdr-l">
+          <span class="logo">F.R.I.D.A.Y.</span>
+          <span class="ver">v3.5</span>
+        </div>
+        <div class="hdr-r">
+          <span class="dot-pulse" id="status-dot"></span>
+          <span id="hdr-clock">00:00:00</span>
+        </div>
+      </header>
+
+      <div class="chat-area" id="chat-area">
+        <div class="msgs" id="msgs"></div>
+      </div>
+
+      <div class="input-bar">
+        <div class="txt-wrap">
+          <input type="text" id="chat-input" placeholder="Type a command or ask anything..." autocomplete="off">
+          <button class="send" id="send-btn"><i class="fa-solid fa-arrow-up"></i></button>
+        </div>
+      </div>
     </main>
 
-    <!-- INPUT BAR -->
-    <div class="input-bar">
-      <button class="mic" id="mic-btn" title="Toggle Microphone">
-        <i class="fa-solid fa-microphone"></i>
-      </button>
-      <div class="txt-wrap">
-        <input type="text" id="chat-input" placeholder="Speak or type a command..." autocomplete="off">
-        <button class="send" id="send-btn"><i class="fa-solid fa-arrow-up"></i></button>
-      </div>
-    </div>
-
-    <!-- DOCK -->
-    <nav class="dock" id="dock">
-      <button class="dock-btn" data-panel="activity" title="PC Activity"><i class="fa-solid fa-chart-line"></i></button>
-      <button class="dock-btn" data-panel="system" title="System Info"><i class="fa-solid fa-microchip"></i></button>
-      <button class="dock-btn" data-panel="weather" title="Weather"><i class="fa-solid fa-cloud-sun"></i></button>
-      <button class="dock-btn" data-panel="emails" title="Emails"><i class="fa-solid fa-envelope"></i></button>
-      <button class="dock-btn" data-panel="processes" title="Processes"><i class="fa-solid fa-list-ol"></i></button>
-      <button class="dock-btn" data-panel="vault" title="Memory Vault"><i class="fa-solid fa-database"></i></button>
-      <button class="dock-btn" data-panel="clipboard" title="Clipboard"><i class="fa-solid fa-clipboard"></i></button>
-      <button class="dock-btn" data-panel="settings" title="Settings"><i class="fa-solid fa-gear"></i></button>
-      <button class="dock-btn" data-panel="commands" title="Commands"><i class="fa-solid fa-terminal"></i></button>
-    </nav>
-
-    <!-- PANELS -->
+    <!-- PANELS (floating glassmorphic) -->
     <div class="panels" id="panels"></div>
   </div>
 

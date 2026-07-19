@@ -1,8 +1,8 @@
 // ================================================
-// F.R.I.D.A.Y. — Core Application v3.0
+// F.R.I.D.A.Y. — Core Application v4.0
+// Split-Screen Holographic Layout
 // ================================================
 
-// AUDIO
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx;
 function getCtx() { if (!audioCtx) audioCtx = new AudioCtx(); return audioCtx; }
@@ -76,13 +76,15 @@ async function runBoot() {
   await sleep(500);
 
   document.getElementById('boot-screen').classList.add('done');
-  document.getElementById('main-app').style.display = 'flex';
+  const app = document.getElementById('main-app');
+  app.style.display = 'flex';
 
   await sleep(100);
   addAIMessage(getGreeting());
   startClock();
   startOrb();
   initSpeechWaves();
+  startHoloShimmer();
   fetchQuota();
   setInterval(fetchQuota, 60000);
   setInterval(updateTimerDisplay, 1000);
@@ -94,9 +96,33 @@ function getGreeting() {
   const h = new Date().getHours();
   const name = loadOfflineMemory().name;
   const who = name ? ` ${name}` : '';
-  if (h < 12) return `Good morning${who}. I am FRIDAY, your personal assistant. All systems are operational. What are we doing today, BOSS?`;
-  if (h < 17) return `Good afternoon${who}. I am FRIDAY, your personal assistant. All systems are green. What are we doing today, BOSS?`;
-  return `Good evening${who}. I am FRIDAY, your personal assistant. Systems are online. What are we doing today, BOSS?`;
+  if (h < 12) return `Good morning${who}. All systems are operational. What are we doing today, BOSS?`;
+  if (h < 17) return `Good afternoon${who}. All systems are green. What are we doing today, BOSS?`;
+  return `Good evening${who}. Systems are online. What are we doing today, BOSS?`;
+}
+
+// ================================================
+// HOLOGRAPHIC SHIMMER — RGB split on orb
+// ================================================
+function startHoloShimmer() {
+  const glow = document.querySelector('.orb-rgb-glow');
+  if (!glow) return;
+  const r = glow.querySelector('.rgb-r');
+  const g = glow.querySelector('.rgb-g');
+  const b = glow.querySelector('.rgb-b');
+  let t = 0;
+  function animate() {
+    t += 0.015;
+    const ox1 = Math.sin(t * 1.1) * 6;
+    const oy1 = Math.cos(t * 0.9) * 4;
+    const ox2 = Math.sin(t * 0.7 + 2) * 5;
+    const oy2 = Math.cos(t * 1.3 + 1) * 5;
+    r.style.transform = `translate(${ox1}px, ${oy1}px)`;
+    g.style.transform = `translate(${ox2}px, ${-oy1}px)`;
+    b.style.transform = `translate(${-ox1}px, ${oy2}px)`;
+    requestAnimationFrame(animate);
+  }
+  animate();
 }
 
 // ================================================
@@ -122,7 +148,6 @@ function startOrb() {
     const isThinking = orbState === 'thinking';
     const isSpeaking = orbState === 'speaking';
 
-    // Outer rings (holographic)
     for (let ring = 0; ring < 4; ring++) {
       const r = 70 + ring * 28;
       const segments = 64;
@@ -141,14 +166,12 @@ function startOrb() {
         else ctx.lineTo(px, py);
       }
       ctx.closePath();
-
       const alpha = isIdle ? 0.03 + ring * 0.01 : 0.06 + ring * 0.03;
       ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
       ctx.lineWidth = isIdle ? 0.5 : 1;
       ctx.stroke();
     }
 
-    // Inner rotating arcs
     for (let a = 0; a < 3; a++) {
       const innerR = 42 + a * 8;
       const arcSpan = isListening ? Math.PI * 1.5 : (isSpeaking ? Math.PI : Math.PI * 0.6);
@@ -160,7 +183,6 @@ function startOrb() {
       ctx.stroke();
     }
 
-    // Core orb
     const coreR = isIdle ? 32 : (isListening ? 38 : (isSpeaking ? 42 : 35));
     const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
 
@@ -173,13 +195,11 @@ function startOrb() {
       grad.addColorStop(0.5, 'rgba(200,200,220,0.15)');
       grad.addColorStop(1, 'rgba(200,200,220,0)');
     } else if (isSpeaking) {
-      const pulseR = coreR + Math.sin(t * 3.5) * 5;
       grad.addColorStop(0, 'rgba(255,255,255,0.8)');
       grad.addColorStop(0.4, 'rgba(255,255,255,0.3)');
       grad.addColorStop(1, 'rgba(255,255,255,0)');
-      // Outer pulse
       ctx.beginPath();
-      ctx.arc(cx, cy, pulseR + 10, 0, Math.PI * 2);
+      ctx.arc(cx, cy, coreR + Math.sin(t * 3.5) * 5 + 10, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(255,255,255,0.03)';
       ctx.fill();
     } else {
@@ -193,7 +213,6 @@ function startOrb() {
     ctx.fillStyle = grad;
     ctx.fill();
 
-    // Floating particles
     if (!isIdle) {
       const count = isSpeaking ? 12 : 6;
       for (let i = 0; i < count; i++) {
@@ -217,12 +236,12 @@ function startOrb() {
 
 function setOrbState(state) {
   orbState = state;
-  const statusEl = document.getElementById('orb-status');
-  const labelEl = document.getElementById('orb-label');
+  const statusEl = document.getElementById('holo-status');
+  const labelEl = document.getElementById('holo-label');
   const clickZone = document.getElementById('orb-click');
   if (statusEl) {
     statusEl.textContent = state.toUpperCase();
-    statusEl.className = 'orb-status' + (state === 'listening' ? ' listening' : state === 'speaking' ? ' speaking' : '');
+    statusEl.className = 'holo-status' + (state === 'listening' ? ' listening' : state === 'speaking' ? ' speaking' : '');
   }
   if (labelEl) {
     const labels = {
@@ -287,7 +306,8 @@ function stopSpeechWaves() {
 // CLOCK
 // ================================================
 function startClock() {
-  const el = document.getElementById('clock');
+  const el = document.getElementById('hdr-clock');
+  if (!el) return;
   function tick() {
     el.textContent = new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
   }
@@ -448,7 +468,6 @@ function parseCommand(text) {
     return { handled: true, response: 'All panels closed, BOSS.' };
   }
 
-  // Timer
   const timerMatch = t.match(/(?:set\s+)?(?:a\s+)?timer\s+(?:for\s+|in\s+)?(\d+)\s*(seconds?|minutes?|hours?|mins?|hrs?)/i)
     || t.match(/(?:alarm|remind me)\s+(?:in\s+)?(\d+)\s*(seconds?|minutes?|hours?|mins?|hrs?)/i);
   if (timerMatch) {
@@ -467,7 +486,6 @@ function parseCommand(text) {
     return { handled: true, response: 'Setting a 1-minute timer, BOSS.' };
   }
 
-  // Briefing
   if (/^(?:briefing|daily briefing|morning briefing|what'?s the status|give me a briefing)/i.test(t)) {
     return { handled: true, response: '__FETCH_BRIEFING__' };
   }
@@ -588,7 +606,7 @@ async function loadPanelContent(name) {
 }
 
 // ================================================
-// PANEL LOADERS — With visual graphs
+// PANEL LOADERS
 // ================================================
 
 function makeCircularGauge(pct, label) {
@@ -997,7 +1015,6 @@ function speak(text) {
   const mem = loadOfflineMemory();
   const voiceId = mem.voiceId || '21m00Tcm4TlvDq8ikWAM';
 
-  // Web Speech voices
   if (voiceId.startsWith('web-')) {
     speakWeb(text, voiceId.replace('web-', ''));
     return;
@@ -1050,7 +1067,8 @@ function speakWeb(text, voiceName) {
 let recognition = null;
 let isListening = false;
 let micStream = null;
-const micBtn = document.getElementById('mic-btn');
+
+const micBtn = document.getElementById('holo-mic-btn');
 const orbClick = document.getElementById('orb-click');
 
 function initRecognition() {
@@ -1078,7 +1096,6 @@ async function startListening() {
   setOrbState('listening');
   sfx.confirm();
 
-  // Start mic stream for visualizer
   try {
     micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     startSpeechWaves(micStream);
@@ -1116,7 +1133,7 @@ if ('speechSynthesis' in window) {
 // ================================================
 // DOCK
 // ================================================
-document.getElementById('dock').addEventListener('click', (e) => {
+document.getElementById('holo-dock').addEventListener('click', (e) => {
   const btn = e.target.closest('.dock-btn');
   if (!btn) return;
   const panel = btn.dataset.panel;
