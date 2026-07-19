@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>F.R.I.D.A.Y.</title>
+  <title>J.E.N.N.Y.</title>
+  <link rel="icon" href="logo.png">
+  <link rel="apple-touch-icon" href="logo.png">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
@@ -18,7 +20,7 @@
     </div>
     <div class="boot-orb"></div>
     <h1 class="boot-title" id="boot-title"></h1>
-    <p class="boot-sub" id="boot-sub">FEMALE REPLACEMENT INTELLIGENT DIGITAL ASSISTANT YIELDING</p>
+    <p class="boot-sub" id="boot-sub">JUST ENHANCED NEURAL NETWORK YIELDING</p>
     <div class="boot-bar-track"><div class="boot-bar-fill" id="boot-bar"></div></div>
     <div class="boot-logs" id="boot-logs"></div>
   </div>
@@ -45,7 +47,6 @@
         </span>
       </div>
 
-      <!-- TOP HALF — System Monitor -->
       <div class="sys-monitor" id="sys-monitor">
         <div class="sys-graph-row">
           <div class="sys-graph-card">
@@ -76,7 +77,7 @@
           </div>
           <div class="sys-graph-card">
             <div class="sys-graph-header">
-              <span class="sys-graph-label">NETWORK</span>
+              <span class="sys-graph-label">NET</span>
               <span class="sys-graph-val" id="sys-net-val">--</span>
             </div>
             <canvas class="sys-sparkline" id="spark-net" width="200" height="50"></canvas>
@@ -90,7 +91,6 @@
         </div>
       </div>
 
-      <!-- BOTTOM HALF — Orb & Controls -->
       <div class="orb-section">
         <div class="holo-orb-stage" id="orb-stage">
           <canvas id="orb-canvas" width="500" height="500"></canvas>
@@ -147,13 +147,18 @@
     <main class="chat-panel" id="chat-panel">
       <header class="hdr">
         <div class="hdr-l">
-          <span class="logo">F.R.I.D.A.Y.</span>
-          <span class="ver">v4.0</span>
+          <img src="logo.png" class="hdr-logo" alt="JENNY">
+          <span class="logo">J.E.N.N.Y.</span>
+          <span class="ver" id="app-version">v1.0</span>
         </div>
         <div class="hdr-r">
+          <span class="hdr-conn-status" id="hdr-conn-status">
+            <span class="dot-pulse" id="status-dot"></span>
+            <span id="status-text">connecting</span>
+          </span>
+          <span class="hdr-sep">|</span>
           <span class="hdr-date" id="hdr-date"></span>
           <span class="hdr-sep">|</span>
-          <span class="dot-pulse" id="status-dot"></span>
           <span id="hdr-clock">00:00:00</span>
         </div>
       </header>
@@ -171,23 +176,64 @@
           <i class="fa-solid fa-clock"></i>
           <span id="ambient-uptime-text">Uptime --</span>
         </div>
+        <div class="ambient-chip" id="ambient-ping">
+          <i class="fa-solid fa-signal"></i>
+          <span id="ambient-ping-text">--ms</span>
+        </div>
       </div>
 
       <div class="chat-area" id="chat-area">
-        <div class="msgs" id="msgs"></div>
+        <div class="particle-bg" id="particle-bg"></div>
+        <div class="chat-scroll" id="chat-scroll">
+          <div class="msgs" id="msgs"></div>
+        </div>
+        <div class="welcome-screen" id="welcome-screen">
+          <div class="welcome-orb"></div>
+          <div class="welcome-title">J.E.N.N.Y.</div>
+          <div class="welcome-sub">What can I help you with, BOSS?</div>
+          <div class="welcome-actions">
+            <button class="welcome-card" data-cmd="briefing">
+              <i class="fa-solid fa-clipboard-list"></i>
+              <span class="wc-title">Briefing</span>
+              <span class="wc-desc">Full system overview</span>
+            </button>
+            <button class="welcome-card" data-cmd="what's the weather">
+              <i class="fa-solid fa-cloud-sun"></i>
+              <span class="wc-title">Weather</span>
+              <span class="wc-desc">Current conditions</span>
+            </button>
+            <button class="welcome-card" data-cmd="set a timer for 5 minutes">
+              <i class="fa-solid fa-stopwatch"></i>
+              <span class="wc-title">Timer</span>
+              <span class="wc-desc">Set a countdown</span>
+            </button>
+            <button class="welcome-card" data-cmd="check emails">
+              <i class="fa-solid fa-envelope"></i>
+              <span class="wc-title">Emails</span>
+              <span class="wc-desc">Check inbox</span>
+            </button>
+            <button class="welcome-card" data-cmd="open commands">
+              <i class="fa-solid fa-terminal"></i>
+              <span class="wc-title">Commands</span>
+              <span class="wc-desc">All available</span>
+            </button>
+            <button class="welcome-card" data-cmd="tell me a joke">
+              <i class="fa-solid fa-face-laugh"></i>
+              <span class="wc-title">Entertain</span>
+              <span class="wc-desc">Jokes &amp; facts</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="input-bar">
-        <div class="quick-actions">
-          <button class="qa-chip" data-cmd="briefing"><i class="fa-solid fa-clipboard-list"></i> Briefing</button>
-          <button class="qa-chip" data-cmd="what's the weather"><i class="fa-solid fa-cloud-sun"></i> Weather</button>
-          <button class="qa-chip" data-cmd="set a timer for 5 minutes"><i class="fa-solid fa-stopwatch"></i> Timer</button>
-          <button class="qa-chip" data-cmd="check emails"><i class="fa-solid fa-envelope"></i> Emails</button>
-          <button class="qa-chip" data-cmd="open commands"><i class="fa-solid fa-terminal"></i> Commands</button>
-          <button class="qa-chip" data-cmd="tell me a joke"><i class="fa-solid fa-face-laugh"></i> Joke</button>
+        <div class="input-stats" id="input-stats">
+          <span id="char-count">0</span>
+          <span class="input-sep">|</span>
+          <span id="word-count">0 words</span>
         </div>
         <div class="txt-wrap">
-          <input type="text" id="chat-input" placeholder="Type a command or ask anything..." autocomplete="off">
+          <input type="text" id="chat-input" placeholder="Ask me anything, BOSS..." autocomplete="off">
           <button class="send" id="send-btn"><i class="fa-solid fa-arrow-up"></i></button>
         </div>
       </div>
