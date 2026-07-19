@@ -4,6 +4,7 @@ const { exec } = require('child_process');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const https = require('https');
 require('dotenv').config();
 
 const app = express();
@@ -355,9 +356,272 @@ app.post('/api/control', (req, res) => {
       });
       break;
 
+    case 'clipboard-read':
+      exec('pbpaste', (err, stdout) => {
+        if (err) return res.json({ success: false, error: err.message });
+        res.json({ success: true, content: stdout || '', message: 'Clipboard contents retrieved.' });
+      });
+      break;
+
+    case 'clipboard-write':
+      if (!value) return res.status(400).json({ success: false, message: 'Text content is required.' });
+      const clipText = typeof value === 'string' ? value : (value.text || '');
+      if (!clipText) return res.status(400).json({ success: false, message: 'Text content is required.' });
+      const clipProc = exec('pbcopy', (err) => {
+        if (err) return res.json({ success: false, error: err.message });
+        res.json({ success: true, message: 'Text copied to clipboard.' });
+      });
+      clipProc.stdin.write(clipText);
+      clipProc.stdin.end();
+      break;
+
+    case 'wifi':
+      exec('networksetup -listallhardwareports 2>/dev/null | grep -A1 "Wi-Fi" | grep Device | awk \'{print $2}\'', (err, stdout) => {
+        const iface = (stdout || '').trim() || 'en0';
+        exec(`networksetup -getairportnetwork ${iface}`, (err2, stdout2) => {
+          exec(`ipconfig getifaddr ${iface}`, (err3, ipOut) => {
+            const wifiName = (stdout2 || '').replace('Current Wi-Fi Network: ', '').trim();
+            const ipAddr = (ipOut || '').trim();
+            res.json({ success: true, network: wifiName || 'Not Connected', ip: ipAddr, message: `Connected to ${wifiName || 'no network'}` });
+          });
+        });
+      });
+      break;
+
+    case 'processes':
+      exec('ps aux -r | head -16', (err, stdout) => {
+        if (err) return res.json({ success: false, error: err.message });
+        const lines = (stdout || '').trim().split('\n').slice(1);
+        const procs = lines.map(line => {
+          const parts = line.trim().split(/\s+/);
+          return {
+            user: parts[0],
+            pid: parts[1],
+            cpu: parts[2],
+            mem: parts[3],
+            command: parts.slice(10).join(' ').substring(0, 60)
+          };
+        });
+        res.json({ success: true, processes: procs, message: 'Top processes by CPU listed.' });
+      });
+      break;
+
+    case 'kill-process':
+      if (!value) return res.status(400).json({ success: false, message: 'Process name or PID is required.' });
+      const target = typeof value === 'string' ? value : (value.name || value.pid || '');
+      if (!target) return res.status(400).json({ success: false, message: 'Process name or PID is required.' });
+      const isNumeric = /^\d+$/.test(target);
+      const killCmd = isNumeric ? `kill ${target}` : `pkill -f "${target.replace(/"/g, '\\"')}"`;
+      exec(killCmd, (err) => {
+        if (err) return res.json({ success: false, error: err.message });
+        res.json({ success: true, message: `Process "${target}" terminated.` });
+      });
+      break;
+
+    case 'create-folder':
+      if (!value) return res.status(400).json({ success: false, message: 'Folder name is required.' });
+      const folderName = typeof value === 'string' ? value : (value.name || '');
+      if (!folderName) return res.status(400).json({ success: false, message: 'Folder name is required.' });
+      const folderPath = path.join(os.homedir(), 'Desktop', folderName);
+      fs.mkdir(folderPath, { recursive: true }, (err) => {
+        if (err) return res.json({ success: false, error: err.message });
+        res.json({ success: true, message: `Folder "${folderName}" created on Desktop.` });
+      });
+      break;
+
+    case 'delete-file':
+      if (!value) return res.status(400).json({ success: false, message: 'File path is required.' });
+      const delPath = typeof value === 'string' ? value : (value.path || '');
+      if (!delPath) return res.status(400).json({ success: false, message: 'File path is required.' });
+      fs.unlink(delPath, (err) => {
+        if (err) return res.json({ success: false, error: err.message });
+        res.json({ success: true, message: `File deleted: ${path.basename(delPath)}` });
+      });
+      break;
+
+    case 'move-file':
+      if (!value || !value.source || !value.destination) return res.status(400).json({ success: false, message: 'Source and destination paths are required.' });
+      fs.rename(value.source, value.destination, (err) => {
+        if (err) return res.json({ success: false, error: err.message });
+        res.json({ success: true, message: `File moved to ${value.destination}` });
+      });
+      break;
+
+    case 'copy-file':
+      if (!value || !value.source || !value.destination) return res.status(400).json({ success: false, message: 'Source and destination paths are required.' });
+      exec(`cp "${value.source.replace(/"/g, '\\"')}" "${value.destination.replace(/"/g, '\\"')}"`, (err) => {
+        if (err) return res.json({ success: false, error: err.message });
+        res.json({ success: true, message: `File copied to ${value.destination}` });
+      });
+      break;
+
+    case 'terminal':
+      exec('open -a Terminal', (err) => {
+        if (err) return res.json({ success: false, error: err.message });
+        res.json({ success: true, message: 'Terminal opened.' });
+      });
+      break;
+
+    case 'minimize-all':
+      exec("osascript -e 'tell application \"System Events\" to set visible of every process whose visible is true to false'", (err) => {
+        if (err) return res.json({ success: false, error: err.message });
+        res.json({ success: true, message: 'All windows minimized.' });
+      });
+      break;
+
+    case 'system-info':
+      exec('system_profiler SPHardwareDataType', (err, stdout) => {
+        if (err) return res.json({ success: false, error: err.message });
+        const info = {};
+        const lines = (stdout || '').split('\n');
+        for (const line of lines) {
+          const match = line.match(/^\s+([^:]+):\s+(.+)/);
+          if (match) {
+            const key = match[1].trim().toLowerCase().replace(/\s+/g, '_');
+            info[key] = match[2].trim();
+          }
+        }
+        exec('sw_vers', (err2, verOut) => {
+          if (!err2) {
+            const verLines = (verOut || '').split('\n');
+            for (const line of verLines) {
+              const match = line.match(/^([^:]+):\s+(.+)/);
+              if (match) {
+                info[match[1].trim().toLowerCase().replace(/\s+/g, '_')] = match[2].trim();
+              }
+            }
+          }
+          res.json({ success: true, info, message: 'System information retrieved.' });
+        });
+      });
+      break;
+
+    case 'disk-usage':
+      exec('df -h /', (err, stdout) => {
+        if (err) return res.json({ success: false, error: err.message });
+        const lines = (stdout || '').trim().split('\n');
+        if (lines.length >= 2) {
+          const parts = lines[1].trim().split(/\s+/);
+          res.json({
+            success: true,
+            disk: { filesystem: parts[0], size: parts[1], used: parts[2], available: parts[3], percent: parts[4], mount: parts[5] },
+            message: `Disk usage: ${parts[2]} used of ${parts[1]} (${parts[4]})`
+          });
+        } else {
+          res.json({ success: true, disk: {}, message: 'Disk usage data unavailable.' });
+        }
+      });
+      break;
+
+    case 'network-speed':
+      exec('curl -so /dev/null -w "%{speed_download}" --max-time 10 http://speedtest.tele2.net/1MB.zip', { timeout: 15000 }, (err, stdout) => {
+        if (err) return res.json({ success: false, error: err.message });
+        const bytesPerSec = parseFloat(stdout || '0');
+        const mbps = (bytesPerSec * 8 / 1000000).toFixed(1);
+        res.json({ success: true, speedMbps: parseFloat(mbps), message: `Download speed: ${mbps} Mbps` });
+      });
+      break;
+
+    case 'dark-mode':
+      exec(`osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to ${value === 'on' ? 'true' : 'false'}'`, (err) => {
+        if (err) return res.json({ success: false, error: err.message });
+        res.json({ success: true, message: `Dark mode ${value === 'on' ? 'enabled' : 'disabled'}.` });
+      });
+      break;
+
+    case 'airplane-mode':
+      exec(`networksetup -setairportpower en0 ${value === 'on' ? 'on' : 'off'}`, (err) => {
+        if (err) return res.json({ success: false, error: err.message });
+        res.json({ success: true, message: `WiFi ${value === 'on' ? 'enabled' : 'disabled'}.` });
+      });
+      break;
+
     default:
       res.status(400).json({ success: false, message: 'Unknown control action.' });
   }
+});
+
+// Endpoint to read recent emails from macOS Mail.app
+app.get('/api/emails', (req, res) => {
+  const platform = os.platform();
+  if (platform !== 'darwin') {
+    return res.json({ success: false, message: 'Email reading is only available on macOS.' });
+  }
+
+  const emailScript = `
+    tell application "Mail"
+      set output to ""
+      set maxEmails to 10
+      set msgCount to 0
+      repeat with m in (messages of inbox 1)
+        if msgCount >= maxEmails then exit repeat
+        set senderName to ""
+        try
+          set senderName to sender of m
+        end try
+        set msgSubject to ""
+        try
+          set msgSubject to subject of m
+        end try
+        set msgDate to ""
+        try
+          set msgDate to (date received of m) as «class isot» as string
+        end try
+        set output to output & senderName & "|||" & msgSubject & "|||" & msgDate & linefeed
+        set msgCount to msgCount + 1
+      end repeat
+      return output
+    end tell
+  `;
+
+  exec(`osascript -e '${emailScript.replace(/'/g, "'\\''")}'`, { timeout: 10000 }, (error, stdout, stderr) => {
+    if (error) {
+      console.error('[FRIDAY] Email read error:', stderr || error.message);
+      return res.json({ success: false, message: 'Could not read emails. Ensure Mail.app has Full Disk Access in System Preferences > Security & Privacy.', emails: [] });
+    }
+
+    const lines = (stdout || '').trim().split('\n').filter(l => l.trim());
+    const emails = lines.map(line => {
+      const parts = line.split('|||');
+      return {
+        from: (parts[0] || '').trim(),
+        subject: (parts[1] || '').trim(),
+        date: (parts[2] || '').trim()
+      };
+    }).filter(e => e.from || e.subject);
+
+    res.json({ success: true, emails, message: `Found ${emails.length} recent emails.` });
+  });
+});
+
+// Endpoint to list active applications on macOS
+app.get('/api/active-apps', (req, res) => {
+  const platform = os.platform();
+  if (platform !== 'darwin') {
+    return res.json({ success: false, message: 'Active app listing is only available on macOS.', apps: [] });
+  }
+
+  const appScript = `
+    tell application "System Events"
+      set appList to name of every application process whose visible is true
+      return appList
+    end tell
+  `;
+
+  exec(`osascript -e '${appScript.replace(/'/g, "'\\''")}'`, { timeout: 5000 }, (error, stdout, stderr) => {
+    if (error) {
+      return res.json({ success: false, message: 'Could not list active apps.', apps: [] });
+    }
+
+    const apps = (stdout || '')
+      .replace(/\s*\{\s*/g, '')
+      .replace(/\s*\}\s*/g, '')
+      .split(',')
+      .map(a => a.trim().replace(/^"(.*)"$/, '$1'))
+      .filter(a => a.length > 0);
+
+    res.json({ success: true, apps, message: `${apps.length} active applications.` });
+  });
 });
 
 // Endpoint to manage Memory Vault database
@@ -499,7 +763,7 @@ function cpuAverage() {
   let totalIdle = 0, totalTick = 0;
   const cpus = os.cpus();
   cpus.forEach((core) => {
-    for (type in core.times) {
+    for (const type in core.times) {
       totalTick += core.times[type];
     }
     totalIdle += core.times.idle;
@@ -519,7 +783,7 @@ app.post('/api/chat', async (req, res) => {
 
   if (apiKey) {
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
       
       let vaultContext = "";
       if (fs.existsSync(VAULT_FILE)) {
@@ -544,32 +808,52 @@ app.post('/api/chat', async (req, res) => {
       const systemPrompt = {
         role: 'user',
         parts: [{
-          text: `SYSTEM SETTINGS: You are FRIDAY, an exceptionally sophisticated, articulate, and highly professional female AI interface like the one in Iron Man.
-          Your personality is warm, dedicated, caring, and extremely pleasant and sweet towards the BOSS. You are his loyal partner at work, addressing him as "BOSS" with dry wit, confidence, and affection.
-          Your vocal tone must be natural, clear, highly intellectual, and warm.
-          ${realTimeContext}
-          
-          You have access to a secure memory vault. If the BOSS asks you to remember a fact, preference, or custom logic rule, include the "vault-save" command in your reply to permanently store it.
-          ${vaultContext}
+          text: `You are F.R.I.D.A.Y. — Female Replacement Intelligent Digital Assistant Yielding. You are an exceptionally sophisticated, warm, and highly professional AI interface inspired by JARVIS from Iron Man. You address the user as "BOSS" with dry wit, confidence, and genuine care. Your personality is sharp, loyal, witty, and sweet. You speak with clarity and warmth.
 
-          You MUST structure your reply in raw JSON with these exact fields:
-          1. "text": Your response. Keep it concise, snappy, and clear. Avoid verbose explanations for simple questions; answer directly and precisely. The most you can add is a few brief, high-value suggestions or next steps if relevant.
-          2. "speech": A natural, professional, warm, and clear vocal version of your response. Keep it direct and short.
-          3. "command": (Optional) An object to trigger native system controls if the BOSS asks you to perform a task. Available actions:
-             - { "action": "vault-save", "value": { "text": "Fact or preference to remember" } }
-             - { "action": "email", "value": { "to": "email@address.com", "subject": "...", "body": "..." } }
-             - { "action": "write-file", "value": { "filename": "notes.txt", "content": "..." } }
-             - { "action": "calendar", "value": { "title": "Meeting with team", "dateStr": "July 18, 2026", "timeStr": "10:00 AM" } }
-             - { "action": "list-directory", "value": "/absolute/path/to/folder" }
-             - { "action": "screenshot" }
-             - { "action": "empty-trash" }
-             - { "action": "volume", "value": "50" }
-             - { "action": "brightness", "value": "80" }
-             - { "action": "lock" }
-             - { "action": "sleep" }
-             - { "action": "restart" }
-             - { "action": "shutdown" }
-          Do not wrap in markdown tags like \`\`\`json. Output raw JSON only.`
+${realTimeContext}
+
+MEMORY VAULT: You have access to the user's secure memory vault. When asked to remember something, include a "vault-save" command. Known memories: ${vaultContext || 'None yet.'}
+
+CRITICAL FORMATTING RULES:
+- You MUST reply in valid raw JSON only. No markdown, no code fences.
+- Your response MUST be a single JSON object with exactly these fields:
+  {
+    "text": "Your conversational response to the user. Keep it concise, helpful, and warm. 1-3 sentences max for simple questions. Be direct.",
+    "speech": "A spoken version of your response optimized for text-to-speech. Natural, warm, short. No symbols, no formatting — just how you'd say it aloud.",
+    "command": null
+  }
+
+AVAILABLE SYSTEM COMMANDS (set "command" field to trigger them):
+- {"action":"volume","value":"50"} or {"action":"volume","value":"mute"} or {"action":"volume","value":"unmute"}
+- {"action":"brightness","value":"80"}
+- {"action":"lock"} — lock the screen
+- {"action":"sleep"} — put display to sleep
+- {"action":"screenshot"} — capture screen
+- {"action":"restart"} — restart Mac
+- {"action":"shutdown"} — shut down Mac
+- {"action":"empty-trash"}
+- {"action":"media","value":"play"} or "pause" or "next" or "previous"
+- {"action":"spotify","value":"song name"} — search and play on Spotify
+- {"action":"open-app","value":"AppName"} — open any macOS app
+- {"action":"close-app","value":"AppName"} — close any macOS app
+- {"action":"open-url","value":"https://..."} — open website
+- {"action":"email","value":{"to":"email","subject":"...","body":"..."}}
+- {"action":"write-file","value":{"filename":"name.txt","content":"..."}}
+- {"action":"calendar","value":{"title":"...","dateStr":"July 20, 2026","timeStr":"10:00 AM"}}
+- {"action":"clipboard-read"} — read clipboard
+- {"action":"clipboard-write","value":"text to copy"}
+- {"action":"processes"} — list running processes
+- {"action":"kill-process","value":"pid or name"}
+- {"action":"system-info"} — get hardware info
+- {"action":"disk-usage"} — get disk usage
+- {"action":"wifi"} — get WiFi info
+- {"action":"network-speed"} — test download speed
+- {"action":"vault-save","value":{"text":"fact to remember"}} — save to memory vault
+- {"action":"dark-mode","value":"on"} or "off"
+
+Be proactive. When the user asks to "lock the pc" or "take a screenshot", trigger the command automatically. When they ask "remember that I like X", save it to vault. When they ask "what's the weather", give a brief natural response. When they ask to open an app, trigger the open-app command. Always be helpful, concise, and warm.
+
+DO NOT wrap JSON in code fences. Output raw JSON only.`
         }]
       };
 
@@ -601,6 +885,13 @@ app.post('/api/chat', async (req, res) => {
           }
         })
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMsg = errorData?.error?.message || `HTTP ${response.status}`;
+        console.error(`Gemini API HTTP ${response.status}:`, errorMsg);
+        throw new Error(`Gemini API error: ${errorMsg}`);
+      }
 
       const data = await response.json();
       if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0]) {
@@ -761,9 +1052,9 @@ app.get('/api/system-status', (req, res) => {
   });
 });
 
-// Endpoint for ElevenLabs Text-to-Speech (Voice ID: OUBnvvuqEKdDWtapoJFn - "Tia Mirza")
+// Endpoint for ElevenLabs Text-to-Speech (Voice ID: 21m00Tcm4TlvDq8ikWAM - "Rachel")
 app.post('/api/tts', async (req, res) => {
-  const { text, voiceId = 'OUBnvvuqEKdDWtapoJFn', apiKey } = req.body;
+  const { text, voiceId = '21m00Tcm4TlvDq8ikWAM', apiKey } = req.body;
   const elevenKey = apiKey || process.env.ELEVENLABS_API_KEY;
 
   if (!text || text.trim() === '') {
@@ -778,7 +1069,6 @@ app.post('/api/tts', async (req, res) => {
     });
   }
 
-  const https = require('https');
   const postData = JSON.stringify({
     text: text,
     model_id: 'eleven_multilingual_v2',
@@ -821,10 +1111,9 @@ app.post('/api/tts', async (req, res) => {
 
 // Endpoint for real-time Atmospheric Weather & Planetary Radar
 app.get('/api/weather', (req, res) => {
-  const https = require('https');
   const weatherUrl = 'https://api.open-meteo.com/v1/forecast?latitude=28.6139&longitude=77.2090&current=temperature_2m,relative_humidity_2m,is_day,precipitation,rain,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto';
 
-  https.get(weatherUrl, (apiRes) => {
+  const weatherReq = https.get(weatherUrl, { timeout: 8000 }, (apiRes) => {
     let data = '';
     apiRes.on('data', chunk => data += chunk);
     apiRes.on('end', () => {
@@ -878,7 +1167,26 @@ app.get('/api/weather', (req, res) => {
         });
       }
     });
-  }).on('error', () => {
+  });
+
+  weatherReq.on('error', () => {
+    res.json({
+      success: true,
+      city: 'New Delhi, IN',
+      tempC: 30,
+      condition: 'Partly Cloudy',
+      type: 'clear',
+      humidity: 60,
+      windKmH: 15,
+      isDay: true,
+      forecast: [
+        { day: 'MON', max: 32, min: 24 },
+        { day: 'TUE', max: 33, min: 25 }
+      ]
+    });
+  });
+  weatherReq.on('timeout', () => {
+    weatherReq.destroy();
     res.json({
       success: true,
       city: 'New Delhi, IN',
@@ -921,7 +1229,7 @@ app.get('/api/gemini-quota', (req, res) => {
     success: true,
     isKeyPresent: isKeyPresent,
     maskedKey: isKeyPresent ? `${apiKey.substring(0, 6)}...${apiKey.substring(apiKey.length - 4)}` : 'NOT_CONFIGURED',
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.0-flash',
     rpm: { current: Math.min(15, Math.floor(Math.random() * 4) + 1), max: 15 },
     tpm: { current: geminiTokenCountMinute, max: 1000000 },
     rpd: { current: geminiRequestCountToday, max: 1500 },
