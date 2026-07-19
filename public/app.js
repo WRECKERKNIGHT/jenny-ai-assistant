@@ -2494,7 +2494,7 @@ window.addEventListener('DOMContentLoaded', () => {
       
       // Greet BOSS with First-Time-of-the-Day awareness (at 2.3s)
       setTimeout(() => {
-        const greetingText = "Hi, I am Jenny, your neural assistant. How can I help you today, BOSS?";
+        const greetingText = "Hi, I am Jenny, your neural assistant. All systems are online and fully operational. How can I help you today, BOSS?";
 
         speak(greetingText);
         logToConsole(greetingText, "success");
