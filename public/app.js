@@ -80,14 +80,20 @@ async function runBoot() {
   app.style.display = 'flex';
 
   await sleep(100);
-  addAIMessage(getGreeting());
+  const greeting = getGreeting();
+  addAIMessage(greeting);
   startClock();
   startOrb();
   initSpeechWaves();
   startHoloShimmer();
+  startSysMonitor();
   fetchQuota();
   setInterval(fetchQuota, 60000);
   setInterval(updateTimerDisplay, 1000);
+
+  // Speak the greeting + intro
+  await sleep(600);
+  speak(greeting);
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -96,9 +102,9 @@ function getGreeting() {
   const h = new Date().getHours();
   const name = loadOfflineMemory().name;
   const who = name ? ` ${name}` : '';
-  if (h < 12) return `Good morning${who}. All systems are operational. What are we doing today, BOSS?`;
-  if (h < 17) return `Good afternoon${who}. All systems are green. What are we doing today, BOSS?`;
-  return `Good evening${who}. Systems are online. What are we doing today, BOSS?`;
+  if (h < 12) return `Good morning${who}. I am FRIDAY, your personal assistant. All systems are operational. What are we doing today, BOSS?`;
+  if (h < 17) return `Good afternoon${who}. I am FRIDAY, your personal assistant. All systems are green. What are we doing today, BOSS?`;
+  return `Good evening${who}. I am FRIDAY, your personal assistant. Systems are online. What are we doing today, BOSS?`;
 }
 
 // ================================================
@@ -113,16 +119,125 @@ function startHoloShimmer() {
   let t = 0;
   function animate() {
     t += 0.015;
-    const ox1 = Math.sin(t * 1.1) * 6;
-    const oy1 = Math.cos(t * 0.9) * 4;
-    const ox2 = Math.sin(t * 0.7 + 2) * 5;
-    const oy2 = Math.cos(t * 1.3 + 1) * 5;
-    r.style.transform = `translate(${ox1}px, ${oy1}px)`;
-    g.style.transform = `translate(${ox2}px, ${-oy1}px)`;
-    b.style.transform = `translate(${-ox1}px, ${oy2}px)`;
+    r.style.transform = `translate(${Math.sin(t*1.1)*6}px, ${Math.cos(t*0.9)*4}px)`;
+    g.style.transform = `translate(${Math.sin(t*0.7+2)*5}px, ${-Math.cos(t*0.9)*4}px)`;
+    b.style.transform = `translate(${-Math.sin(t*1.1)*6}px, ${Math.cos(t*1.3+1)*5}px)`;
     requestAnimationFrame(animate);
   }
   animate();
+}
+
+// ================================================
+// SYSTEM MONITOR — Live Sparklines
+// ================================================
+const sparkHistory = { cpu: [], ram: [], disk: [], net: [] };
+const SPARK_MAX = 40;
+let lastNetBytes = 0;
+
+function pushSpark(key, val) {
+  sparkHistory[key].push(val);
+  if (sparkHistory[key].length > SPARK_MAX) sparkHistory[key].shift();
+}
+
+function drawSparkline(canvasId, data, color) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  if (data.length < 2) return;
+
+  const step = W / (SPARK_MAX - 1);
+
+  // Fill
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  data.forEach((v, i) => {
+    const x = i * step;
+    const y = H - (v / 100) * (H - 4);
+    if (i === 0) ctx.lineTo(x, y);
+    else {
+      const px = (i - 1) * step;
+      const py = H - (data[i-1] / 100) * (H - 4);
+      const cpx1 = px + step * 0.4;
+      const cpx2 = x - step * 0.4;
+      ctx.bezierCurveTo(cpx1, py, cpx2, y, x, y);
+    }
+  });
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  const fillGrad = ctx.createLinearGradient(0, 0, 0, H);
+  fillGrad.addColorStop(0, color.replace(')', ',0.15)').replace('rgb', 'rgba'));
+  fillGrad.addColorStop(1, color.replace(')', ',0.0)').replace('rgb', 'rgba'));
+  ctx.fillStyle = fillGrad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  data.forEach((v, i) => {
+    const x = i * step;
+    const y = H - (v / 100) * (H - 4);
+    if (i === 0) ctx.moveTo(x, y);
+    else {
+      const px = (i - 1) * step;
+      const py = H - (data[i-1] / 100) * (H - 4);
+      const cpx1 = px + step * 0.4;
+      const cpx2 = x - step * 0.4;
+      ctx.bezierCurveTo(cpx1, py, cpx2, y, x, y);
+    }
+  });
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Dot at end
+  const lastX = (data.length - 1) * step;
+  const lastY = H - (data[data.length - 1] / 100) * (H - 4);
+  ctx.beginPath();
+  ctx.arc(lastX, lastY, 2.5, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+async function fetchSysStats() {
+  try {
+    const res = await fetch('/api/system-status');
+    const d = await res.json();
+    if (!d.success) return;
+
+    const cpu = d.cpu?.usage || 0;
+    const ram = d.ram?.usage || 0;
+    const disk = d.disk?.usage || 0;
+
+    pushSpark('cpu', cpu);
+    pushSpark('ram', ram);
+    pushSpark('disk', disk);
+
+    document.getElementById('sys-cpu-val').textContent = cpu + '%';
+    document.getElementById('sys-ram-val').textContent = ram + '%';
+    document.getElementById('sys-disk-val').textContent = disk + '%';
+
+    const cpuModel = d.cpu?.model || '';
+    const shortModel = cpuModel.replace(/\(R\)|Core\(TM\)|CPU/g, '').replace(/\s+/g, ' ').trim();
+    document.getElementById('sys-cpu-model').textContent = shortModel;
+    document.getElementById('sys-ram-info').textContent = `${d.ram?.usedMB || 0} / ${d.ram?.totalMB || 0} MB`;
+    document.getElementById('sys-disk-info').textContent = `${d.disk?.free || '--'} free`;
+
+    const uptimeH = d.uptime ? Math.floor(d.uptime / 3600) : 0;
+    const uptimeM = d.uptime ? Math.floor((d.uptime % 3600) / 60) : 0;
+    document.getElementById('sys-uptime').textContent = `${uptimeH}h ${uptimeM}m`;
+    document.getElementById('sys-battery').textContent = d.battery?.level != null ? `${Math.round(d.battery.level * 100)}%` : '--';
+    document.getElementById('sys-wifi').textContent = d.hostname ? d.hostname.split('.')[0] : '--';
+
+    drawSparkline('spark-cpu', sparkHistory.cpu, 'rgb(255,255,255)');
+    drawSparkline('spark-ram', sparkHistory.ram, 'rgb(255,255,255)');
+    drawSparkline('spark-disk', sparkHistory.disk, 'rgb(255,255,255)');
+  } catch {}
+}
+
+function startSysMonitor() {
+  fetchSysStats();
+  setInterval(fetchSysStats, 3000);
 }
 
 // ================================================
@@ -141,7 +256,6 @@ function startOrb() {
   function draw() {
     orbFrame++;
     ctx.clearRect(0, 0, W, H);
-
     const t = orbFrame * 0.016;
     const isIdle = orbState === 'idle';
     const isListening = orbState === 'listening';
@@ -153,7 +267,6 @@ function startOrb() {
       const segments = 64;
       const speed = isListening ? 0.025 : (isThinking ? 0.018 : (isSpeaking ? 0.012 : 0.006));
       const dir = ring % 2 === 0 ? 1 : -1;
-
       ctx.beginPath();
       for (let i = 0; i <= segments; i++) {
         const angle = (i / segments) * Math.PI * 2 + t * speed * dir;
@@ -162,8 +275,7 @@ function startOrb() {
           : Math.sin(t * 2 + i * 0.3) * (isSpeaking ? 12 : 6);
         const px = cx + Math.cos(angle) * (r + wobble);
         const py = cy + Math.sin(angle) * (r + wobble);
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
       }
       ctx.closePath();
       const alpha = isIdle ? 0.03 + ring * 0.01 : 0.06 + ring * 0.03;
@@ -185,7 +297,6 @@ function startOrb() {
 
     const coreR = isIdle ? 32 : (isListening ? 38 : (isSpeaking ? 42 : 35));
     const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
-
     if (isListening) {
       grad.addColorStop(0, 'rgba(255,255,255,0.7)');
       grad.addColorStop(0.5, 'rgba(255,255,255,0.2)');
@@ -207,7 +318,6 @@ function startOrb() {
       grad.addColorStop(0.5, 'rgba(255,255,255,0.15)');
       grad.addColorStop(1, 'rgba(255,255,255,0)');
     }
-
     ctx.beginPath();
     ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
     ctx.fillStyle = grad;
@@ -230,7 +340,6 @@ function startOrb() {
 
     requestAnimationFrame(draw);
   }
-
   draw();
 }
 
@@ -244,17 +353,10 @@ function setOrbState(state) {
     statusEl.className = 'holo-status' + (state === 'listening' ? ' listening' : state === 'speaking' ? ' speaking' : '');
   }
   if (labelEl) {
-    const labels = {
-      idle: 'Tap the orb or type a command',
-      listening: 'Listening...',
-      thinking: 'Processing...',
-      speaking: 'Speaking...'
-    };
+    const labels = { idle: 'Tap the orb or type a command', listening: 'Listening...', thinking: 'Processing...', speaking: 'Speaking...' };
     labelEl.textContent = labels[state] || '';
   }
-  if (clickZone) {
-    clickZone.classList.toggle('active', state === 'listening');
-  }
+  if (clickZone) clickZone.classList.toggle('active', state === 'listening');
 }
 
 // ================================================
@@ -278,16 +380,12 @@ function startSpeechWaves(stream) {
     const source = ctx.createMediaStreamSource(stream);
     source.connect(speechAnalyser);
     const data = new Uint8Array(speechAnalyser.frequencyBinCount);
-
     const container = document.getElementById('speech-waves');
     if (container) container.classList.add('active');
-
     function animate() {
       speechAnalyser.getByteFrequencyData(data);
       speechWaveBars.forEach((bar, i) => {
-        const val = data[i] || 0;
-        const h = Math.max(2, (val / 255) * 28);
-        bar.style.height = h + 'px';
+        bar.style.height = Math.max(2, (data[i] || 0) / 255 * 28) + 'px';
       });
       speechAnimFrame = requestAnimationFrame(animate);
     }
@@ -326,7 +424,6 @@ async function fetchQuota() {
     const badge = document.getElementById('mode-badge');
     const rpmEl = document.getElementById('quota-rpm');
     const dot = document.getElementById('status-dot');
-
     if (d.isKeyPresent) {
       badge.textContent = d.model.toUpperCase();
       badge.classList.add('active');
@@ -458,10 +555,7 @@ function parseCommand(text) {
   }
 
   const closeMatch = t.match(/^(?:close|dismiss|hide|shut)\s+(.+)$/i);
-  if (closeMatch) {
-    closePanel(closeMatch[1].trim());
-    return { handled: true, response: `Panel closed, BOSS.` };
-  }
+  if (closeMatch) { closePanel(closeMatch[1].trim()); return { handled: true, response: `Panel closed, BOSS.` }; }
 
   if (/^(?:close all|dismiss all|hide all)$/i.test(t)) {
     document.querySelectorAll('.panel').forEach(p => closePanel(p.dataset.panel));
@@ -481,14 +575,8 @@ function parseCommand(text) {
     return { handled: true, response: `Timer set for ${label}, BOSS. I'll let you know when it's done.` };
   }
 
-  if (/^(?:timer|alarm|set timer)\s*$/i.test(t)) {
-    setFrontendTimer(60, '1 min');
-    return { handled: true, response: 'Setting a 1-minute timer, BOSS.' };
-  }
-
-  if (/^(?:briefing|daily briefing|morning briefing|what'?s the status|give me a briefing)/i.test(t)) {
-    return { handled: true, response: '__FETCH_BRIEFING__' };
-  }
+  if (/^(?:timer|alarm|set timer)\s*$/i.test(t)) { setFrontendTimer(60, '1 min'); return { handled: true, response: 'Setting a 1-minute timer, BOSS.' }; }
+  if (/^(?:briefing|daily briefing|morning briefing|what'?s the status|give me a briefing)/i.test(t)) { return { handled: true, response: '__FETCH_BRIEFING__' }; }
 
   return null;
 }
@@ -503,7 +591,6 @@ function setFrontendTimer(seconds, label) {
   frontendTimers.push({ id, label, endTime: Date.now() + seconds * 1000, seconds });
   sfx.confirm();
   toast(`Timer "${label}" started — ${formatTimerDuration(seconds)}`, 'ok');
-
   setTimeout(() => {
     frontendTimers = frontendTimers.filter(t => t.id !== id);
     toast(`Timer "${label}" is done!`, 'ok');
@@ -527,13 +614,11 @@ function updateTimerDisplay() {
   if (active.length === 0) { pill.classList.add('hidden'); return; }
   pill.classList.remove('hidden');
   const remaining = Math.max(0, Math.ceil((active[0].endTime - now) / 1000));
-  const m = Math.floor(remaining / 60);
-  const s = remaining % 60;
-  display.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+  display.textContent = `${Math.floor(remaining/60)}:${(remaining%60).toString().padStart(2,'0')}`;
 }
 
 // ================================================
-// PANEL SYSTEM
+// PANEL SYSTEM — Draggable Liquid Glass
 // ================================================
 const openPanels = new Set();
 
@@ -541,7 +626,6 @@ function openPanel(name) {
   if (openPanels.has(name)) { toast(`${name} already open`, 'info'); return; }
 
   const container = document.getElementById('panels');
-  container.querySelectorAll('.panel').forEach(p => closePanel(p.dataset.panel));
 
   const panel = document.createElement('div');
   panel.className = 'panel';
@@ -560,11 +644,12 @@ function openPanel(name) {
   };
 
   const titleStr = titles[name] || `fa-circle ${name.toUpperCase()}`;
-  const iconClass = titleStr.split(' ')[0];
-  const titleText = titleStr.split(' ').slice(1).join(' ');
+  const parts = titleStr.split(' ');
+  const iconClass = parts[0];
+  const titleText = parts.slice(1).join(' ');
 
   panel.innerHTML = `
-    <div class="panel-hdr">
+    <div class="panel-hdr" data-drag="true">
       <h3><i class="fa-solid ${iconClass}"></i> ${titleText}</h3>
       <button class="panel-close" onclick="closePanel('${name}')">&times;</button>
     </div>
@@ -578,6 +663,9 @@ function openPanel(name) {
   document.querySelector(`.dock-btn[data-panel="${name}"]`)?.classList.add('active');
   loadPanelContent(name);
   sfx.confirm();
+
+  // Make draggable
+  initDraggable(panel);
 }
 
 function closePanel(name) {
@@ -587,6 +675,72 @@ function closePanel(name) {
   setTimeout(() => panel.remove(), 200);
   openPanels.delete(name);
   document.querySelector(`.dock-btn[data-panel="${name}"]`)?.classList.remove('active');
+}
+
+function initDraggable(panel) {
+  const handle = panel.querySelector('.panel-hdr');
+  if (!handle) return;
+
+  let isDragging = false;
+  let startX, startY, startLeft, startTop;
+
+  handle.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.panel-close')) return;
+    isDragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    const rect = panel.getBoundingClientRect();
+    startLeft = rect.left;
+    startTop = rect.top;
+    panel.style.transition = 'none';
+    panel.style.transform = 'none';
+    panel.style.left = startLeft + 'px';
+    panel.style.top = startTop + 'px';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    panel.style.left = (startLeft + dx) + 'px';
+    panel.style.top = (startTop + dy) + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!isDragging) return;
+    isDragging = false;
+    panel.style.transition = '';
+  });
+
+  // Touch support
+  handle.addEventListener('touchstart', (e) => {
+    if (e.target.closest('.panel-close')) return;
+    isDragging = true;
+    const touch = e.touches[0];
+    startX = touch.clientX;
+    startY = touch.clientY;
+    const rect = panel.getBoundingClientRect();
+    startLeft = rect.left;
+    startTop = rect.top;
+    panel.style.transition = 'none';
+    panel.style.transform = 'none';
+    panel.style.left = startLeft + 'px';
+    panel.style.top = startTop + 'px';
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+    const touch = e.touches[0];
+    panel.style.left = (startLeft + touch.clientX - startX) + 'px';
+    panel.style.top = (startTop + touch.clientY - startY) + 'px';
+  }, { passive: true });
+
+  document.addEventListener('touchend', () => {
+    if (!isDragging) return;
+    isDragging = false;
+    panel.style.transition = '';
+  });
 }
 
 async function loadPanelContent(name) {
@@ -610,16 +764,15 @@ async function loadPanelContent(name) {
 // ================================================
 
 function makeCircularGauge(pct, label) {
-  const r = 25;
+  const r = 22;
   const circ = 2 * Math.PI * r;
   const offset = circ - (pct / 100) * circ;
   return `
     <div class="circular-gauge">
-      <svg viewBox="0 0 60 60">
-        <circle class="track" cx="30" cy="30" r="${r}"/>
-        <circle class="fill" cx="30" cy="30" r="${r}"
-          stroke-dasharray="${circ}" stroke-dashoffset="${offset}"
-          style="stroke:rgba(255,255,255,${pct > 80 ? 0.5 : 0.25})"/>
+      <svg viewBox="0 0 52 52">
+        <circle class="track" cx="26" cy="26" r="${r}"/>
+        <circle class="fill" cx="26" cy="26" r="${r}"
+          stroke-dasharray="${circ}" stroke-dashoffset="${offset}"/>
       </svg>
       <div class="gauge-label">${pct}%</div>
     </div>
@@ -633,26 +786,22 @@ async function loadActivityPanel(el) {
     const res = await fetch('/api/system-status');
     const d = await res.json();
     if (!d.success) { el.innerHTML = '<div class="panel-empty">Failed to load.</div>'; return; }
-
-    const cpu = d.cpu?.usage || 0;
-    const ram = d.ram?.usage || 0;
-    const bat = d.battery?.level ?? '--';
-    const disk = d.disk?.usage || 0;
+    const cpu = d.cpu?.usage || 0, ram = d.ram?.usage || 0, disk = d.disk?.usage || 0;
+    const bat = d.battery?.level ?? 0;
     const uptimeH = d.uptime ? Math.floor(d.uptime / 3600) : 0;
     const uptimeM = d.uptime ? Math.floor((d.uptime % 3600) / 60) : 0;
-
     el.innerHTML = `
       <div class="panel-stat-grid">
         <div class="panel-stat-box">${makeCircularGauge(cpu, 'CPU')}</div>
         <div class="panel-stat-box">${makeCircularGauge(ram, 'RAM')}</div>
-        <div class="panel-stat-box">${makeCircularGauge(typeof bat === 'number' ? bat : 0, 'BATTERY')}</div>
         <div class="panel-stat-box">${makeCircularGauge(disk, 'DISK')}</div>
+        <div class="panel-stat-box">${makeCircularGauge(Math.round(bat*100), 'BATTERY')}</div>
       </div>
       <div class="panel-row"><span class="lbl">UPTIME</span><span class="val">${uptimeH}h ${uptimeM}m</span></div>
       <div class="panel-row"><span class="lbl">HOST</span><span class="val">${d.hostname || '---'}</span></div>
       <div class="panel-row"><span class="lbl">RAM</span><span class="val">${d.ram?.usedMB || 0} / ${d.ram?.totalMB || 0} MB</span></div>
       <div class="panel-row"><span class="lbl">DISK FREE</span><span class="val">${d.disk?.free || '--'}</span></div>
-      <div class="panel-row"><span class="lbl">CPU</span><span class="val" style="font-size:9px">${d.cpu?.model || '---'}</span></div>
+      <div class="panel-row"><span class="lbl">CPU</span><span class="val" style="font-size:8px">${d.cpu?.model || '---'}</span></div>
     `;
   } catch { el.innerHTML = '<div class="panel-empty">Error.</div>'; }
 }
@@ -691,9 +840,7 @@ async function loadWeatherPanel(el) {
       <div class="panel-row"><span class="lbl">HUMIDITY</span><span class="val">${d.humidity}%</span></div>
       <div class="panel-row"><span class="lbl">WIND</span><span class="val">${d.windKmH} km/h</span></div>
       <div class="panel-row"><span class="lbl">DAYLIGHT</span><span class="val">${d.isDay ? 'Yes' : 'No'}</span></div>
-      ${d.forecast ? d.forecast.map(f => `
-        <div class="panel-row"><span class="lbl">${f.day}</span><span class="val">${f.min}\u00B0 / ${f.max}\u00B0</span></div>
-      `).join('') : ''}
+      ${d.forecast ? d.forecast.map(f => `<div class="panel-row"><span class="lbl">${f.day}</span><span class="val">${f.min}\u00B0 / ${f.max}\u00B0</span></div>`).join('') : ''}
     `;
   } catch { el.innerHTML = '<div class="panel-empty">Error.</div>'; }
 }
@@ -703,10 +850,7 @@ async function loadEmailPanel(el) {
   try {
     const res = await fetch('/api/emails');
     const d = await res.json();
-    if (!d.success || !d.emails?.length) {
-      el.innerHTML = `<div class="panel-empty">${d.message || 'No emails found.'}</div>`;
-      return;
-    }
+    if (!d.success || !d.emails?.length) { el.innerHTML = `<div class="panel-empty">${d.message || 'No emails found.'}</div>`; return; }
     el.innerHTML = d.emails.map(e => `
       <div class="email-item">
         <div class="email-from">${escHtml(e.from || 'Unknown')}</div>
@@ -714,9 +858,7 @@ async function loadEmailPanel(el) {
         <div class="email-date">${escHtml(e.date || '')}</div>
       </div>
     `).join('');
-  } catch {
-    el.innerHTML = '<div class="panel-empty">Error reading emails.</div>';
-  }
+  } catch { el.innerHTML = '<div class="panel-empty">Error reading emails.</div>'; }
 }
 
 async function loadProcessPanel(el) {
@@ -731,7 +873,7 @@ async function loadProcessPanel(el) {
     el.innerHTML = d.processes.map(p => `
       <div class="proc-item">
         <span class="pcpu">${p.cpu}%</span>
-        <span style="color:var(--txt3)">${p.pid}</span>
+        <span style="color:rgba(255,255,255,0.2)">${p.pid}</span>
         <span class="pcmd">${escHtml(p.command)}</span>
         <button class="pk" onclick="killProc('${p.pid}')" title="Kill"><i class="fa-solid fa-xmark"></i></button>
       </div>
@@ -775,10 +917,7 @@ async function loadVaultPanel(el) {
 async function addVault() {
   const input = document.getElementById('vault-input');
   if (!input || !input.value.trim()) return;
-  await fetch('/api/vault', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: input.value.trim() })
-  });
+  await fetch('/api/vault', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: input.value.trim() }) });
   toast('Memory saved, BOSS.', 'ok');
   input.value = '';
   loadVaultPanel(document.getElementById('panel-body-vault'));
@@ -792,15 +931,12 @@ async function deleteVault(id) {
 
 async function loadClipboardPanel(el) {
   try {
-    const res = await fetch('/api/control', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'clipboard-read' })
-    });
+    const res = await fetch('/api/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'clipboard-read' }) });
     const d = await res.json();
     el.innerHTML = `
       <div class="panel-row"><span class="lbl">CLIPBOARD</span></div>
-      <div style="margin-top:8px;padding:10px;background:rgba(255,255,255,0.015);border:1px solid rgba(255,255,255,0.03);border-radius:8px;font-family:var(--mono);font-size:10px;color:var(--txt2);max-height:180px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;">${escHtml(d.content || '(empty)')}</div>
-      <div class="panel-input" style="margin-top:8px;">
+      <div style="margin-top:6px;padding:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:8px;font-family:var(--mono);font-size:9px;color:rgba(255,255,255,0.5);max-height:160px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;">${escHtml(d.content || '(empty)')}</div>
+      <div class="panel-input" style="margin-top:6px;">
         <input type="text" id="clip-input" placeholder="Write to clipboard..." onkeydown="if(event.key==='Enter')writeClip()">
         <button onclick="writeClip()"><i class="fa-solid fa-copy"></i></button>
       </div>
@@ -812,10 +948,7 @@ async function writeClip() {
   const input = document.getElementById('clip-input');
   if (!input || !input.value.trim()) return;
   try { await navigator.clipboard.writeText(input.value.trim()); } catch {}
-  await fetch('/api/control', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'clipboard-write', value: input.value.trim() })
-  });
+  await fetch('/api/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'clipboard-write', value: input.value.trim() }) });
   toast('Copied, BOSS.', 'ok');
   input.value = '';
   loadClipboardPanel(document.getElementById('panel-body-clipboard'));
@@ -826,7 +959,7 @@ function loadSettingsPanel(el) {
   el.innerHTML = `
     <div class="setting-row">
       <label>VOICE</label>
-      <select id="voice-select" style="width:150px">
+      <select id="voice-select" style="width:140px">
         <optgroup label="ElevenLabs">
           <option value="21m00Tcm4TlvDq8ikWAM">Rachel</option>
           <option value="EXAVITQu4vr4xnSDxMaL">Bella</option>
@@ -847,11 +980,11 @@ function loadSettingsPanel(el) {
     </div>
     <div class="setting-row">
       <label>SPEECH RATE</label>
-      <input type="range" id="speech-rate" min="0.5" max="2" step="0.1" value="1.0" style="width:110px">
+      <input type="range" id="speech-rate" min="0.5" max="2" step="0.1" value="1.0" style="width:100px">
     </div>
     <div class="setting-row">
       <label>SPEECH PITCH</label>
-      <input type="range" id="speech-pitch" min="0.5" max="2" step="0.1" value="1.0" style="width:110px">
+      <input type="range" id="speech-pitch" min="0.5" max="2" step="0.1" value="1.0" style="width:100px">
     </div>
     <div class="setting-row">
       <label>CONTINUOUS LISTEN</label>
@@ -859,32 +992,15 @@ function loadSettingsPanel(el) {
     </div>
     <div class="setting-row">
       <label>YOUR NAME</label>
-      <input type="text" id="name-input" value="${mem.name || ''}" placeholder="Tell me your name" style="width:140px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);color:var(--txt2);border-radius:6px;padding:4px 8px;font-family:var(--mono);font-size:10px;">
+      <input type="text" id="name-input" value="${mem.name || ''}" placeholder="Tell me your name" style="width:130px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);color:rgba(255,255,255,0.5);border-radius:6px;padding:3px 7px;font-family:var(--mono);font-size:9px;">
     </div>
   `;
 
-  document.getElementById('voice-select').addEventListener('change', (e) => {
-    mem.voiceId = e.target.value;
-    saveOfflineMemory(mem);
-    toast('Voice updated, BOSS.', 'ok');
-  });
-  document.getElementById('speech-rate').addEventListener('input', (e) => {
-    mem.speechRate = parseFloat(e.target.value);
-    saveOfflineMemory(mem);
-  });
-  document.getElementById('speech-pitch').addEventListener('input', (e) => {
-    mem.speechPitch = parseFloat(e.target.value);
-    saveOfflineMemory(mem);
-  });
-  document.getElementById('cont-listen').addEventListener('change', (e) => {
-    mem.continuousListen = e.target.checked;
-    saveOfflineMemory(mem);
-  });
-  document.getElementById('name-input').addEventListener('change', (e) => {
-    mem.name = e.target.value.trim();
-    saveOfflineMemory(mem);
-    toast(`Name set to ${mem.name}, BOSS.`, 'ok');
-  });
+  document.getElementById('voice-select').addEventListener('change', (e) => { mem.voiceId = e.target.value; saveOfflineMemory(mem); toast('Voice updated, BOSS.', 'ok'); });
+  document.getElementById('speech-rate').addEventListener('input', (e) => { mem.speechRate = parseFloat(e.target.value); saveOfflineMemory(mem); });
+  document.getElementById('speech-pitch').addEventListener('input', (e) => { mem.speechPitch = parseFloat(e.target.value); saveOfflineMemory(mem); });
+  document.getElementById('cont-listen').addEventListener('change', (e) => { mem.continuousListen = e.target.checked; saveOfflineMemory(mem); });
+  document.getElementById('name-input').addEventListener('change', (e) => { mem.name = e.target.value.trim(); saveOfflineMemory(mem); toast(`Name set to ${mem.name}, BOSS.`, 'ok'); });
 
   if (mem.voiceId) document.getElementById('voice-select').value = mem.voiceId;
   if (mem.speechRate) document.getElementById('speech-rate').value = mem.speechRate;
@@ -917,16 +1033,10 @@ const chatInput = document.getElementById('chat-input');
 const sendBtn = document.getElementById('send-btn');
 
 chatInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && chatInput.value.trim()) {
-    sendMessage(chatInput.value.trim());
-    chatInput.value = '';
-  }
+  if (e.key === 'Enter' && chatInput.value.trim()) { sendMessage(chatInput.value.trim()); chatInput.value = ''; }
 });
 sendBtn.addEventListener('click', () => {
-  if (chatInput.value.trim()) {
-    sendMessage(chatInput.value.trim());
-    chatInput.value = '';
-  }
+  if (chatInput.value.trim()) { sendMessage(chatInput.value.trim()); chatInput.value = ''; }
 });
 
 // ================================================
@@ -939,7 +1049,7 @@ async function sendMessage(text) {
   const cmd = parseCommand(text);
   if (cmd) {
     if (cmd.response === '__FETCH_BRIEFING__') {
-      const typing = addTyping();
+      addTyping();
       setOrbState('thinking');
       try {
         const bRes = await fetch('/api/briefing');
@@ -950,13 +1060,8 @@ async function sendMessage(text) {
           const briefingText = `${b.greeting}. Here's your briefing for ${b.date} at ${b.time}.\n\nWeather: ${b.weather}\nSystem: ${b.system}\nBattery: ${b.battery}\nMemories stored: ${b.vaultCount}`;
           addAIMessage(briefingText);
           speak(`${b.greeting}. It's ${b.time}. Weather is ${b.weather}. System at ${b.system}, battery ${b.battery}. You have ${b.vaultCount} memories saved, BOSS.`);
-        } else {
-          addAIMessage('Unable to fetch briefing, BOSS.');
-        }
-      } catch {
-        removeTyping();
-        addAIMessage('Briefing service unavailable, BOSS.');
-      }
+        } else { addAIMessage('Unable to fetch briefing, BOSS.'); }
+      } catch { removeTyping(); addAIMessage('Briefing service unavailable, BOSS.'); }
       setOrbState('idle');
       return;
     }
@@ -965,42 +1070,28 @@ async function sendMessage(text) {
     return;
   }
 
-  const typing = addTyping();
+  addTyping();
   setOrbState('thinking');
 
   try {
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text })
-    });
+    const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: text }) });
     const data = await res.json();
     removeTyping();
-
     if (data.success && data.reply) {
       addAIMessage(data.reply.text);
-
       if (data.reply.command?.action === 'vault-save') {
-        await fetch('/api/vault', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: data.reply.command.value?.text || '' })
-        });
+        await fetch('/api/vault', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: data.reply.command.value?.text || '' }) });
         toast('Saved to vault, BOSS.', 'ok');
       }
-
       if (data.reply.command && data.reply.command.action !== 'vault-save') {
-        await fetch('/api/control', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data.reply.command)
-        });
+        await fetch('/api/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data.reply.command) });
       }
-
       speak(data.reply.speech || data.reply.text);
     } else {
       addAIMessage('Something went wrong, BOSS. Please try again.');
       setOrbState('idle');
     }
-  } catch (e) {
+  } catch {
     removeTyping();
     addAIMessage('Connection error, BOSS. Please try again.');
     setOrbState('idle');
@@ -1014,30 +1105,22 @@ function speak(text) {
   if (!text) return;
   const mem = loadOfflineMemory();
   const voiceId = mem.voiceId || '21m00Tcm4TlvDq8ikWAM';
-
-  if (voiceId.startsWith('web-')) {
-    speakWeb(text, voiceId.replace('web-', ''));
-    return;
-  }
+  if (voiceId.startsWith('web-')) { speakWeb(text, voiceId.replace('web-', '')); return; }
 
   setOrbState('speaking');
-  fetch('/api/tts', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, voiceId })
-  }).then(async (res) => {
-    const data = await res.json().catch(() => null);
-    if (data && data.fallback) {
-      speakWeb(text);
-    } else {
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audio.playbackRate = mem.speechRate || 1.0;
-      audio.onended = () => setOrbState('idle');
-      audio.play().catch(() => speakWeb(text));
-    }
-  }).catch(() => speakWeb(text));
+  fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, voiceId }) })
+    .then(async (res) => {
+      const data = await res.json().catch(() => null);
+      if (data && data.fallback) { speakWeb(text); }
+      else {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.playbackRate = mem.speechRate || 1.0;
+        audio.onended = () => setOrbState('idle');
+        audio.play().catch(() => speakWeb(text));
+      }
+    }).catch(() => speakWeb(text));
 }
 
 function speakWeb(text, voiceName) {
@@ -1049,14 +1132,8 @@ function speakWeb(text, voiceName) {
   u.rate = mem.speechRate || 1.0;
   u.pitch = mem.speechPitch || 1.0;
   const voices = window.speechSynthesis.getVoices();
-  if (voiceName) {
-    const match = voices.find(v => v.name.toLowerCase().includes(voiceName));
-    if (match) u.voice = match;
-  }
-  if (!u.voice) {
-    const female = voices.find(v => /female|samantha|karen|moira|tessa/i.test(v.name)) || voices[0];
-    if (female) u.voice = female;
-  }
+  if (voiceName) { const match = voices.find(v => v.name.toLowerCase().includes(voiceName)); if (match) u.voice = match; }
+  if (!u.voice) { const female = voices.find(v => /female|samantha|karen|moira|tessa/i.test(v.name)) || voices[0]; if (female) u.voice = female; }
   u.onend = () => setOrbState('idle');
   window.speechSynthesis.speak(u);
 }
@@ -1067,7 +1144,6 @@ function speakWeb(text, voiceName) {
 let recognition = null;
 let isListening = false;
 let micStream = null;
-
 const micBtn = document.getElementById('holo-mic-btn');
 const orbClick = document.getElementById('orb-click');
 
@@ -1078,11 +1154,7 @@ function initRecognition() {
   r.continuous = false;
   r.interimResults = false;
   r.lang = 'en-US';
-  r.onresult = (e) => {
-    const text = e.results[0][0].transcript;
-    sendMessage(text);
-    stopListening();
-  };
+  r.onresult = (e) => { sendMessage(e.results[0][0].transcript); stopListening(); };
   r.onerror = () => stopListening();
   r.onend = () => stopListening();
   return r;
@@ -1095,12 +1167,7 @@ async function startListening() {
   micBtn.classList.add('active');
   setOrbState('listening');
   sfx.confirm();
-
-  try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    startSpeechWaves(micStream);
-  } catch {}
-
+  try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); startSpeechWaves(micStream); } catch {}
   try { recognition.start(); } catch {}
 }
 
@@ -1109,22 +1176,12 @@ function stopListening() {
   micBtn.classList.remove('active');
   if (orbState === 'listening') setOrbState('idle');
   stopSpeechWaves();
-  if (micStream) {
-    micStream.getTracks().forEach(t => t.stop());
-    micStream = null;
-  }
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
   try { recognition?.stop(); } catch {}
 }
 
-micBtn.addEventListener('click', () => {
-  if (isListening) stopListening();
-  else startListening();
-});
-
-orbClick.addEventListener('click', () => {
-  if (isListening) stopListening();
-  else startListening();
-});
+micBtn.addEventListener('click', () => { isListening ? stopListening() : startListening(); });
+orbClick.addEventListener('click', () => { isListening ? stopListening() : startListening(); });
 
 if ('speechSynthesis' in window) {
   window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
@@ -1137,8 +1194,7 @@ document.getElementById('holo-dock').addEventListener('click', (e) => {
   const btn = e.target.closest('.dock-btn');
   if (!btn) return;
   const panel = btn.dataset.panel;
-  if (openPanels.has(panel)) closePanel(panel);
-  else openPanel(panel);
+  openPanels.has(panel) ? closePanel(panel) : openPanel(panel);
 });
 
 // ================================================

@@ -23,7 +23,7 @@
     <div class="boot-logs" id="boot-logs"></div>
   </div>
 
-  <!-- MAIN APP — Split Layout -->
+  <!-- MAIN APP -->
   <div id="main-app" style="display:none">
     <div class="scanlines"></div>
     <div class="holographic"></div>
@@ -45,69 +45,108 @@
         </span>
       </div>
 
-      <!-- ORB -->
-      <div class="holo-orb-stage" id="orb-stage">
-        <canvas id="orb-canvas" width="500" height="500"></canvas>
-        <div class="orb-click-zone" id="orb-click" title="Click to talk">
-          <i class="fa-solid fa-microphone mic-icon"></i>
+      <!-- TOP HALF — System Monitor -->
+      <div class="sys-monitor" id="sys-monitor">
+        <div class="sys-graph-row">
+          <div class="sys-graph-card">
+            <div class="sys-graph-header">
+              <span class="sys-graph-label">CPU</span>
+              <span class="sys-graph-val" id="sys-cpu-val">0%</span>
+            </div>
+            <canvas class="sys-sparkline" id="spark-cpu" width="200" height="50"></canvas>
+            <div class="sys-graph-sub" id="sys-cpu-model"></div>
+          </div>
+          <div class="sys-graph-card">
+            <div class="sys-graph-header">
+              <span class="sys-graph-label">RAM</span>
+              <span class="sys-graph-val" id="sys-ram-val">0%</span>
+            </div>
+            <canvas class="sys-sparkline" id="spark-ram" width="200" height="50"></canvas>
+            <div class="sys-graph-sub" id="sys-ram-info"></div>
+          </div>
         </div>
-
-        <!-- Holographic projection lines above orb -->
-        <div class="holo-projection">
-          <div class="proj-line"></div>
-          <div class="proj-line"></div>
-          <div class="proj-line"></div>
-          <div class="proj-line"></div>
-          <div class="proj-line"></div>
+        <div class="sys-graph-row">
+          <div class="sys-graph-card">
+            <div class="sys-graph-header">
+              <span class="sys-graph-label">DISK</span>
+              <span class="sys-graph-val" id="sys-disk-val">0%</span>
+            </div>
+            <canvas class="sys-sparkline" id="spark-disk" width="200" height="50"></canvas>
+            <div class="sys-graph-sub" id="sys-disk-info"></div>
+          </div>
+          <div class="sys-graph-card">
+            <div class="sys-graph-header">
+              <span class="sys-graph-label">NETWORK</span>
+              <span class="sys-graph-val" id="sys-net-val">--</span>
+            </div>
+            <canvas class="sys-sparkline" id="spark-net" width="200" height="50"></canvas>
+            <div class="sys-graph-sub" id="sys-net-info"></div>
+          </div>
         </div>
-
-        <!-- RGB split glow -->
-        <div class="orb-rgb-glow" id="orb-rgb-glow">
-          <div class="rgb-r"></div>
-          <div class="rgb-g"></div>
-          <div class="rgb-b"></div>
+        <div class="sys-info-row">
+          <div class="sys-info-chip"><i class="fa-solid fa-clock"></i> <span id="sys-uptime">--</span></div>
+          <div class="sys-info-chip"><i class="fa-solid fa-battery-full"></i> <span id="sys-battery">--</span></div>
+          <div class="sys-info-chip"><i class="fa-solid fa-wifi"></i> <span id="sys-wifi">--</span></div>
         </div>
       </div>
 
-      <div class="holo-status" id="holo-status">STANDBY</div>
-      <div class="holo-label" id="holo-label">Tap the orb or type a command</div>
+      <!-- BOTTOM HALF — Orb & Controls -->
+      <div class="orb-section">
+        <div class="holo-orb-stage" id="orb-stage">
+          <canvas id="orb-canvas" width="500" height="500"></canvas>
+          <div class="orb-click-zone" id="orb-click" title="Click to talk">
+            <i class="fa-solid fa-microphone mic-icon"></i>
+          </div>
+          <div class="holo-projection">
+            <div class="proj-line"></div>
+            <div class="proj-line"></div>
+            <div class="proj-line"></div>
+            <div class="proj-line"></div>
+            <div class="proj-line"></div>
+          </div>
+          <div class="orb-rgb-glow" id="orb-rgb-glow">
+            <div class="rgb-r"></div>
+            <div class="rgb-g"></div>
+            <div class="rgb-b"></div>
+          </div>
+        </div>
 
-      <!-- Speech detector waves -->
-      <div class="speech-waves" id="speech-waves">
-        <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
-        <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
-        <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
-        <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
-        <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
-        <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
-        <div class="wave-bar"></div><div class="wave-bar"></div>
+        <div class="holo-status" id="holo-status">STANDBY</div>
+        <div class="holo-label" id="holo-label">Tap the orb or type a command</div>
+
+        <div class="speech-waves" id="speech-waves">
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div>
+        </div>
+
+        <button class="holo-mic-btn" id="holo-mic-btn" title="Toggle Microphone">
+          <i class="fa-solid fa-microphone"></i>
+          <div class="mic-ring-outer"></div>
+          <div class="mic-ring-inner"></div>
+        </button>
+
+        <div class="timer-pill hidden" id="timer-pill">
+          <i class="fa-solid fa-stopwatch"></i>
+          <span id="timer-display">0:00</span>
+        </div>
+
+        <nav class="holo-dock" id="holo-dock">
+          <button class="dock-btn" data-panel="activity" title="PC Activity"><i class="fa-solid fa-chart-line"></i></button>
+          <button class="dock-btn" data-panel="system" title="System"><i class="fa-solid fa-microchip"></i></button>
+          <button class="dock-btn" data-panel="weather" title="Weather"><i class="fa-solid fa-cloud-sun"></i></button>
+          <button class="dock-btn" data-panel="emails" title="Emails"><i class="fa-solid fa-envelope"></i></button>
+          <button class="dock-btn" data-panel="processes" title="Processes"><i class="fa-solid fa-list-ol"></i></button>
+          <button class="dock-btn" data-panel="vault" title="Vault"><i class="fa-solid fa-database"></i></button>
+          <button class="dock-btn" data-panel="clipboard" title="Clipboard"><i class="fa-solid fa-clipboard"></i></button>
+          <button class="dock-btn" data-panel="settings" title="Settings"><i class="fa-solid fa-gear"></i></button>
+          <button class="dock-btn" data-panel="commands" title="Commands"><i class="fa-solid fa-terminal"></i></button>
+        </nav>
       </div>
-
-      <!-- Mic button -->
-      <button class="holo-mic-btn" id="holo-mic-btn" title="Toggle Microphone">
-        <i class="fa-solid fa-microphone"></i>
-        <div class="mic-ring-outer"></div>
-        <div class="mic-ring-inner"></div>
-      </button>
-
-      <!-- Timer pill -->
-      <div class="timer-pill hidden" id="timer-pill">
-        <i class="fa-solid fa-stopwatch"></i>
-        <span id="timer-display">0:00</span>
-      </div>
-
-      <!-- Dock -->
-      <nav class="holo-dock" id="holo-dock">
-        <button class="dock-btn" data-panel="activity" title="PC Activity"><i class="fa-solid fa-chart-line"></i></button>
-        <button class="dock-btn" data-panel="system" title="System"><i class="fa-solid fa-microchip"></i></button>
-        <button class="dock-btn" data-panel="weather" title="Weather"><i class="fa-solid fa-cloud-sun"></i></button>
-        <button class="dock-btn" data-panel="emails" title="Emails"><i class="fa-solid fa-envelope"></i></button>
-        <button class="dock-btn" data-panel="processes" title="Processes"><i class="fa-solid fa-list-ol"></i></button>
-        <button class="dock-btn" data-panel="vault" title="Vault"><i class="fa-solid fa-database"></i></button>
-        <button class="dock-btn" data-panel="clipboard" title="Clipboard"><i class="fa-solid fa-clipboard"></i></button>
-        <button class="dock-btn" data-panel="settings" title="Settings"><i class="fa-solid fa-gear"></i></button>
-        <button class="dock-btn" data-panel="commands" title="Commands"><i class="fa-solid fa-terminal"></i></button>
-      </nav>
     </aside>
 
     <!-- RIGHT PANEL — Chat & Output -->
@@ -115,7 +154,7 @@
       <header class="hdr">
         <div class="hdr-l">
           <span class="logo">F.R.I.D.A.Y.</span>
-          <span class="ver">v3.5</span>
+          <span class="ver">v4.0</span>
         </div>
         <div class="hdr-r">
           <span class="dot-pulse" id="status-dot"></span>
@@ -135,7 +174,7 @@
       </div>
     </main>
 
-    <!-- PANELS (floating glassmorphic) -->
+    <!-- PANELS (floating glassmorphic, draggable) -->
     <div class="panels" id="panels"></div>
   </div>
 
