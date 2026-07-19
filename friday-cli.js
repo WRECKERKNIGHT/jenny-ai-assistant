@@ -72,7 +72,7 @@ function openUrl(url) {
   if (platform === 'darwin') {
     exec(`open "${targetUrl}"`);
   } else if (platform === 'win32') {
-    exec(`start "${targetUrl}"`);
+    exec(`start "" "${targetUrl}"`);
   } else {
     exec(`xdg-open "${targetUrl}"`);
   }
@@ -115,7 +115,7 @@ function runSystemControl(action, value) {
       } else if (value === 'next') {
         script = 'tell application "System Events" to key code 124 using {control down, command down}'; // simulated next track
       } else if (value === 'previous') {
-        script = 'tell application "System Events" to key code 125 using {control down, command down}'; // simulated prev track
+        script = 'tell application "System Events" to key code 123 using {control down, command down}'; // prev track
       }
       
       exec(`osascript -e '${script}'`, () => {
@@ -335,7 +335,7 @@ async function chatQuery(message) {
   const mem = loadMemory();
   const query = message.toLowerCase();
   
-  const nameMatch = message.match(/my name is\s+(.+)$/i) || message.match(/call me\s+(.+)$/i);
+  const nameMatch = message.match(/my name is\s+(.+)/i) || message.match(/call me\s+(.+)/i);
   if (nameMatch) {
     mem.name = nameMatch[1].trim();
     saveMemory(mem);
@@ -347,7 +347,7 @@ async function chatQuery(message) {
 
   // Try local Express chat server (maintains Gemini context and history)
   try {
-    const response = await fetch('http://localhost:3000/api/chat', {
+    const response = await fetch(`http://localhost:${process.env.PORT || 3000}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message })

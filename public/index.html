@@ -124,12 +124,6 @@
           <div class="wave-bar"></div><div class="wave-bar"></div>
         </div>
 
-        <button class="holo-mic-btn" id="holo-mic-btn" title="Toggle Microphone">
-          <i class="fa-solid fa-microphone"></i>
-          <div class="mic-ring-outer"></div>
-          <div class="mic-ring-inner"></div>
-        </button>
-
         <div class="timer-pill hidden" id="timer-pill">
           <i class="fa-solid fa-stopwatch"></i>
           <span id="timer-display">0:00</span>
@@ -157,16 +151,41 @@
           <span class="ver">v4.0</span>
         </div>
         <div class="hdr-r">
+          <span class="hdr-date" id="hdr-date"></span>
+          <span class="hdr-sep">|</span>
           <span class="dot-pulse" id="status-dot"></span>
           <span id="hdr-clock">00:00:00</span>
         </div>
       </header>
+
+      <div class="chat-ambient" id="chat-ambient">
+        <div class="ambient-chip" id="ambient-weather">
+          <i class="fa-solid fa-cloud-sun"></i>
+          <span id="ambient-weather-text">--</span>
+        </div>
+        <div class="ambient-chip" id="ambient-system">
+          <i class="fa-solid fa-microchip"></i>
+          <span id="ambient-system-text">CPU --% | RAM --%</span>
+        </div>
+        <div class="ambient-chip" id="ambient-uptime">
+          <i class="fa-solid fa-clock"></i>
+          <span id="ambient-uptime-text">Uptime --</span>
+        </div>
+      </div>
 
       <div class="chat-area" id="chat-area">
         <div class="msgs" id="msgs"></div>
       </div>
 
       <div class="input-bar">
+        <div class="quick-actions">
+          <button class="qa-chip" data-cmd="briefing"><i class="fa-solid fa-clipboard-list"></i> Briefing</button>
+          <button class="qa-chip" data-cmd="what's the weather"><i class="fa-solid fa-cloud-sun"></i> Weather</button>
+          <button class="qa-chip" data-cmd="set a timer for 5 minutes"><i class="fa-solid fa-stopwatch"></i> Timer</button>
+          <button class="qa-chip" data-cmd="check emails"><i class="fa-solid fa-envelope"></i> Emails</button>
+          <button class="qa-chip" data-cmd="open commands"><i class="fa-solid fa-terminal"></i> Commands</button>
+          <button class="qa-chip" data-cmd="tell me a joke"><i class="fa-solid fa-face-laugh"></i> Joke</button>
+        </div>
         <div class="txt-wrap">
           <input type="text" id="chat-input" placeholder="Type a command or ask anything..." autocomplete="off">
           <button class="send" id="send-btn"><i class="fa-solid fa-arrow-up"></i></button>

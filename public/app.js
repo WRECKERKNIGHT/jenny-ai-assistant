@@ -87,9 +87,18 @@ async function runBoot() {
   initSpeechWaves();
   startHoloShimmer();
   startSysMonitor();
+  startAmbientBar();
   fetchQuota();
   setInterval(fetchQuota, 60000);
   setInterval(updateTimerDisplay, 1000);
+
+  // Quick action chips
+  document.querySelectorAll('.qa-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const cmd = chip.dataset.cmd;
+      if (cmd) { sendMessage(cmd); sfx.click(); }
+    });
+  });
 
   // Speak the greeting + intro
   await sleep(600);
@@ -99,12 +108,7 @@ async function runBoot() {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function getGreeting() {
-  const h = new Date().getHours();
-  const name = loadOfflineMemory().name;
-  const who = name ? ` ${name}` : '';
-  if (h < 12) return `Good morning${who}. I am FRIDAY, your personal assistant. All systems are operational. What are we doing today, BOSS?`;
-  if (h < 17) return `Good afternoon${who}. I am FRIDAY, your personal assistant. All systems are green. What are we doing today, BOSS?`;
-  return `Good evening${who}. I am FRIDAY, your personal assistant. Systems are online. What are we doing today, BOSS?`;
+  return 'Good evening BOSS. I am FRIDAY, your personal assistant. All Systems are working fine. What are we doing today, BOSS?';
 }
 
 // ================================================
@@ -405,12 +409,47 @@ function stopSpeechWaves() {
 // ================================================
 function startClock() {
   const el = document.getElementById('hdr-clock');
+  const dateEl = document.getElementById('hdr-date');
   if (!el) return;
   function tick() {
-    el.textContent = new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const now = new Date();
+    el.textContent = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    if (dateEl) dateEl.textContent = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   }
   tick();
   setInterval(tick, 1000);
+}
+
+// ================================================
+// AMBIENT BAR — Right panel status chips
+// ================================================
+function startAmbientBar() {
+  fetchAmbientData();
+  setInterval(fetchAmbientData, 8000);
+}
+
+async function fetchAmbientData() {
+  try {
+    const res = await fetch('/api/system-status');
+    const d = await res.json();
+    if (!d.success) return;
+    const cpu = d.cpu?.usage || 0;
+    const ram = d.ram?.usage || 0;
+    const uptimeH = d.uptime ? Math.floor(d.uptime / 3600) : 0;
+    const uptimeM = d.uptime ? Math.floor((d.uptime % 3600) / 60) : 0;
+    const sysEl = document.getElementById('ambient-system-text');
+    const upEl = document.getElementById('ambient-uptime-text');
+    if (sysEl) sysEl.textContent = `CPU ${cpu}% | RAM ${ram}%`;
+    if (upEl) upEl.textContent = `Uptime ${uptimeH}h ${uptimeM}m`;
+  } catch {}
+  try {
+    const res = await fetch('/api/weather');
+    const d = await res.json();
+    if (d.success) {
+      const wEl = document.getElementById('ambient-weather-text');
+      if (wEl) wEl.textContent = `${d.tempC}\u00B0 ${d.condition}`;
+    }
+  } catch {}
 }
 
 // ================================================
@@ -1144,7 +1183,6 @@ function speakWeb(text, voiceName) {
 let recognition = null;
 let isListening = false;
 let micStream = null;
-const micBtn = document.getElementById('holo-mic-btn');
 const orbClick = document.getElementById('orb-click');
 
 function initRecognition() {
@@ -1164,7 +1202,7 @@ async function startListening() {
   if (!recognition) recognition = initRecognition();
   if (!recognition) { toast('Speech recognition not supported', 'err'); return; }
   isListening = true;
-  micBtn.classList.add('active');
+  orbClick.classList.add('active');
   setOrbState('listening');
   sfx.confirm();
   try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); startSpeechWaves(micStream); } catch {}
@@ -1173,14 +1211,13 @@ async function startListening() {
 
 function stopListening() {
   isListening = false;
-  micBtn.classList.remove('active');
+  orbClick.classList.remove('active');
   if (orbState === 'listening') setOrbState('idle');
   stopSpeechWaves();
   if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
   try { recognition?.stop(); } catch {}
 }
 
-micBtn.addEventListener('click', () => { isListening ? stopListening() : startListening(); });
 orbClick.addEventListener('click', () => { isListening ? stopListening() : startListening(); });
 
 if ('speechSynthesis' in window) {
