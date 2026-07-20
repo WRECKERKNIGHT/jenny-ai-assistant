@@ -182,8 +182,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
     func updateServerStatus(_ online: Bool) {
         serverOnline = online
         serverMenuItem.title = online ? "  ● Server Online" : "  ● Server Offline"
-        statusMenuItem.title = online ? "  Status: Ready" : "  Status: Disconnected"
-        if online { loadMiniHUD() }
+        statusMenuItem.title = online ? "  Status: Ready" : "  Status: Starting Server..."
+        if online {
+            loadMiniHUD()
+        } else {
+            autoStartServer()
+        }
+    }
+
+    func autoStartServer() {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/bash")
+        let appPath = Bundle.main.bundlePath
+        var appDir = (appPath as NSString).deletingLastPathComponent
+        if appDir.hasSuffix("/bin") {
+            appDir = (appDir as NSString).deletingLastPathComponent
+        }
+        task.arguments = ["-c", "cd \"\(appDir)\" && node server.js &"]
+        try? task.run()
     }
 
     func loadMiniHUD() {

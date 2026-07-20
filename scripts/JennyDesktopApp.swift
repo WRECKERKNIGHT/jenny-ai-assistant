@@ -146,9 +146,25 @@ class DesktopAppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate,
 
     func updateServerStatus(_ online: Bool) {
         serverOnline = online
-        statusLabel?.stringValue = online ? "● Online" : "● Offline"
-        statusLabel?.textColor = online ? NSColor.systemGreen : NSColor.systemRed
-        if online { loadMainUI() }
+        statusLabel?.stringValue = online ? "● Online" : "● Auto-Starting Server..."
+        statusLabel?.textColor = online ? NSColor.systemGreen : NSColor.systemOrange
+        if online {
+            loadMainUI()
+        } else {
+            autoStartServer()
+        }
+    }
+
+    func autoStartServer() {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/bash")
+        let appPath = Bundle.main.bundlePath
+        var appDir = (appPath as NSString).deletingLastPathComponent
+        if appDir.hasSuffix("/bin") {
+            appDir = (appDir as NSString).deletingLastPathComponent
+        }
+        task.arguments = ["-c", "cd \"\(appDir)\" && node server.js &"]
+        try? task.run()
     }
 
     func loadMainUI() {
