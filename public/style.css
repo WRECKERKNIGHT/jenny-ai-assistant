@@ -1,14 +1,17 @@
 :root {
-  --bg: #08080e;
-  --surface: rgba(255,255,255,0.04);
-  --glass-border: rgba(255,255,255,0.08);
-  --txt: rgba(255,255,255,0.92);
-  --txt2: rgba(255,255,255,0.60);
-  --txt3: rgba(255,255,255,0.40);
-  --cyan: #00d4e6;
-  --pink: #ff2d87;
-  --purple: #8b5cf6;
-  --gold: #ffd700;
+  --bg: #000000;
+  --surface: rgba(255,255,255,0.03);
+  --glass-bg: rgba(0,0,0,0.45);
+  --glass-border: rgba(255,255,255,0.12);
+  --glass-border-gold: rgba(229,193,88,0.35);
+  --txt: #ffffff;
+  --txt2: #d1d5db;
+  --txt3: #9ca3af;
+  --cyan: #e5c158;
+  --pink: #ffffff;
+  --purple: #c0c0c0;
+  --gold: #e5c158;
+  --silver: #c0c0c0;
   --mono: 'SF Mono','Fira Code','Cascadia Code','Menlo',monospace;
   --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   --panel-radius: 14px;

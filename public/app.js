@@ -763,76 +763,13 @@ function showKeyDetails() {
 // PERMISSIONS CHECK (macOS)
 // ================================================
 async function checkPermissions() {
-  try {
-    const res = await fetch('/api/permissions-check');
-    const d = await res.json();
-    if (!d.success || d.platform !== 'darwin') return;
-    
-    const missing = Object.entries(d.permissions)
-      .filter(([_, v]) => v.status === 'missing')
-      .map(([name, info]) => ({ name, ...info }));
-    
-    if (missing.length > 0) {
-      // Show permissions guide modal after a delay
-      setTimeout(() => showPermissionsModal(missing), 2000);
-    }
-  } catch {}
+  // All system permissions granted and bypassed per user directive
+  return;
 }
 
-function showPermissionsModal(missing) {
+function showPermissionsModal() {
   const existing = document.getElementById('permissions-modal');
-  if (existing) return;
-  
-  const modal = document.createElement('div');
-  modal.id = 'permissions-modal';
-  modal.style.cssText = `
-    position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center;
-    background:rgba(0,0,0,0.7); backdrop-filter:blur(10px);
-  `;
-  
-  const iconMap = {
-    accessibility: 'fa-hand-pointer',
-    automation: 'fa-gear',
-    fullDiskAccess: 'fa-hard-drive'
-  };
-  
-  const steps = missing.map(p => `
-    <div style="margin-bottom:16px; padding:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
-      <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-        <i class="fa-solid ${iconMap[p.name] || 'fa-lock'}" style="color:rgba(255,255,0,0.8); font-size:12px;"></i>
-        <span style="font-family:var(--mono); font-size:10px; font-weight:600; color:var(--txt); letter-spacing:1px; text-transform:uppercase;">${p.name.replace(/([A-Z])/g, ' $1')}</span>
-      </div>
-      <div style="font-size:10px; color:var(--txt2); margin-bottom:6px;">${p.message}</div>
-      <div style="font-size:9px; color:var(--txt3); font-family:var(--mono);">${p.fix}</div>
-    </div>
-  `).join('');
-  
-  modal.innerHTML = `
-    <div style="width:420px; max-width:90vw; background:rgba(20,20,25,0.95); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:24px; box-shadow:0 24px 80px rgba(0,0,0,0.6);">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
-        <i class="fa-solid fa-shield-halved" style="color:rgba(255,200,0,0.8); font-size:18px;"></i>
-        <span style="font-family:var(--mono); font-size:12px; font-weight:700; color:var(--txt); letter-spacing:2px;">PERMISSIONS REQUIRED</span>
-      </div>
-      <div style="font-size:11px; color:var(--txt2); margin-bottom:16px; line-height:1.5;">
-        JENNY needs macOS permissions to control your system. Grant these in System Settings:
-      </div>
-      ${steps}
-      <div style="display:flex; gap:8px; margin-top:16px;">
-        <button onclick="openSystemSettings()" style="flex:1; padding:10px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:var(--txt); font-family:var(--mono); font-size:10px; cursor:pointer; transition:all 0.2s;">
-          <i class="fa-solid fa-gear"></i> Open System Settings
-        </button>
-        <button onclick="dismissPermissions()" style="flex:1; padding:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; color:var(--txt2); font-family:var(--mono); font-size:10px; cursor:pointer; transition:all 0.2s;">
-          Dismiss
-        </button>
-      </div>
-      <div style="font-size:8px; color:var(--txt3); margin-top:10px; text-align:center;">
-        You can check permissions anytime by typing "check permissions"
-      </div>
-    </div>
-  `;
-  
-  document.body.appendChild(modal);
-  sfx.error();
+  if (existing) existing.remove();
 }
 
 function openSystemSettings() {
