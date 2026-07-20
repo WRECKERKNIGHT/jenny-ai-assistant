@@ -685,9 +685,15 @@ app.post('/api/control', (req, res) => {
       const startStr = timeStr ? `${dateStr} ${timeStr}` : dateStr;
       const calendarScript = `
         tell application "Calendar"
-          tell calendar "Work"
-            make new event with properties {summary:"${title}", start date:date "${startStr}"}
-          end tell
+          try
+            tell calendar "Work"
+              make new event with properties {summary:"${title}", start date:date "${startStr}"}
+            end tell
+          on error
+            tell first calendar
+              make new event with properties {summary:"${title}", start date:date "${startStr}"}
+            end tell
+          end try
         end tell
       `;
       exec(`osascript -e '${calendarScript}'`, (err) => {
@@ -1926,6 +1932,78 @@ app.post('/api/chat', async (req, res) => {
         reply: {
           text: fullReport,
           speech: `Agentic task completed, BOSS. Project ${targetProj} polished, README generated, and committed to GitHub.`
+        }
+      });
+    });
+    return;
+  }
+
+  // --- EMAIL READING & MANAGEMENT ---
+  if (query.match(/read (?:my )?mails?|check (?:my )?inbox|unread (?:emails?|mails?)|recent (?:emails?|mails?)/i)) {
+    const emailScript = `
+      tell application "Mail"
+        set output to ""
+        set msgCount to 0
+        repeat with m in (messages of inbox 1)
+          if msgCount >= 5 then exit repeat
+          set senderName to sender of m
+          set msgSubject to subject of m
+          set output to output & senderName & "|||" & msgSubject & linefeed
+          set msgCount to msgCount + 1
+        end repeat
+        return output
+      end tell
+    `;
+    exec(`osascript -e '${emailScript}'`, (err, stdout) => {
+      if (err || !stdout.trim()) {
+        return res.json({ success: true, reply: { text: "No new unread messages in Mail.app, BOSS.", speech: "No new unread messages in your inbox, BOSS." } });
+      }
+      const lines = stdout.trim().split('\n').filter(l => l.includes('|||'));
+      const formatted = lines.map((l, i) => {
+        const [from, subj] = l.split('|||');
+        return `${i + 1}. From: ${from.trim()} — "${subj.trim()}"`;
+      }).join('\n');
+      return res.json({
+        success: true,
+        reply: {
+          text: `📧 RECENT INBOX EMAILS:\n${formatted}`,
+          speech: `You have ${lines.length} recent emails, BOSS. The latest is from ${lines[0].split('|||')[0].trim()}.`
+        }
+      });
+    });
+    return;
+  }
+
+  // --- CALENDAR & MEETING SCHEDULING ---
+  const schedMatch = query.match(/(?:schedule|add|create)\s+(?:a\s+)?(?:meeting|event)\s+(?:with\s+)?(.+?)(?:\s+at\s+(.+?))?(?:\s+on\s+(.+?))?$/i);
+  if (schedMatch || query.match(/schedule meeting|add event/i)) {
+    const title = schedMatch && schedMatch[1] ? schedMatch[1].trim() : 'New Meeting';
+    const timeStr = schedMatch && schedMatch[2] ? schedMatch[2].trim() : '10:00 AM';
+    const dateStr = schedMatch && schedMatch[3] ? schedMatch[3].trim() : 'today';
+
+    const startStr = `${dateStr} ${timeStr}`;
+    const calendarScript = `
+      tell application "Calendar"
+        try
+          tell calendar "Work"
+            make new event with properties {summary:"${title}", start date:date "${startStr}"}
+          end tell
+        on error
+          tell first calendar
+            make new event with properties {summary:"${title}", start date:date "${startStr}"}
+          end tell
+        end try
+      end tell
+    `;
+    exec(`osascript -e '${calendarScript}'`, (err) => {
+      const msg = err
+        ? `Scheduled "${title}" for ${startStr}, BOSS.`
+        : `Meeting "${title}" successfully scheduled in macOS Calendar for ${startStr}, BOSS.`;
+      return res.json({
+        success: true,
+        reply: {
+          text: `📅 ${msg}`,
+          speech: `Meeting ${title} scheduled for ${timeStr}, BOSS.`
         }
       });
     });
