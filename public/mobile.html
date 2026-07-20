@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>JENNY AI Mobile Remote</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    :root {
+      --bg: #000000;
+      --glass-bg: rgba(0, 0, 0, 0.55);
+      --glass-card: rgba(255, 255, 255, 0.03);
+      --glass-border: rgba(255, 255, 255, 0.12);
+      --gold: #e5c158;
+      --gold-dim: rgba(229, 193, 88, 0.2);
+      --silver: #c0c0c0;
+      --txt: #ffffff;
+      --txt2: #d1d5db;
+      --txt3: #9ca3af;
+      --mono: 'SF Mono', -apple-system, BlinkMacSystemFont, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--txt);
+      font-family: var(--mono);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mobile-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--glass-border);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand img {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid var(--glass-border);
+    }
+    .brand-title {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: #fff;
+    }
+    .brand-subtitle {
+      font-size: 9px;
+      color: var(--gold);
+      letter-spacing: 1px;
+    }
+    .status-badge {
+      font-size: 10px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--glass-border);
+      color: var(--silver);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-badge.online {
+      border-color: var(--gold-dim);
+      color: var(--gold);
+    }
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--silver);
+    }
+    .status-badge.online .dot {
+      background: var(--gold);
+      box-shadow: 0 0 8px var(--gold);
+    }
+
+    .container {
+      flex: 1;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-width: 500px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* ORB MIC SECTION */
+    .mic-stage {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      background: var(--glass-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      position: relative;
+    }
+    .mic-orb {
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      border: 2px solid var(--gold-dim);
+      background: radial-gradient(circle at 40% 40%, rgba(229,193,88,0.15), rgba(0,0,0,0.8));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 36px;
+      cursor: pointer;
+      box-shadow: 0 0 40px rgba(229,193,88,0.15);
+      transition: all 0.3s ease;
+    }
+    .mic-orb:active, .mic-orb.listening {
+      transform: scale(1.08);
+      border-color: var(--gold);
+      box-shadow: 0 0 60px rgba(229,193,88,0.4);
+      color: var(--gold);
+    }
+    .mic-label {
+      font-size: 11px;
+      color: var(--silver);
+      letter-spacing: 2px;
+      margin-top: 14px;
+      text-align: center;
+    }
+
+    /* QUICK WORKFLOW CHIPS */
+    .section-title {
+      font-size: 11px;
+      color: var(--gold);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .chips-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    .chip-btn {
+      background: var(--glass-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 14px 12px;
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      backdrop-filter: blur(15px);
+      -webkit-backdrop-filter: blur(15px);
+      transition: all 0.2s ease;
+    }
+    .chip-btn:active {
+      background: rgba(229,193,88,0.15);
+      border-color: var(--gold);
+      transform: scale(0.97);
+    }
+    .chip-btn i {
+      font-size: 14px;
+      color: var(--gold);
+    }
+
+    /* SYSTEM GAUGES */
+    .gauge-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .gauge-card {
+      background: var(--glass-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 12px 8px;
+      text-align: center;
+    }
+    .gauge-val {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      margin-top: 4px;
+    }
+    .gauge-lbl {
+      font-size: 9px;
+      color: var(--silver);
+      letter-spacing: 1px;
+    }
+
+    /* TERMINAL CHAT INPUT */
+    .input-box {
+      display: flex;
+      gap: 8px;
+      background: var(--glass-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      padding: 6px;
+    }
+    .input-box input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 13px;
+      padding: 8px 12px;
+    }
+    .input-box button {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      color: var(--gold);
+      width: 42px;
+      height: 42px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .input-box button:active {
+      background: var(--gold);
+      color: #000;
+    }
+
+    /* FEED LOG */
+    .feed-container {
+      flex: 1;
+      background: var(--glass-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      padding: 12px;
+      max-height: 220px;
+      overflow-y: auto;
+      font-size: 11px;
+      line-height: 1.6;
+    }
+    .feed-item {
+      margin-bottom: 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      padding-bottom: 6px;
+    }
+    .feed-user { color: var(--silver); }
+    .feed-jenny { color: #fff; border-left: 2px solid var(--gold); padding-left: 8px; }
+
+    /* SERVER CONFIG MODAL */
+    .config-card {
+      background: var(--glass-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .config-card input {
+      flex: 1;
+      background: rgba(0,0,0,0.6);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 10px;
+    }
+    .config-card button {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      color: #fff;
+      padding: 6px 12px;
+      font-family: var(--mono);
+      font-size: 10px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="mobile-header">
+    <div class="brand">
+      <img src="logo.png" alt="Jenny">
+      <div>
+        <div class="brand-title">J.E.N.N.Y.</div>
+        <div class="brand-subtitle">REMOTE CONTROL MOBILE</div>
+      </div>
+    </div>
+    <div class="status-badge online" id="status-badge">
+      <span class="dot"></span> <span id="status-text">CONNECTED</span>
+    </div>
+  </header>
+
+  <div class="container">
+    
+    <!-- SERVER URL CONFIG -->
+    <div class="config-card">
+      <span style="font-size:10px; color:var(--silver);">SERVER:</span>
+      <input type="text" id="server-url-input" placeholder="http://192.168.1.X:3000 or ngrok URL">
+      <button id="save-url-btn">SAVE</button>
+    </div>
+
+    <!-- MIC ORB -->
+    <div class="mic-stage">
+      <div class="mic-orb" id="mic-orb">
+        <i class="fa-solid fa-microphone"></i>
+      </div>
+      <div class="mic-label" id="mic-label">TAP TO SPEAK REMOTE COMMAND</div>
+    </div>
+
+    <!-- QUICK ACTIONS -->
+    <div>
+      <div class="section-title"><i class="fa-solid fa-bolt"></i> Quick Remote Workflows</div>
+      <div class="chips-grid">
+        <button class="chip-btn" data-cmd="Hi I am on my way home">
+          <i class="fa-solid fa-car"></i> On Way Home
+        </button>
+        <button class="chip-btn" data-cmd="wake mac display">
+          <i class="fa-solid fa-sun"></i> Wake Display
+        </button>
+        <button class="chip-btn" data-cmd="lock screen">
+          <i class="fa-solid fa-lock"></i> Lock Mac
+        </button>
+        <button class="chip-btn" data-cmd="open youtube">
+          <i class="fa-solid fa-play"></i> Open YouTube
+        </button>
+        <button class="chip-btn" data-cmd="open spotify">
+          <i class="fa-solid fa-music"></i> Open Spotify
+        </button>
+        <button class="chip-btn" data-cmd="volume 80">
+          <i class="fa-solid fa-volume-high"></i> Volume 80%
+        </button>
+        <button class="chip-btn" data-cmd="health check">
+          <i class="fa-solid fa-heart-pulse"></i> Health Check
+        </button>
+        <button class="chip-btn" data-cmd="take screenshot">
+          <i class="fa-solid fa-camera"></i> Screenshot
+        </button>
+      </div>
+    </div>
+
+    <!-- TELEMETRY GAUGES -->
+    <div>
+      <div class="section-title"><i class="fa-solid fa-chart-simple"></i> Live Mac Status</div>
+      <div class="gauge-grid">
+        <div class="gauge-card">
+          <div class="gauge-lbl">CPU</div>
+          <div class="gauge-val" id="g-cpu">--%</div>
+        </div>
+        <div class="gauge-card">
+          <div class="gauge-lbl">RAM</div>
+          <div class="gauge-val" id="g-ram">--%</div>
+        </div>
+        <div class="gauge-card">
+          <div class="gauge-lbl">BATTERY</div>
+          <div class="gauge-val" id="g-bat">--%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHAT INPUT -->
+    <div class="input-box">
+      <input type="text" id="mobile-input" placeholder="Type remote command for Mac...">
+      <button id="mobile-send-btn"><i class="fa-solid fa-paper-plane"></i></button>
+    </div>
+
+    <!-- FEED LOG -->
+    <div class="feed-container" id="feed-container">
+      <div class="feed-item feed-jenny">
+        <strong>JENNY:</strong> Remote link established. Ready for mobile commands, BOSS.
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let serverUrl = localStorage.getItem('jenny_server_url') || window.location.origin;
+    document.getElementById('server-url-input').value = serverUrl;
+
+    document.getElementById('save-url-btn').addEventListener('click', () => {
+      serverUrl = document.getElementById('server-url-input').value.trim() || window.location.origin;
+      localStorage.setItem('jenny_server_url', serverUrl);
+      addFeedItem('JENNY', `Server URL updated to: ${serverUrl}`);
+    });
+
+    const feedContainer = document.getElementById('feed-container');
+    const mobileInput = document.getElementById('mobile-input');
+    const mobileSendBtn = document.getElementById('mobile-send-btn');
+    const micOrb = document.getElementById('mic-orb');
+    const micLabel = document.getElementById('mic-label');
+
+    function addFeedItem(sender, text) {
+      const div = document.createElement('div');
+      div.className = `feed-item ${sender === 'USER' ? 'feed-user' : 'feed-jenny'}`;
+      div.innerHTML = `<strong>${sender}:</strong> ${text}`;
+      feedContainer.appendChild(div);
+      feedContainer.scrollTop = feedContainer.scrollHeight;
+    }
+
+    async function sendRemoteCommand(cmdText) {
+      if (!cmdText.trim()) return;
+      addFeedItem('USER', cmdText);
+      mobileInput.value = '';
+      
+      try {
+        const res = await fetch(`${serverUrl}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: cmdText })
+        });
+        const d = await res.json();
+        if (d.success && d.reply) {
+          addFeedItem('JENNY', d.reply.text);
+          if (d.reply.command && d.reply.command.action !== 'vault-save') {
+            await fetch(`${serverUrl}/api/control`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(d.reply.command)
+            });
+          }
+        } else {
+          addFeedItem('JENNY', 'Command execution failed.');
+        }
+      } catch (e) {
+        addFeedItem('JENNY', `Connection error: ${e.message}`);
+      }
+    }
+
+    mobileSendBtn.addEventListener('click', () => sendRemoteCommand(mobileInput.value));
+    mobileInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendRemoteCommand(mobileInput.value); });
+
+    document.querySelectorAll('.chip-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const cmd = btn.dataset.cmd;
+        if (cmd) sendRemoteCommand(cmd);
+      });
+    });
+
+    // SPEECH RECOGNITION
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    let isListening = false;
+
+    if (SR) {
+      recognition = new SR();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        isListening = true;
+        micOrb.classList.add('listening');
+        micLabel.textContent = 'LISTENING FOR REMOTE COMMAND...';
+      };
+      recognition.onresult = (e) => {
+        const text = e.results[0][0].transcript;
+        sendRemoteCommand(text);
+      };
+      recognition.onend = () => {
+        isListening = false;
+        micOrb.classList.remove('listening');
+        micLabel.textContent = 'TAP TO SPEAK REMOTE COMMAND';
+      };
+      recognition.onerror = () => {
+        isListening = false;
+        micOrb.classList.remove('listening');
+        micLabel.textContent = 'TAP TO SPEAK REMOTE COMMAND';
+      };
+
+      micOrb.addEventListener('click', () => {
+        if (isListening) recognition.stop();
+        else recognition.start();
+      });
+    } else {
+      micLabel.textContent = 'SPEECH MIC NOT SUPPORTED ON THIS BROWSER';
+    }
+
+    // SYSTEM GAUGES MONITOR
+    async function updateTelemetry() {
+      try {
+        const res = await fetch(`${serverUrl}/api/system-status`);
+        const d = await res.json();
+        if (d.success) {
+          document.getElementById('g-cpu').textContent = (d.cpu?.usage || 0) + '%';
+          document.getElementById('g-ram').textContent = (d.ram?.usage || 0) + '%';
+          document.getElementById('g-bat').textContent = Math.round(d.battery?.level || 100) + '%';
+          document.getElementById('status-badge').classList.add('online');
+          document.getElementById('status-text').textContent = 'CONNECTED';
+        }
+      } catch {
+        document.getElementById('status-badge').classList.remove('online');
+        document.getElementById('status-text').textContent = 'DISCONNECTED';
+      }
+    }
+    updateTelemetry();
+    setInterval(updateTelemetry, 5000);
+  </script>
+</body>
+</html>

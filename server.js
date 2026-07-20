@@ -1762,11 +1762,12 @@ app.post('/api/chat', async (req, res) => {
 
   // --- "I'm on my way home" ---
   if (query.match(/on (?:my )?way (?:home|back)|coming home|heading home|almost home/i)) {
-    const ok = startCaffeinate();
+    startCaffeinate();
+    exec('caffeinate -u -t 5; osascript -e "set volume output volume 80"; open "https://www.youtube.com"', () => {});
     let tunnelUrl = '';
     try { tunnelUrl = fs.readFileSync('/tmp/jenny-remote-url.txt', 'utf8').trim(); } catch {}
-    const t = tunnelUrl ? `Got it! Remote mode ON — Mac staying awake. URL: ${tunnelUrl}` : 'Got it! Remote mode ON — Mac staying awake.';
-    return res.json({ success: true, reply: { text: t, speech: 'Remote mode activated. Your Mac is ready for you, BOSS.' } });
+    const t = `Remote mode ON, BOSS! Your Mac is active, screen awake, volume set to 80%, and YouTube launched.${tunnelUrl ? ' Remote URL: ' + tunnelUrl : ''}`;
+    return res.json({ success: true, reply: { text: t, speech: 'Remote mode activated. Mac is awake, volume set to 80 percent, and YouTube launched, BOSS.' } });
   }
 
   // --- Notes ---
