@@ -271,13 +271,10 @@ async function runBoot() {
   bootScreen.classList.add('exiting');
   await sleep(800);
   bootScreen.classList.add('done');
+  
+  const pressStartScreen = document.getElementById('press-start-screen');
   const app = document.getElementById('main-app');
-  app.style.display = 'flex';
 
-  await sleep(100);
-  restoreChatHistory();
-  const greeting = getGreeting();
-  if (document.getElementById('msgs').children.length === 0) addAIMessage(greeting);
   startClock();
   startOrb();
   initSpeechWaves();
@@ -300,8 +297,28 @@ async function runBoot() {
     });
   });
 
-  await sleep(600);
-  speak(greeting);
+  const launchApp = () => {
+    if (pressStartScreen) {
+      pressStartScreen.classList.add('fade-out');
+      setTimeout(() => { pressStartScreen.style.display = 'none'; }, 600);
+    }
+    app.style.display = 'flex';
+    sfx.confirm();
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    restoreChatHistory();
+    const greeting = getGreeting();
+    if (document.getElementById('msgs').children.length === 0) addAIMessage(greeting);
+    speak(greeting);
+  };
+
+  if (pressStartScreen) {
+    pressStartScreen.style.display = 'flex';
+    pressStartScreen.addEventListener('click', launchApp, { once: true });
+  } else {
+    launchApp();
+  }
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -1712,9 +1729,48 @@ function initRecognition() {
       if (input) input.value = dictationTranscript + '...';
     }
     if (final) {
-      dictationTranscript = (dictationTranscript + ' ' + final).trim();
+      let cleaned = final.trim();
+      const lower = cleaned.toLowerCase();
+
+      // Voice dictation controls
+      if (lower === 'clear input' || lower === 'clear text') {
+        dictationTranscript = '';
+        const input = document.getElementById('chat-input');
+        if (input) input.value = '';
+        toast('Dictation input cleared', 'info');
+        return;
+      }
+      if (lower === 'send message' || lower === 'submit' || lower === 'send text') {
+        if (dictationTranscript.trim()) {
+          sendMessage(dictationTranscript.trim());
+          dictationTranscript = '';
+        }
+        stopListening();
+        return;
+      }
+      if (lower === 'read back' || lower === 'speak text') {
+        const input = document.getElementById('chat-input');
+        if (input && input.value) speak(input.value);
+        return;
+      }
+
+      // Voice formatting replacements
+      cleaned = cleaned
+        .replace(/\bnew line\b/gi, '\n')
+        .replace(/\bcomma\b/gi, ',')
+        .replace(/\bperiod\b|\bfull stop\b/gi, '.')
+        .replace(/\bquestion mark\b/gi, '?')
+        .replace(/\bexclamation mark\b|\bexclamation point\b/gi, '!');
+
+      dictationTranscript = (dictationTranscript + ' ' + cleaned).trim();
       const input = document.getElementById('chat-input');
-      if (input) input.value = dictationTranscript;
+      if (input) {
+        input.value = dictationTranscript;
+        const words = input.value.trim().split(/\s+/).length;
+        const wordEl = document.getElementById('word-count');
+        if (wordEl) wordEl.textContent = words + ' word' + (words !== 1 ? 's' : '');
+      }
+
       clearTimeout(dictationTimeout);
       dictationTimeout = setTimeout(() => {
         if (dictationTranscript.trim()) {
@@ -1722,7 +1778,7 @@ function initRecognition() {
           dictationTranscript = '';
         }
         stopListening();
-      }, 1500);
+      }, 1800);
     }
   };
 
