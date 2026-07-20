@@ -7,37 +7,43 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
     :root {
-      --surface: rgba(255,255,255,0.04);
-      --surface-hover: rgba(255,255,255,0.07);
+      --surface: rgba(255,255,255,0.03);
+      --surface-hover: rgba(255,255,255,0.08);
       --surface-alt: rgba(255,255,255,0.02);
-      --border: rgba(255,255,255,0.07);
-      --border-hover: rgba(255,255,255,0.14);
-      --txt: rgba(255,255,255,0.92);
-      --txt2: rgba(255,255,255,0.5);
-      --txt3: rgba(255,255,255,0.28);
-      --cyan: #00d4e6;
-      --cyan-dim: rgba(0,212,230,0.15);
-      --pink: #ff2d87;
-      --pink-dim: rgba(255,45,135,0.12);
-      --purple: #8b5cf6;
+      --border: rgba(229,193,88,0.25);
+      --border-hover: rgba(229,193,88,0.5);
+      --txt: #ffffff;
+      --txt2: #d1d5db;
+      --txt3: #9ca3af;
+      --cyan: #e5c158;
+      --cyan-dim: rgba(229,193,88,0.15);
+      --pink: #c0c0c0;
+      --pink-dim: rgba(192,192,192,0.12);
+      --purple: #e5c158;
+      --gold: #e5c158;
+      --silver: #c0c0c0;
       --success: #34d399;
       --warn: #fbbf24;
-      --mono: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Mono', 'Menlo', monospace;
+      --mono: 'SF Mono', -apple-system, BlinkMacSystemFont, 'Menlo', monospace;
       --radius: 10px;
       --radius-sm: 6px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background: transparent;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(30px) saturate(1.8);
+      -webkit-backdrop-filter: blur(30px) saturate(1.8);
       color: var(--txt);
       font-family: var(--mono);
       width: 380px;
-      height: 540px;
+      height: 560px;
       overflow: hidden;
       display: flex;
       flex-direction: column;
       -webkit-user-select: none;
       user-select: none;
+      border: 1px solid var(--border);
+      border-radius: 16px;
     }
 
     /* ── Header ── */

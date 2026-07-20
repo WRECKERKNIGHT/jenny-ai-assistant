@@ -115,6 +115,21 @@ app.get('/api/remote-status', (req, res) => {
   });
 });
 
+// Get local network IP address for mobile app connection
+app.get('/api/local-ip', (req, res) => {
+  const nets = os.networkInterfaces();
+  let localIp = '127.0.0.1';
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        localIp = net.address;
+        break;
+      }
+    }
+  }
+  res.json({ success: true, ip: localIp, mobileUrl: `http://${localIp}:${PORT}/mobile.html` });
+});
+
 // Sanitize inputs to prevent shell command injection
 function isValidAppName(name) {
   return /^[a-zA-Z0-9\s.\-_]+$/.test(name);
