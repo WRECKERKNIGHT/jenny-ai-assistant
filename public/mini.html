@@ -9,6 +9,7 @@
     :root {
       --surface: rgba(255,255,255,0.04);
       --surface-hover: rgba(255,255,255,0.07);
+      --surface-alt: rgba(255,255,255,0.02);
       --border: rgba(255,255,255,0.07);
       --border-hover: rgba(255,255,255,0.14);
       --txt: rgba(255,255,255,0.92);
@@ -137,8 +138,11 @@
 
     /* ── Quick Input ── */
     .quick-input-wrap { flex: 1; display: flex; flex-direction: column; gap: 0; min-width: 0; }
+    .input-row {
+      display: flex; gap: 6px; align-items: stretch;
+    }
     .quick-input {
-      width: 100%; padding: 9px 12px;
+      flex: 1; padding: 9px 12px;
       background: rgba(255,255,255,0.06); border: 1px solid rgba(0,212,230,0.15);
       border-radius: var(--radius-sm); color: var(--txt);
       font-family: var(--mono); font-size: 11px;
@@ -146,6 +150,15 @@
     }
     .quick-input::placeholder { color: var(--txt3); }
     .quick-input:focus { border-color: rgba(0,212,230,0.4); background: rgba(0,212,230,0.06); box-shadow: 0 0 12px rgba(0,212,230,0.08); }
+    .send-btn {
+      width: 32px; flex-shrink: 0;
+      background: var(--cyan-dim); border: 1px solid rgba(0,212,230,0.2);
+      border-radius: var(--radius-sm); color: var(--cyan);
+      cursor: pointer; transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px;
+    }
+    .send-btn:hover { background: rgba(0,212,230,0.25); color: #fff; }
 
     /* ── Wave ── */
     .wave-wrap { height: 28px; position: relative; margin: 2px 0; }
@@ -184,27 +197,75 @@
     }
     .act i { color: var(--cyan); font-size: 10px; width: 14px; text-align: center; flex-shrink: 0; }
 
-    /* ── Transcript ── */
-    .transcript {
+    /* ── Summon Row ── */
+    .summon-row {
+      display: flex; gap: 5px; padding: 0 14px;
+    }
+    .summon-btn {
+      flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px;
+      padding: 6px 4px; background: var(--surface-alt);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--txt3); font-family: var(--mono);
+      font-size: 8px; cursor: pointer; transition: all 0.15s;
+      letter-spacing: 0.4px;
+    }
+    .summon-btn:hover {
+      background: var(--pink-dim); border-color: rgba(255,45,135,0.2);
+      color: var(--pink); transform: translateY(-1px);
+    }
+    .summon-btn i { font-size: 9px; }
+
+    /* ── Chat ── */
+    .chat {
       flex: 1; margin: 4px 14px 0; padding: 8px 10px;
       background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--radius-sm); overflow-y: auto;
-      font-size: 9px; color: var(--txt2); line-height: 1.6;
-      min-height: 0;
+      min-height: 0; display: flex; flex-direction: column;
     }
-    .transcript::-webkit-scrollbar { width: 2px; }
-    .transcript::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
-    .tr-label {
+    .chat::-webkit-scrollbar { width: 2px; }
+    .chat::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
+    .chat-label {
       font-size: 7px; color: var(--txt3); letter-spacing: 1.5px;
-      margin-bottom: 6px; text-transform: uppercase;
-      display: flex; align-items: center; gap: 6px;
+      margin-bottom: 8px; text-transform: uppercase;
+      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
     }
-    .tr-label::before { content: ''; flex: 0 0 4px; height: 4px; border-radius: 50%; background: var(--cyan); }
-    .tr-msg { margin-bottom: 5px; word-wrap: break-word; padding: 3px 0; }
-    .tr-msg.user { color: var(--cyan); }
-    .tr-msg.user::before { content: '> '; opacity: 0.4; }
-    .tr-msg.ai { color: var(--txt); }
-    .tr-msg.system { color: var(--txt3); font-style: italic; font-size: 8px; }
+    .chat-label::before { content: ''; flex: 0 0 4px; height: 4px; border-radius: 50%; background: var(--cyan); }
+    .chat-msgs {
+      flex: 1; overflow-y: auto; display: flex; flex-direction: column;
+      gap: 6px; min-height: 0;
+    }
+    .chat-msgs::-webkit-scrollbar { width: 2px; }
+    .chat-msgs::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
+    .bubble {
+      max-width: 88%; padding: 7px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 10px; line-height: 1.5;
+      word-wrap: break-word; animation: fadeIn 0.15s ease-out;
+      flex-shrink: 0;
+    }
+    .bubble.user {
+      align-self: flex-end;
+      background: rgba(0,212,230,0.12);
+      border: 1px solid rgba(0,212,230,0.2);
+      color: var(--cyan);
+      border-bottom-right-radius: 2px;
+    }
+    .bubble.ai {
+      align-self: flex-start;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--txt2);
+      border-bottom-left-radius: 2px;
+    }
+    .bubble.system {
+      align-self: center;
+      background: transparent;
+      border: none;
+      color: var(--txt3);
+      font-size: 8px; font-style: italic;
+      text-align: center;
+    }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(4px);} to{opacity:1;transform:translateY(0);} }
 
     /* ── Footer ── */
     .footer {
@@ -249,8 +310,11 @@
       <div class="orb-core"><i class="fa-solid fa-microphone"></i></div>
     </div>
     <div class="quick-input-wrap">
-      <input class="quick-input" id="chat-input" type="text"
-             placeholder="Ask anything, BOSS..." autocomplete="off">
+      <div class="input-row">
+        <input class="quick-input" id="chat-input" type="text"
+               placeholder="Ask anything, BOSS..." autocomplete="off">
+        <button class="send-btn" id="send-btn" onclick="submitChat()"><i class="fa-solid fa-paper-plane"></i></button>
+      </div>
     </div>
   </div>
 
@@ -283,11 +347,18 @@
     <button class="act" onclick="quickCmd('tell me a joke')"><i class="fa-solid fa-face-laugh"></i> Joke</button>
   </div>
 
-  <!-- Transcript -->
-  <div class="transcript" id="transcript">
-    <div class="tr-label">Neural Stream</div>
-    <div id="transcript-content">
-      <div class="tr-msg ai">Ready, BOSS. Tap the orb or type a command.</div>
+  <!-- Summon Panels -->
+  <div class="summon-row">
+    <button class="summon-btn" onclick="summonPanel('system')"><i class="fa-solid fa-microchip"></i> System</button>
+    <button class="summon-btn" onclick="summonPanel('commands')"><i class="fa-solid fa-terminal"></i> Commands</button>
+    <button class="summon-btn" onclick="summonPanel('notes')"><i class="fa-solid fa-note-sticky"></i> Notes</button>
+  </div>
+
+  <!-- Chat -->
+  <div class="chat" id="chat">
+    <div class="chat-label">Neural Stream</div>
+    <div class="chat-msgs" id="chat-msgs">
+      <div class="bubble ai">Ready, BOSS. Tap the orb or type a command.</div>
     </div>
   </div>
 
@@ -321,13 +392,14 @@
 
     /* ── Chat input ── */
     const chatInput = document.getElementById('chat-input');
+    function submitChat() {
+      const text = chatInput.value.trim();
+      if (!text) return;
+      chatInput.value = '';
+      quickCmd(text);
+    }
     chatInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter') {
-        const text = chatInput.value.trim();
-        if (!text) return;
-        chatInput.value = '';
-        quickCmd(text);
-      }
+      if (e.key === 'Enter') submitChat();
     });
 
     /* ── Quick command ── */
@@ -356,14 +428,23 @@
 
     /* ── Messages ── */
     function addMsg(text, role) {
-      const el = document.getElementById('transcript-content');
+      const container = document.getElementById('chat-msgs');
       const div = document.createElement('div');
-      div.className = 'tr-msg ' + role;
+      div.className = 'bubble ' + role;
       div.textContent = text;
-      el.appendChild(div);
-      const box = document.getElementById('transcript');
-      box.scrollTop = box.scrollHeight;
-      while (el.children.length > 25) el.removeChild(el.children[1]);
+      container.appendChild(div);
+      const chat = document.getElementById('chat');
+      chat.scrollTop = chat.scrollHeight;
+      while (container.children.length > 25) container.removeChild(container.children[1]);
+    }
+
+    /* ── Summon panel (opens desktop app) ── */
+    function summonPanel(name) {
+      if (window.webkit && window.webkit.messageHandlers) {
+        window.webkit.messageHandlers.openDesktopApp.postMessage('summon:' + name);
+      } else {
+        window.open('http://localhost:3000?panel=' + name, '_blank');
+      }
     }
 
     /* ── Open desktop app ── */

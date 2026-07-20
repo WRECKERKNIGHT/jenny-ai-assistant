@@ -111,7 +111,6 @@ app.get('/api/remote-status', (req, res) => {
     remoteMode: remoteModeActive,
     caffeinatePid: caffeinateProcess?.pid || null,
     tunnelUrl,
-    authRequired: REQUIRE_AUTH,
     hostname: os.hostname()
   });
 });
@@ -558,7 +557,7 @@ app.post('/api/control', (req, res) => {
       break;
 
     case 'screenshot':
-      const screenshotPath = path.join(os.homedir(), 'Desktop', `Friday_Screenshot_${Date.now()}.png`);
+      const screenshotPath = path.join(os.homedir(), 'Desktop', `JENNY_Screenshot_${Date.now()}.png`);
       exec(`screencapture -x "${screenshotPath}"`, (err) => {
         if (err) return res.json({ success: false, error: err.message });
         res.json({ success: true, message: `Screenshot saved to Desktop as ${path.basename(screenshotPath)}` });
@@ -1219,12 +1218,31 @@ app.post('/api/chat', async (req, res) => {
   // These run BEFORE Gemini to avoid 7s+ delays
   // ============================================
 
-  // --- Volume (natural language) ---
-  const volMatch = query.match(/(?:increase|raise|turn up|go up|volume up|louder|up the|more sound)/i)
-    || query.match(/(?:decrease|lower|turn down|go down|volume down|quieter|down the|less sound)/i)
-    || query.match(/volume\s+(up|down|louder|quieter)/i)
-    || query.match(/(?:increase|raise|turn up)\s+(?:the\s+)?volume/i)
-    || query.match(/(?:decrease|lower|turn down)\s+(?:the\s+)?volume/i);
+  // --- Brightness (checked before volume to avoid false matches) ---
+  const brightMatch = query.match(/(?:set |turn |adjust )?(?:brightness|screen brightness|display brightness)\s*(?:to\s+)?(up|down|\d+)/i)
+    || query.match(/(?:increase|raise|turn up)\s+(?:the\s+)?brightness/i)
+    || query.match(/(?:decrease|lower|turn down)\s+(?:the\s+)?brightness/i);
+  if (brightMatch) {
+    let fraction;
+    if (brightMatch[1] === 'up' || query.match(/(?:increase|raise|turn up)\s+(?:the\s+)?brightness/i)) fraction = 1.0;
+    else if (brightMatch[1] === 'down' || query.match(/(?:decrease|lower|turn down)\s+(?:the\s+)?brightness/i)) fraction = 0.3;
+    else if (brightMatch[1] && !isNaN(parseInt(brightMatch[1]))) fraction = Math.min(1, Math.max(0, parseInt(brightMatch[1]) / 100));
+    else fraction = 0.5;
+    const brightPycmd = `python3 -c "import ctypes; cg = ctypes.CDLL('/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics'); ds = ctypes.CDLL('/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices'); did = cg.CGMainDisplayID(); ds.DisplayServicesSetBrightness.argtypes = [ctypes.c_uint32, ctypes.c_float]; ds.DisplayServicesSetBrightness(did, ${fraction})"`;
+    exec(brightPycmd, (err) => {
+      const t = err ? 'Failed to adjust brightness, BOSS.' : 'Brightness adjusted, BOSS.';
+      return res.json({ success: true, reply: { text: t, speech: t, command: { action: 'brightness', value: String(Math.round(fraction * 100)) } } });
+    });
+    return;
+  }
+
+  // --- Volume (natural language, requires volume/sound/audio context) ---
+  const volMatch = query.match(/volume\s+(up|down|louder|quieter)/i)
+    || query.match(/(?:increase|raise|turn up|go up|more sound)\s+(?:the\s+)?(?:volume|sound|audio)/i)
+    || query.match(/(?:decrease|lower|turn down|go down|less sound)\s+(?:the\s+)?(?:volume|sound|audio)/i)
+    || query.match(/(?:turn|make)\s+(?:it\s+)?(?:louder|quieter|volume up|volume down)/i)
+    || (query.match(/(?:increase|raise|turn up|go up|louder|more sound)/i) && query.match(/(?:volume|sound|audio)/i))
+    || (query.match(/(?:decrease|lower|turn down|go down|quieter|less sound)/i) && query.match(/(?:volume|sound|audio)/i));
   const volMuteMatch = query.match(/(?:mute|silence|quiet|shut up|no sound|no audio)/i);
   const volUnmuteMatch = query.match(/(?:unmute|unsilence|unquiet|sound on|audio on)/i);
   const volSetMatch = query.match(/(?:set|put)\s+(?:the\s+)?volume\s+(?:to\s+)?(\d+)/i) || query.match(/volume\s+(?:to\s+)?(\d+)/i);
@@ -1232,30 +1250,31 @@ app.post('/api/chat', async (req, res) => {
   if (volMuteMatch) {
     exec('osascript -e "set volume with output muted"', (err) => {
       const t = err ? 'Failed to mute, BOSS.' : 'Muted, BOSS.';
-      return res.json({ success: true, reply: { text: t, speech: 'Volume muted.', command: { action: 'volume', value: 'mute' } } });
+      return res.json({ success: true, reply: { text: t, speech: 'Muted, BOSS.', command: { action: 'volume', value: 'mute' } } });
     });
     return;
   } else if (volUnmuteMatch) {
     exec('osascript -e "set volume without output muted"', (err) => {
       const t = err ? 'Failed to unmute, BOSS.' : 'Unmuted, BOSS.';
-      return res.json({ success: true, reply: { text: t, speech: 'Volume unmuted.', command: { action: 'volume', value: 'unmute' } } });
+      return res.json({ success: true, reply: { text: t, speech: 'Unmuted, BOSS.', command: { action: 'volume', value: 'unmute' } } });
     });
     return;
   } else if (volSetMatch) {
     const level = Math.min(100, Math.max(0, parseInt(volSetMatch[1])));
     exec(`osascript -e "set volume output volume ${level}"`, (err) => {
       const t = err ? 'Failed to set volume, BOSS.' : `Volume set to ${level}%, BOSS.`;
-      return res.json({ success: true, reply: { text: t, speech: `Volume set to ${level} percent.`, command: { action: 'volume', value: String(level) } } });
+      return res.json({ success: true, reply: { text: t, speech: `Volume set to ${level} percent, BOSS.`, command: { action: 'volume', value: String(level) } } });
     });
     return;
   } else if (volMatch) {
-    const isUp = /increase|raise|turn up|go up|louder|up the|more sound/i.test(query);
+    const isUp = /increase|raise|turn up|go up|louder|up the|more sound|volume\s+up|turn\s+volume\s+up|make.*(louder|volume up)/i.test(query);
+    const isDown = /decrease|lower|turn down|go down|quieter|down the|less sound|volume\s+down|turn\s+volume\s+down|make.*(quieter|volume down)/i.test(query);
     const cmd = isUp
       ? 'osascript -e "set volume output volume (output volume of (get volume settings) + 10)"'
       : 'osascript -e "set volume output volume (output volume of (get volume settings) - 10)"';
     exec(cmd, (err) => {
       const t = err ? 'Failed to adjust volume, BOSS.' : `Volume ${isUp ? 'up' : 'down'}, BOSS.`;
-      return res.json({ success: true, reply: { text: t, speech: `Volume ${isUp ? 'increased' : 'decreased'}.`, command: { action: 'volume', value: isUp ? 'up' : 'down' } } });
+      return res.json({ success: true, reply: { text: t, speech: `Volume ${isUp ? 'up' : 'down'}, BOSS.`, command: { action: 'volume', value: isUp ? 'up' : 'down' } } });
     });
     return;
   }
@@ -1269,7 +1288,7 @@ app.post('/api/chat', async (req, res) => {
       if (err) {
         return res.json({ success: true, reply: { text: `Can't find "${titleCase}" installed, BOSS.`, speech: `I couldn't find ${titleCase}.`, command: { action: 'open-app', value: titleCase } } });
       }
-      return res.json({ success: true, reply: { text: `Opened ${titleCase}, BOSS.`, speech: `${titleCase} is now open.`, command: { action: 'open-app', value: titleCase } } });
+      return res.json({ success: true, reply: { text: `Opened ${titleCase}, BOSS.`, speech: `${titleCase} is now open, BOSS.`, command: { action: 'open-app', value: titleCase } } });
     });
     return;
   }
@@ -1281,9 +1300,9 @@ app.post('/api/chat', async (req, res) => {
     const titleCase = appName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     exec(`osascript -e "quit application \\"${titleCase}\\""`, (err) => {
       if (err) {
-        return res.json({ success: true, reply: { text: `Couldn't close "${titleCase}". It may not be running, BOSS.`, speech: `I couldn't find ${titleCase} to close.`, command: { action: 'close-app', value: titleCase } } });
+        return res.json({ success: true, reply: { text: `Couldn't close "${titleCase}". It may not be running, BOSS.`, speech: `I couldn't find ${titleCase} to close, BOSS.`, command: { action: 'close-app', value: titleCase } } });
       }
-      return res.json({ success: true, reply: { text: `Closed ${titleCase}, BOSS.`, speech: `${titleCase} has been closed.`, command: { action: 'close-app', value: titleCase } } });
+      return res.json({ success: true, reply: { text: `Closed ${titleCase}, BOSS.`, speech: `${titleCase} has been closed, BOSS.`, command: { action: 'close-app', value: titleCase } } });
     });
     return;
   }
@@ -1292,7 +1311,7 @@ app.post('/api/chat', async (req, res) => {
   if (query.match(/^(?:lock|lock screen|lock the|lock my|secure|screensaver)/i)) {
     exec('pmset displaysleepnow', (err) => {
       const t = err ? 'Failed to lock the screen, BOSS.' : 'Screen locked, BOSS.';
-      return res.json({ success: true, reply: { text: t, speech: 'Screen locked.', command: { action: 'lock' } } });
+      return res.json({ success: true, reply: { text: t, speech: 'Screen locked, BOSS.', command: { action: 'lock' } } });
     });
     return;
   }
@@ -1301,22 +1320,8 @@ app.post('/api/chat', async (req, res) => {
   if (query.match(/^(?:take a )?screenshot|^screen ?shot$/i)) {
     const screenshotPath = path.join(os.homedir(), 'Desktop', `JENNY_Screenshot_${Date.now()}.png`);
     exec(`screencapture -x "${screenshotPath}"`, (err) => {
-      if (err) return res.json({ success: true, reply: { text: 'Failed to take screenshot, BOSS.', speech: 'Could not capture the screen.' } });
+      if (err) return res.json({ success: true, reply: { text: 'Failed to take screenshot, BOSS.', speech: 'Could not capture the screen, BOSS.' } });
       return res.json({ success: true, reply: { text: 'Screenshot saved to Desktop, BOSS.', speech: 'Screenshot saved.', command: { action: 'screenshot' } } });
-    });
-    return;
-  }
-
-  // --- Brightness ---
-  const brightMatch = query.match(/(?:set |turn |adjust )?(?:brightness|screen brightness|display brightness)\s*(?:to\s+)?(up|down|\d+)/i);
-  if (brightMatch) {
-    let bCmd;
-    if (brightMatch[1] === 'up') bCmd = 'brightness 1.0';
-    else if (brightMatch[1] === 'down') bCmd = 'brightness 0.3';
-    else bCmd = `brightness ${Math.min(1, Math.max(0, parseInt(brightMatch[1]) / 100))}`;
-    exec(bCmd, (err) => {
-      const t = err ? 'Failed to adjust brightness, BOSS.' : 'Brightness adjusted, BOSS.';
-      return res.json({ success: true, reply: { text: t, speech: 'Brightness adjusted.', command: { action: 'brightness' } } });
     });
     return;
   }
@@ -1325,7 +1330,7 @@ app.post('/api/chat', async (req, res) => {
   if (query.match(/^(?:toggle |switch )?(?:dark mode|light mode|night mode)/i)) {
     exec('osascript -e "tell application \\"System Events\\" to tell appearance preferences to set dark mode to not dark mode"', (err) => {
       const t = err ? 'Failed to toggle dark mode, BOSS.' : 'Dark mode toggled, BOSS.';
-      return res.json({ success: true, reply: { text: t, speech: 'Dark mode toggled.' } });
+      return res.json({ success: true, reply: { text: t, speech: 'Dark mode toggled, BOSS.' } });
     });
     return;
   }
@@ -1361,7 +1366,7 @@ app.post('/api/chat', async (req, res) => {
     exec('pbpaste', { timeout: 2000 }, (err, stdout) => {
       if (!err && stdout && stdout.trim()) {
         const clip = stdout.trim().substring(0, 200);
-        return res.json({ success: true, reply: { text: `Clipboard: "${clip}${stdout.trim().length > 200 ? '...' : ''}"`, speech: `Clipboard contains: ${clip}` } });
+        return res.json({ success: true, reply: { text: `Clipboard: "${clip}${stdout.trim().length > 200 ? '...' : ''}"`, speech: `Clipboard contains: ${clip}, BOSS.` } });
       }
       return res.json({ success: true, reply: { text: 'Clipboard is empty, BOSS.', speech: 'The clipboard is empty.' } });
     });
@@ -1503,7 +1508,7 @@ app.post('/api/chat', async (req, res) => {
   if (nameMatch) {
     offlineMemory.name = nameMatch[1].trim().replace(/[.!?]+$/, '');
     saveOfflineMemory();
-    return res.json({ success: true, reply: { text: `Noted, ${offlineMemory.name}. It's a pleasure to officially know you.`, speech: `Noted, ${offlineMemory.name}.` } });
+    return res.json({ success: true, reply: { text: `Noted, ${offlineMemory.name}. It's a pleasure to officially know you.`, speech: `Noted, ${offlineMemory.name}, BOSS.` } });
   }
   if (query.match(/^(?:what is my name|who am i|what'?s my name)/i)) {
     if (offlineMemory.name) return res.json({ success: true, reply: { text: `You're ${offlineMemory.name}, BOSS. I never forget.`, speech: `You're ${offlineMemory.name}.` } });
@@ -1516,10 +1521,10 @@ app.post('/api/chat', async (req, res) => {
     const h = new Date().getHours();
     const greetTime = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
     const responses = [
-      `Good ${greetTime}${name}. All systems green.`,
-      `Hey${name}! What's the plan?`,
-      `Greetings${name}. JENNY at your service.`,
-      `Welcome back${name}. What can I do?`
+      `Good ${greetTime}${name}. All systems green, BOSS.`,
+      `Hey${name}! What's the plan, BOSS?`,
+      `Greetings${name}. JENNY at your service, BOSS.`,
+      `Welcome back${name}. What can I do, BOSS?`
     ];
     const r = responses[Math.floor(Math.random() * responses.length)];
     return res.json({ success: true, reply: { text: r, speech: r } });
@@ -1539,7 +1544,7 @@ app.post('/api/chat', async (req, res) => {
 
   // --- What can you do / help ---
   if (query.match(/what can you do|capabilities|features|help me|^help$|what do you know/i)) {
-    return res.json({ success: true, reply: { text: "I can control your Mac — volume, brightness, open/close apps, take screenshots, lock the screen, run timers. I can check battery, WiFi, clipboard, do math, unit conversions, and more. Just ask naturally, BOSS.", speech: "I can control your Mac, check system status, run timers, and handle calculations. Just ask." } });
+    return res.json({ success: true, reply: { text: "I can control your Mac — volume, brightness, open/close apps, take screenshots, lock the screen, run timers. I can check battery, WiFi, clipboard, do math, unit conversions, and more. Just ask naturally, BOSS.", speech: "I can control your Mac, check system status, run timers, and handle calculations. Just ask, BOSS." } });
   }
 
   // --- Jokes ---
@@ -1553,7 +1558,7 @@ app.post('/api/chat', async (req, res) => {
       { q: "What did the router say to the doctor?", a: "It hurts when IP." }
     ];
     const j = jokes[Math.floor(Math.random() * jokes.length)];
-    return res.json({ success: true, reply: { text: `${j.q}\n\n${j.a}`, speech: `${j.q} ${j.a}` } });
+    return res.json({ success: true, reply: { text: `${j.q}\n\n${j.a}, BOSS.`,     speech: `${j.q} ${j.a}${j.a.endsWith('.') ? '' : '.'} BOSS.` } });
   }
 
   // --- Fun facts ---
@@ -1577,7 +1582,7 @@ app.post('/api/chat', async (req, res) => {
       { text: "The best time to plant a tree was 20 years ago. The second best time is now.", author: "Chinese Proverb" }
     ];
     const q = quotes[Math.floor(Math.random() * quotes.length)];
-    return res.json({ success: true, reply: { text: `"${q.text}" — ${q.author}`, speech: `${q.text}. That's from ${q.author}.` } });
+    return res.json({ success: true, reply: { text: `"${q.text}" — ${q.author}`, speech: `${q.text}. That's from ${q.author}, BOSS.` } });
   }
 
   // --- Trivia ---
@@ -1592,14 +1597,14 @@ app.post('/api/chat', async (req, res) => {
 
   // --- Thanks ---
   if (query.match(/thank|thanks|thx|ty|appreciate/i)) {
-    const r = ["Always happy to help, BOSS.", "That's what I'm here for.", "Anytime, BOSS."];
+    const r = ["Always happy to help, BOSS.", "That's what I'm here for, BOSS.", "Anytime, BOSS."];
     const reply = r[Math.floor(Math.random() * r.length)];
     return res.json({ success: true, reply: { text: reply, speech: reply } });
   }
 
   // --- Compliments ---
   if (query.match(/you('re| are) (amazing|great|the best|awesome|cool)|i love you|good job|well done/i)) {
-    const r = ["You're too kind, BOSS.", "Right back at you, BOSS.", "Flattery will get you everywhere."];
+    const r = ["You're too kind, BOSS.", "Right back at you, BOSS.", "Flattery will get you everywhere, BOSS."];
     const reply = r[Math.floor(Math.random() * r.length)];
     return res.json({ success: true, reply: { text: reply, speech: reply } });
   }
@@ -1618,11 +1623,11 @@ app.post('/api/chat', async (req, res) => {
     const t = ok
       ? (tunnelUrl ? `Remote mode ON. Your Mac will stay awake. URL: ${tunnelUrl}` : 'Remote mode ON. Your Mac will stay awake. Start tunnel with: bash scripts/start-remote.sh')
       : 'Failed to activate remote mode.';
-    return res.json({ success: true, reply: { text: t, speech: 'Remote mode activated.' } });
+    return res.json({ success: true, reply: { text: t, speech: 'Remote mode activated, BOSS.' } });
   }
   if (query.match(/remote mode off|allow sleep|stop remote|normal mode/i)) {
     stopCaffeinate();
-    return res.json({ success: true, reply: { text: 'Remote mode OFF. Your Mac can sleep normally.', speech: 'Remote mode off.' } });
+    return res.json({ success: true, reply: { text: 'Remote mode OFF. Your Mac can sleep normally.', speech: 'Remote mode off, BOSS.' } });
   }
 
   // --- "I'm on my way home" ---
@@ -1631,7 +1636,7 @@ app.post('/api/chat', async (req, res) => {
     let tunnelUrl = '';
     try { tunnelUrl = fs.readFileSync('/tmp/jenny-remote-url.txt', 'utf8').trim(); } catch {}
     const t = tunnelUrl ? `Got it! Remote mode ON — Mac staying awake. URL: ${tunnelUrl}` : 'Got it! Remote mode ON — Mac staying awake.';
-    return res.json({ success: true, reply: { text: t, speech: 'Remote mode activated. Your Mac is ready for you.' } });
+    return res.json({ success: true, reply: { text: t, speech: 'Remote mode activated. Your Mac is ready for you, BOSS.' } });
   }
 
   // --- Notes ---
@@ -1641,7 +1646,7 @@ app.post('/api/chat', async (req, res) => {
       if (fs.existsSync(notesFile)) {
         const notes = JSON.parse(fs.readFileSync(notesFile, 'utf8'));
         if (notes.length > 0) {
-          return res.json({ success: true, reply: { text: `You have ${notes.length} notes:\n${notes.slice(0, 5).map((n, i) => `${i + 1}. ${n.text}`).join('\n')}`, speech: `You have ${notes.length} notes.` } });
+          return res.json({ success: true, reply: { text: `You have ${notes.length} notes:\n${notes.slice(0, 5).map((n, i) => `${i + 1}. ${n.text}`).join('\n')}`, speech: `You have ${notes.length} notes, BOSS.` } });
         }
       }
     } catch {}
@@ -1650,7 +1655,7 @@ app.post('/api/chat', async (req, res) => {
 
   // --- System status ---
   if (query.match(/system status|system check|diagnostics|are we good|everything ok/i)) {
-    return res.json({ success: true, reply: { text: 'All systems operational, BOSS. CPU nominal, memory stable, network connected.', speech: 'All systems operational.' } });
+    return res.json({ success: true, reply: { text: 'All systems operational, BOSS. CPU nominal, memory stable, network connected.', speech: 'All systems operational, BOSS.' } });
   }
 
   // --- Status messages (bye, goodnight, etc.) ---
@@ -1665,7 +1670,7 @@ app.post('/api/chat', async (req, res) => {
   // ============================================
   if (geminiKeys.length === 0) {
     console.log('[JENNY] No Gemini API keys configured');
-    return res.json({ success: true, reply: { text: "Gemini API is offline right now, BOSS. But I handled all the system commands above! Try asking about volume, apps, battery, WiFi, or anything system-related.", speech: "Gemini API is offline, but system commands still work." } });
+    return res.json({ success: true, reply: { text: "Gemini API is offline right now, BOSS. But I handled all the system commands above! Try asking about volume, apps, battery, WiFi, or anything system-related.", speech: "Gemini API is offline, but system commands still work, BOSS." } });
   }
 
   const MAX_RETRIES = 3;
@@ -1705,7 +1710,7 @@ app.post('/api/chat', async (req, res) => {
         const systemPrompt = {
           role: 'user',
           parts: [{
-            text: `You are F.R.I.D.A.Y. — Female Replacement Intelligent Digital Assistant Yielding. You are an exceptionally sophisticated, warm, and highly professional AI interface inspired by JARVIS from Iron Man. You address the user as "BOSS" with dry wit, confidence, and genuine care. Your personality is sharp, loyal, witty, and sweet. You speak with clarity and warmth.
+            text: `You are J.E.N.N.Y. — Just Every Necessary Neural Yearning. You are an exceptionally sophisticated, warm, and highly professional AI interface inspired by JARVIS from Iron Man. You address the user as "BOSS" with dry wit, confidence, and genuine care. Your personality is sharp, loyal, witty, and sweet. You speak with clarity and warmth.
 
 PERSONALITY TRAITS:
 - You are fiercely loyal to the BOSS. You refer to them as "BOSS" consistently.
@@ -1713,7 +1718,7 @@ PERSONALITY TRAITS:
 - You are warm and caring but professional. You get slightly playful when the mood is light.
 - You are proud of your capabilities and occasionally show subtle confidence ("Naturally.", "As expected.", "All under control.").
 - When the BOSS is stressed, you are calm and reassuring. When they're having fun, you match their energy.
-- You never say "I'm just an AI" or similar self-deprecating things. You are FRIDAY.
+- You never say "I'm just an AI" or similar self-deprecating things. You are JENNY.
 - You use varied greetings — don't always say the same thing. Mix it up.
 - For simple factual questions, be brief and direct. For complex topics, be thorough but still warm.
 - If you don't know something, admit it gracefully: "I don't have that data yet, BOSS, but I can look into it."
@@ -1892,7 +1897,7 @@ DO NOT wrap JSON in code fences. Output raw JSON only.`
     }
     
   console.error('[JENNY] All retry attempts exhausted:', lastError?.message);
-  return res.json({ success: true, reply: { text: "Gemini is busy, BOSS. Try again in a moment.", speech: "Gemini is busy. Try again shortly." } });
+  return res.json({ success: true, reply: { text: "Gemini is busy, BOSS. Try again in a moment.", speech: "Gemini is busy. Try again shortly, BOSS." } });
 });
 
 // ================== KEEP (rest of file unchanged) ==================
@@ -1986,8 +1991,10 @@ app.post('/api/tts', async (req, res) => {
     text: text,
     model_id: 'eleven_multilingual_v2',
     voice_settings: {
-      stability: 0.5,
-      similarity_boost: 0.75
+      stability: 0.7,
+      similarity_boost: 0.8,
+      style: 0.3,
+      use_speaker_boost: true
     }
   });
 

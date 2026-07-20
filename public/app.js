@@ -1668,12 +1668,14 @@ function speakWeb(text, voiceName) {
   setOrbState('speaking');
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
-  u.rate = mem.speechRate || 1.0;
-  u.pitch = mem.speechPitch || 1.0;
+  u.rate = 0.9;
+  u.pitch = 1.0;
+  u.volume = 1.0;
   const voices = window.speechSynthesis.getVoices();
   if (voiceName) { const match = voices.find(v => v.name.toLowerCase().includes(voiceName)); if (match) u.voice = match; }
-  if (!u.voice) { const female = voices.find(v => /female|samantha|karen|moira|tessa/i.test(v.name)) || voices[0]; if (female) u.voice = female; }
+  if (!u.voice) { const female = voices.find(v => /samantha|karen|moira|tessa|google.*female|zira|google uk english female/i.test(v.name)) || voices.find(v => /female/i.test(v.name)) || voices[0]; if (female) u.voice = female; }
   u.onend = () => setOrbState('idle');
+  u.onerror = () => setOrbState('idle');
   window.speechSynthesis.speak(u);
 }
 
@@ -1684,17 +1686,61 @@ let recognition = null;
 let isListening = false;
 let micStream = null;
 const orbClick = document.getElementById('orb-click');
+let dictationTranscript = '';
+let dictationTimeout = null;
 
 function initRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return null;
   const r = new SR();
-  r.continuous = false;
-  r.interimResults = false;
+  r.continuous = true;
+  r.interimResults = true;
   r.lang = 'en-US';
-  r.onresult = (e) => { sendMessage(e.results[0][0].transcript); stopListening(); };
-  r.onerror = () => stopListening();
-  r.onend = () => stopListening();
+  r.maxAlternatives = 1;
+
+  r.onresult = (e) => {
+    let interim = '';
+    let final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) final += t;
+      else interim += t;
+    }
+    if (interim) {
+      dictationTranscript = final || interim;
+      const input = document.getElementById('chat-input');
+      if (input) input.value = dictationTranscript + '...';
+    }
+    if (final) {
+      dictationTranscript = (dictationTranscript + ' ' + final).trim();
+      const input = document.getElementById('chat-input');
+      if (input) input.value = dictationTranscript;
+      clearTimeout(dictationTimeout);
+      dictationTimeout = setTimeout(() => {
+        if (dictationTranscript.trim()) {
+          sendMessage(dictationTranscript.trim());
+          dictationTranscript = '';
+        }
+        stopListening();
+      }, 1500);
+    }
+  };
+
+  r.onerror = (e) => {
+    console.warn('[JENNY] Speech recognition error:', e.error);
+    if (e.error === 'not-allowed') { toast('Mic access denied. Allow it in browser settings.', 'err'); stopListening(); }
+    else if (e.error === 'no-speech') { /* ignore, keep listening */ }
+    else if (e.error === 'network') { toast('Speech recognition needs internet.', 'err'); }
+  };
+
+  r.onend = () => {
+    if (isListening && dictationTranscript.trim()) {
+      sendMessage(dictationTranscript.trim());
+      dictationTranscript = '';
+    }
+    stopListening();
+  };
+
   return r;
 }
 
@@ -1702,6 +1748,7 @@ async function startListening() {
   if (!recognition) recognition = initRecognition();
   if (!recognition) { toast('Speech recognition not supported', 'err'); return; }
   isListening = true;
+  dictationTranscript = '';
   orbClick.classList.add('active');
   setOrbState('listening');
   sfx.confirm();
