@@ -92,6 +92,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
         let config = WKWebViewConfiguration()
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
         config.userContentController.add(self, name: "retry")
+        config.userContentController.add(self, name: "openDesktopApp")
+        config.userContentController.add(self, name: "openFullApp")
 
         webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 380, height: 540), configuration: config)
         webView.navigationDelegate = self
@@ -285,6 +287,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         if message.name == "retry" { refreshConnection() }
+        else if message.name == "openDesktopApp" || message.name == "openFullApp" {
+            openDesktopApp()
+        }
+    }
+
+    @objc func openDesktopApp() {
+        let appBundlePath = Bundle.main.bundlePath.replacingOccurrences(of: "JennyAI.app", with: "JennyDesktop.app")
+        if let url = URL(string: "file://\(appBundlePath)/Contents/MacOS/JennyDesktop") {
+            NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+        } else {
+            openMainApp()
+        }
+        popover.performClose(nil)
     }
 }
 

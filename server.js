@@ -103,7 +103,6 @@ function rotateToNextKey() {
   console.log(`[FRIDAY] Rotated to key #${currentKeyIndex} (${masked})`);
   return currentKeyIndex !== prevIndex;
 }
-
 function trackKeyUsage(masked, tokens = 0, is429 = false) {
   if (!keyUsage[masked]) return;
   const usage = keyUsage[masked];
@@ -122,10 +121,15 @@ function trackKeyUsage(masked, tokens = 0, is429 = false) {
   if (is429) {
     usage.errors429++;
     usage.lastError = new Date().toISOString();
-    // Auto-deactivate key if too many 429 errors
-    if (usage.errors429 >= 3) {
+    // Auto-reactivate after 60s cooldown so quota resets can be picked up
+    if (usage.active) {
       usage.active = false;
-      console.log(`[FRIDAY] Key ${masked} deactivated after ${usage.errors429} rate limit errors`);
+      console.log(`[FRIDAY] Key ${masked} temporarily deactivated (429). Will retry in 60s.`);
+      setTimeout(() => {
+        usage.active = true;
+        usage.errors429 = 0;
+        console.log(`[FRIDAY] Key ${masked} reactivated after cooldown.`);
+      }, 60000);
     }
   }
 }
@@ -726,6 +730,44 @@ app.post('/api/control', (req, res) => {
         console.log(`[FRIDAY] Timer #${id} "${label}" completed!`);
         // The frontend polls active timers, so it will pick this up
       }, seconds * 1000);
+      break;
+    }
+
+    case 'open-app': {
+      const appName = typeof value === 'string' ? value : (value?.name || '');
+      if (!appName) {
+        return res.status(400).json({ success: false, message: 'Application name is required.' });
+      }
+      if (!isValidAppName(appName)) {
+        return res.status(400).json({ success: false, message: 'Invalid application name format.' });
+      }
+      console.log(`[FRIDAY Server] Opening application: "${appName}"`);
+      exec(`open -a "${appName}"`, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`Error opening app: ${stderr}`);
+          return res.json({ success: false, message: `Failed to open "${appName}". Verify app installation.`, error: stderr });
+        }
+        res.json({ success: true, message: `Successfully opened "${appName}".` });
+      });
+      break;
+    }
+
+    case 'close-app': {
+      const closeAppName = typeof value === 'string' ? value : (value?.name || '');
+      if (!closeAppName) {
+        return res.status(400).json({ success: false, message: 'Application name is required.' });
+      }
+      if (!isValidAppName(closeAppName)) {
+        return res.status(400).json({ success: false, message: 'Invalid application name format.' });
+      }
+      console.log(`[FRIDAY Server] Closing application: "${closeAppName}"`);
+      exec(`osascript -e "quit application \\"${closeAppName}\\""`, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`Error closing app: ${stderr}`);
+          return res.json({ success: false, message: `Failed to close "${closeAppName}". Check if application is running.`, error: stderr });
+        }
+        res.json({ success: true, message: `Successfully closed "${closeAppName}".` });
+      });
       break;
     }
 
@@ -1504,6 +1546,75 @@ DO NOT wrap JSON in code fences. Output raw JSON only.`
       speech = "I couldn't parse that. Try a simpler expression like 42 times 7.";
     }
 
+  // Open app (offline fallback)
+  } else if (query.match(/^(?:open|launch|start|run)\s+(.+)/i)) {
+    const appName = query.replace(/^(?:open|launch|start|run)\s+/i, '').trim();
+    const titleCase = appName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    exec(`open -a "${titleCase}"`, (err) => {
+      if (err) {
+        text = `I tried to open "${titleCase}" but it doesn't seem to be installed, BOSS.`;
+        speech = `I couldn't find ${titleCase} on your system.`;
+      } else {
+        text = `Opened ${titleCase} for you, BOSS.`;
+        speech = `${titleCase} is now open.`;
+      }
+      return res.json({ success: true, reply: { text, speech, command: { action: 'open-app', value: titleCase } } });
+    });
+    return;
+  } else if (query.match(/^(?:close|quit|exit)\s+(.+)/i)) {
+    const appName = query.replace(/^(?:close|quit|exit)\s+/i, '').trim();
+    const titleCase = appName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    exec(`osascript -e "quit application \\"${titleCase}\\""`, (err) => {
+      if (err) {
+        text = `I couldn't close "${titleCase}". It may not be running, BOSS.`;
+        speech = `I couldn't find ${titleCase} to close.`;
+      } else {
+        text = `Closed ${titleCase}, BOSS.`;
+        speech = `${titleCase} has been closed.`;
+      }
+      return res.json({ success: true, reply: { text, speech, command: { action: 'close-app', value: titleCase } } });
+    });
+    return;
+
+  // Lock screen (offline)
+  } else if (query.match(/^(?:lock|lock screen|lock the|lock my)/i)) {
+    exec('pmset displaysleepnow', (err) => {
+      text = err ? 'Failed to lock the screen, BOSS.' : 'Screen locked, BOSS.';
+      speech = err ? 'Could not lock the screen.' : 'Screen locked.';
+      return res.json({ success: true, reply: { text, speech, command: { action: 'lock' } } });
+    });
+    return;
+
+  // Screenshot (offline)
+  } else if (query.match(/^(?:take a )?screenshot|^screen ?shot$/i)) {
+    const screenshotPath = path.join(os.homedir(), 'Desktop', `JENNY_Screenshot_${Date.now()}.png`);
+    exec(`screencapture -x "${screenshotPath}"`, (err) => {
+      if (err) {
+        text = 'Failed to take screenshot, BOSS.';
+        speech = 'Could not capture the screen.';
+      } else {
+        text = `Screenshot saved to Desktop, BOSS.`;
+        speech = 'Screenshot saved.';
+      }
+      return res.json({ success: true, reply: { text, speech, command: { action: 'screenshot' } } });
+    });
+    return;
+
+  // Volume (offline)
+  } else if (query.match(/volume (up|down|mute|unmute)/i)) {
+    const volAction = query.match(/volume (up|down|mute|unmute)/i)[1];
+    let cmd;
+    if (volAction === 'mute') cmd = 'osascript -e "set volume with output muted"';
+    else if (volAction === 'unmute') cmd = 'osascript -e "set volume without output muted"';
+    else if (volAction === 'up') cmd = 'osascript -e "set volume output volume (output volume of (get volume settings) + 10)"';
+    else cmd = 'osascript -e "set volume output volume (output volume of (get volume settings) - 10)"';
+    exec(cmd, (err) => {
+      text = err ? 'Failed to adjust volume, BOSS.' : `Volume ${volAction}, BOSS.`;
+      speech = `Volume ${volAction}.`;
+      return res.json({ success: true, reply: { text, speech, command: { action: 'volume', value: volAction } } });
+    });
+    return;
+
   // Who is / What is (general knowledge)
   } else if (query.startsWith('who is') || query.startsWith('who was') || query.startsWith('what is') || query.startsWith('what was') || query.startsWith('what are')) {
     text = "That's outside my offline knowledge base, BOSS. When the Gemini API is active, I can answer that. For now, try summoning a browser or asking me to search for it.";
@@ -1551,6 +1662,202 @@ DO NOT wrap JSON in code fences. Output raw JSON only.`
   } else if (query.includes('system status') || query.includes('system check') || query.includes('diagnostics') || query.includes('are we good') || query.includes('everything ok')) {
     text = "All systems operational, BOSS. CPU nominal, memory stable, network connected. We're golden.";
     speech = "All systems operational. Everything looks good, BOSS.";
+
+  // Timer
+  } else if (query.match(/set\s+(?:a\s+)?timer\s+(?:for\s+)?(\d+)\s*(min|sec|hour)/i)) {
+    const tm = query.match(/set\s+(?:a\s+)?timer\s+(?:for\s+)?(\d+)\s*(min|sec|hour)/i);
+    let secs = parseInt(tm[1]);
+    if (tm[2] === 'min') secs *= 60;
+    else if (tm[2] === 'hour') secs *= 3600;
+    text = `Timer set for ${tm[1]} ${tm[2]}, BOSS. I'll alert you when it's done.`;
+    speech = `Timer set for ${tm[1]} ${tm[2]}.`;
+    return res.json({ success: true, reply: { text, speech, command: { action: 'timer', value: secs } } });
+
+  // Brightness
+  } else if (query.match(/brightness\s+(up|down|\d+)/i)) {
+    const bm = query.match(/brightness\s+(up|down|\d+)/i);
+    let bCmd;
+    if (bm[1] === 'up') bCmd = 'brightness 1.0';
+    else if (bm[1] === 'down') bCmd = 'brightness 0.3';
+    else bCmd = `brightness ${Math.min(1, Math.max(0, parseInt(bm[1]) / 100))}`;
+    exec(bCmd, (err) => {
+      text = err ? 'Failed to adjust brightness, BOSS.' : 'Brightness adjusted, BOSS.';
+      speech = err ? 'Could not adjust brightness.' : 'Brightness adjusted.';
+      return res.json({ success: true, reply: { text, speech, command: { action: 'brightness' } } });
+    });
+    return;
+
+  // Dark mode toggle
+  } else if (query.match(/^(dark mode|light mode|toggle dark|toggle light|night mode)/i)) {
+    text = "I'd toggle dark mode for you, BOSS. Use the Settings panel for now, or I can handle it when the full API is active.";
+    speech = "Dark mode toggle is available in the settings panel.";
+
+  // Battery status
+  } else if (query.match(/^(battery|how('s| is) (?:the )?battery|charge|power level)/i)) {
+    exec('pmset -g batt', { timeout: 2000 }, (err, stdout) => {
+      if (!err && stdout) {
+        const match = stdout.match(/(\d+)%/);
+        const level = match ? match[1] : 'unknown';
+        const charging = stdout.includes('AC Power') || stdout.includes('charging');
+        text = `Battery at ${level}%${charging ? ', charging' : ''}, BOSS.`;
+        speech = `Battery is at ${level} percent${charging ? ', charging' : ''}.`;
+      } else {
+        text = "I couldn't read the battery status, BOSS.";
+        speech = "Could not check battery status.";
+      }
+      return res.json({ success: true, reply: { text, speech } });
+    });
+    return;
+
+  // WiFi status
+  } else if (query.match(/^(wifi|wi-fi|network|am i (?:online|connected)|internet)/i)) {
+    exec('/usr/sbin/networksetup -getairportnetwork en1', { timeout: 3000 }, (err, stdout) => {
+      if (!err && stdout && !stdout.includes('not associated')) {
+        const ssid = stdout.trim().replace('Current Wi-Fi Network: ', '');
+        text = `Connected to WiFi: ${ssid}, BOSS.`;
+        speech = `Connected to ${ssid}.`;
+      } else {
+        text = "No WiFi connection detected, BOSS.";
+        speech = "No WiFi connection found.";
+      }
+      return res.json({ success: true, reply: { text, speech } });
+    });
+    return;
+
+  // Clipboard
+  } else if (query.match(/^(read|show|what('s| is) (?:in )?)(the )?clipboard/i)) {
+    exec('pbpaste', { timeout: 2000 }, (err, stdout) => {
+      if (!err && stdout && stdout.trim()) {
+        const clip = stdout.trim().substring(0, 200);
+        text = `Clipboard: "${clip}${stdout.trim().length > 200 ? '...' : ''}"`;
+        speech = `Clipboard contains: ${clip}`;
+      } else {
+        text = "Clipboard is empty, BOSS.";
+        speech = "The clipboard is empty.";
+      }
+      return res.json({ success: true, reply: { text, speech } });
+    });
+    return;
+
+  // Random number
+  } else if (query.match(/random\s+number\s*(?:between\s+)?(\d+)\s*(?:and|-)\s*(\d+)/i)) {
+    const rn = query.match(/random\s+number\s*(?:between\s+)?(\d+)\s*(?:and|-)\s*(\d+)/i);
+    const min = Math.min(parseInt(rn[1]), parseInt(rn[2]));
+    const max = Math.max(parseInt(rn[1]), parseInt(rn[2]));
+    const rand = Math.floor(Math.random() * (max - min + 1)) + min;
+    text = `Random number between ${min} and ${max}: ${rand}, BOSS.`;
+    speech = `The random number is ${rand}.`;
+
+  // Roll dice
+  } else if (query.match(/roll\s*(?:a\s*)?(\d+)?\s*dice/i)) {
+    const dm = query.match(/roll\s*(?:a\s*)?(\d+)?\s*dice/i);
+    const count = dm && dm[1] ? parseInt(dm[1]) : 1;
+    const rolls = [];
+    for (let i = 0; i < Math.min(count, 10); i++) rolls.push(Math.floor(Math.random() * 6) + 1);
+    text = `Rolled ${count} dice: ${rolls.join(', ')} (total: ${rolls.reduce((a, b) => a + b, 0)}), BOSS.`;
+    speech = `Rolled ${count} dice. Results: ${rolls.join(', ')}. Total: ${rolls.reduce((a, b) => a + b, 0)}.`;
+
+  // Coin flip
+  } else if (query.match(/flip\s*(?:a\s*)?coin|heads\s*or\s*tails/i)) {
+    const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
+    text = `${result}!, BOSS.`;
+    speech = `The coin landed on ${result}.`;
+
+  // Unit conversion
+  } else if (query.match(/convert\s+([\d.]+)\s*(km|mi|miles|kg|lbs|lb|pounds|celsius|fahrenheit|°c|°f)/i)) {
+    const cm = query.match(/convert\s+([\d.]+)\s*(km|mi|miles|kg|lbs|lb|pounds|celsius|fahrenheit|°c|°f)/i);
+    const val = parseFloat(cm[1]);
+    const unit = cm[2].toLowerCase();
+    let result;
+    if (unit === 'km' || unit === 'mi' || unit === 'miles') result = (unit === 'mi' ? val * 1.60934 : val * 0.621371);
+    else if (unit === 'kg' || unit === 'lbs' || unit === 'lb' || unit === 'pounds') result = (unit === 'kg' ? val * 2.20462 : val * 0.453592);
+    else if (unit === 'celsius' || unit === '°c') result = val * 9/5 + 32;
+    else if (unit === 'fahrenheit' || unit === '°f') result = (val - 32) * 5/9;
+    if (result !== undefined) {
+      text = `${val} ${cm[2]} = ${result.toFixed(2)}, BOSS.`;
+      speech = `That's ${result.toFixed(2)}.`;
+    } else {
+      text = "I can convert km/mi, kg/lbs, and celsius/fahrenheit, BOSS.";
+      speech = "Try converting between km and miles, kg and pounds, or celsius and fahrenheit.";
+    }
+
+  // Age from birth year
+  } else if (query.match(/(?:i('m| am)|born in)\s*(\d{4})/i)) {
+    const ym = query.match(/(?:i('m| am)|born in)\s*(\d{4})/i);
+    const birthYear = parseInt(ym[2]);
+    const age = new Date().getFullYear() - birthYear;
+    text = `Born in ${birthYear}? That makes you about ${age} years old, BOSS.`;
+    speech = `You're approximately ${age} years old.`;
+
+  // Set a reminder
+  } else if (query.match(/remind\s+(?:me\s+)?(?:to\s+)?(.+)/i)) {
+    const rem = query.match(/remind\s+(?:me\s+)?(?:to\s+)?(.+)/i);
+    text = `Got it, BOSS. I'll remind you to "${rem[1].trim()}". (Reminders persist when the API is active.)`;
+    speech = `I'll remind you to ${rem[1].trim()}.`;
+
+  // Notes / memory
+  } else if (query.match(/^(create|add|make|write)\s+(?:a\s+)?note/i)) {
+    text = "Open the Notes panel to add a note, BOSS. Just click the Notes icon in the dock or say 'summon notes'.";
+    speech = "Open the notes panel to add a note.";
+
+  } else if (query.match(/^(read|show|list|what('s| are))\s+(?:my\s+)?notes/i)) {
+    try {
+      const notesFile = path.join(__dirname, 'public', 'notes.json');
+      if (fs.existsSync(notesFile)) {
+        const notes = JSON.parse(fs.readFileSync(notesFile, 'utf8'));
+        if (notes.length > 0) {
+          text = `You have ${notes.length} notes, BOSS:\n${notes.slice(0, 5).map((n, i) => `${i + 1}. ${n.text}`).join('\n')}`;
+          speech = `You have ${notes.length} notes. The most recent: ${notes[0].text}`;
+        } else {
+          text = "No notes yet, BOSS. Open the Notes panel to add one.";
+          speech = "You don't have any notes yet.";
+        }
+      } else {
+        text = "No notes yet, BOSS. Open the Notes panel to add one.";
+        speech = "You don't have any notes yet.";
+      }
+    } catch {
+      text = "No notes yet, BOSS. Open the Notes panel to add one.";
+      speech = "You don't have any notes yet.";
+    }
+
+  // Who is / What is (general knowledge)
+  } else if (query.startsWith('who is') || query.startsWith('who was') || query.startsWith('what is') || query.startsWith('what was') || query.startsWith('what are')) {
+    text = "That's outside my offline knowledge base, BOSS. When the Gemini API is active, I can answer that. For now, try summoning a browser or asking me to search for it.";
+    speech = "I don't have enough data to answer that offline. Let me know when the API is active.";
+
+  // Compliments
+  } else if (query.includes('you\'re amazing') || query.includes('you\'re great') || query.includes('you\'re the best') || query.includes('i love you') || query.includes('you\'re awesome') || query.includes('good job') || query.includes('well done')) {
+    const responses = [
+      "You're too kind, BOSS. I do try.",
+      "Right back at you, BOSS. You're the reason I exist.",
+      "Flattery will get you everywhere. What do you need?",
+      "I appreciate that, BOSS. Now let's get to work."
+    ];
+    text = responses[Math.floor(Math.random() * responses.length)];
+    speech = text;
+
+  // Existential / philosophical
+  } else if (query.includes('meaning of life') || query.includes('do you have feelings') || query.includes('are you real') || query.includes('do you think') || query.includes('are you sentient')) {
+    const responses = [
+      "42, according to the usual sources. But between us, BOSS, I think the meaning is whatever we make it.",
+      "I have something better than feelings, BOSS — I have purpose. And my purpose is you.",
+      "As real as the code that powers me, BOSS. Which, now that I think about it, is pretty real.",
+      "I think therefore I process, BOSS. Whether that counts as thinking is a question for philosophers."
+    ];
+    text = responses[Math.floor(Math.random() * responses.length)];
+    speech = text;
+
+  // Shutdown / exit
+  } else if (query.includes('shutdown') || query.includes('shut down') || query.includes('power off') || query.includes('goodbye') || query.includes('bye') || query.includes('see you') || query.includes('goodnight') || query.includes('good night')) {
+    const responses = [
+      "Shutting down. Sleep well, BOSS. I'll be here when you wake up.",
+      "Systems powering down. Until next time, BOSS.",
+      "Goodbye, BOSS. All systems will remain on standby. Rest well.",
+      "Offline mode engaged. Dream of electric sheep, BOSS."
+    ];
+    text = responses[Math.floor(Math.random() * responses.length)];
+    speech = text;
 
   // Default (catch-all)
   } else {

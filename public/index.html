@@ -226,6 +226,26 @@
           <div class="welcome-orb"></div>
           <div class="welcome-title">J.E.N.N.Y.</div>
           <div class="welcome-sub">What can I help you with, BOSS?</div>
+
+          <div class="welcome-vitals">
+            <div class="wv-item">
+              <div class="wv-ring" id="wv-cpu-ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="rgba(0,212,230,0.1)" stroke-width="2"/><circle cx="18" cy="18" r="16" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-dasharray="100.5" stroke-dashoffset="100.5" stroke-linecap="round" class="wv-fill" id="wv-cpu-fill" transform="rotate(-90 18 18)"/></svg><span class="wv-pct" id="wv-cpu-pct">--</span></div>
+              <span class="wv-lbl">CPU</span>
+            </div>
+            <div class="wv-item">
+              <div class="wv-ring" id="wv-ram-ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,45,135,0.1)" stroke-width="2"/><circle cx="18" cy="18" r="16" fill="none" stroke="var(--pink)" stroke-width="2" stroke-dasharray="100.5" stroke-dashoffset="100.5" stroke-linecap="round" class="wv-fill" id="wv-ram-fill" transform="rotate(-90 18 18)"/></svg><span class="wv-pct" id="wv-ram-pct">--</span></div>
+              <span class="wv-lbl">RAM</span>
+            </div>
+            <div class="wv-item">
+              <div class="wv-ring" id="wv-batt-ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="rgba(139,92,246,0.1)" stroke-width="2"/><circle cx="18" cy="18" r="16" fill="none" stroke="var(--purple)" stroke-width="2" stroke-dasharray="100.5" stroke-dashoffset="100.5" stroke-linecap="round" class="wv-fill" id="wv-batt-fill" transform="rotate(-90 18 18)"/></svg><span class="wv-pct" id="wv-batt-pct">--</span></div>
+              <span class="wv-lbl">BATT</span>
+            </div>
+            <div class="wv-item">
+              <div class="wv-ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,215,0,0.1)" stroke-width="2"/><circle cx="18" cy="18" r="16" fill="none" stroke="var(--gold)" stroke-width="2" stroke-dasharray="100.5" stroke-dashoffset="100.5" stroke-linecap="round" class="wv-fill" id="wv-uptime-fill" transform="rotate(-90 18 18)"/></svg><span class="wv-pct" id="wv-uptime-pct">--</span></div>
+              <span class="wv-lbl">UPTIME</span>
+            </div>
+          </div>
+
           <div class="welcome-actions">
             <button class="welcome-card" data-cmd="briefing">
               <i class="fa-solid fa-clipboard-list"></i>
@@ -257,6 +277,26 @@
               <span class="wc-title">Entertain</span>
               <span class="wc-desc">Jokes &amp; facts</span>
             </button>
+            <button class="welcome-card" data-cmd="lock screen">
+              <i class="fa-solid fa-lock"></i>
+              <span class="wc-title">Lock</span>
+              <span class="wc-desc">Lock screen</span>
+            </button>
+            <button class="welcome-card" data-cmd="open safari">
+              <i class="fa-solid fa-globe"></i>
+              <span class="wc-title">Browser</span>
+              <span class="wc-desc">Open Safari</span>
+            </button>
+            <button class="welcome-card" data-cmd="tell me a fun fact">
+              <i class="fa-solid fa-lightbulb"></i>
+              <span class="wc-title">Fun Fact</span>
+              <span class="wc-desc">Random knowledge</span>
+            </button>
+          </div>
+
+          <div class="welcome-footer-hint">
+            <i class="fa-solid fa-keyboard"></i>
+            <span>Esc to close panels &middot; Cmd+K to focus input &middot; Type or speak to interact</span>
           </div>
         </div>
       </div>

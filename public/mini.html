@@ -7,20 +7,27 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
     :root {
-      --bg: #08080e;
       --surface: rgba(255,255,255,0.04);
-      --border: rgba(255,255,255,0.08);
-      --txt: rgba(255,255,255,0.9);
+      --surface-hover: rgba(255,255,255,0.07);
+      --border: rgba(255,255,255,0.07);
+      --border-hover: rgba(255,255,255,0.14);
+      --txt: rgba(255,255,255,0.92);
       --txt2: rgba(255,255,255,0.5);
-      --txt3: rgba(255,255,255,0.3);
-      --cyan: #00f2fe;
-      --pink: #ff007f;
-      --purple: #7928ca;
-      --mono: 'SF Mono', 'Fira Code', 'Menlo', monospace;
+      --txt3: rgba(255,255,255,0.28);
+      --cyan: #00d4e6;
+      --cyan-dim: rgba(0,212,230,0.15);
+      --pink: #ff2d87;
+      --pink-dim: rgba(255,45,135,0.12);
+      --purple: #8b5cf6;
+      --success: #34d399;
+      --warn: #fbbf24;
+      --mono: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Mono', 'Menlo', monospace;
+      --radius: 10px;
+      --radius-sm: 6px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background: var(--bg);
+      background: transparent;
       color: var(--txt);
       font-family: var(--mono);
       width: 380px;
@@ -28,238 +35,302 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
+      -webkit-user-select: none;
+      user-select: none;
     }
 
-    /* Header */
+    /* ── Header ── */
     .hdr {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 14px; border-bottom: 1px solid var(--border);
+      padding: 10px 14px 8px;
     }
+    .hdr-left { display: flex; align-items: center; gap: 8px; }
+    .hdr-logo {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--cyan), var(--pink));
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 14px rgba(0,212,230,0.4);
+    }
+    .hdr-logo i { font-size: 11px; color: #fff; }
     .hdr-title {
-      font-size: 11px; font-weight: 700; letter-spacing: 2px;
+      font-size: 11px; font-weight: 700; letter-spacing: 3px;
       background: linear-gradient(90deg, var(--cyan), var(--pink));
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      display: flex; align-items: center; gap: 6px;
     }
-    .hdr-title i { -webkit-text-fill-color: var(--cyan); font-size: 10px; }
     .hdr-status {
-      font-size: 9px; padding: 2px 8px; border-radius: 10px;
-      border: 1px solid rgba(0,242,254,0.2); color: var(--cyan);
-      background: rgba(0,242,254,0.06); display: flex; align-items: center; gap: 4px;
-    }
-    .hdr-status .dot {
-      width: 5px; height: 5px; border-radius: 50%;
-      background: var(--cyan); animation: pulse 2s ease-in-out infinite;
-    }
-    @keyframes pulse { 0%,100%{opacity:0.3;} 50%{opacity:1;} }
-
-    /* Orb Stage */
-    .orb-stage {
-      display: flex; flex-direction: column; align-items: center;
-      padding: 16px 12px 12px; position: relative;
-      background: linear-gradient(180deg, rgba(0,242,254,0.02) 0%, transparent 100%);
-    }
-    .orb-container {
-      position: relative; width: 80px; height: 80px;
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer;
-    }
-    .orb-glow {
-      position: absolute; inset: 0; border-radius: 50%;
-      background: radial-gradient(circle, rgba(0,242,254,0.5) 0%, rgba(255,0,127,0.3) 50%, transparent 70%);
-      filter: blur(12px); animation: glow 3s ease-in-out infinite;
-    }
-    @keyframes glow { 0%,100%{transform:scale(0.8);opacity:0.5;} 50%{transform:scale(1.3);opacity:1;} }
-    .orb-core {
-      position: relative; width: 50px; height: 50px; border-radius: 50%;
-      background: radial-gradient(circle at 30% 30%, var(--cyan), var(--pink), var(--purple));
-      box-shadow: inset 0 0 12px rgba(255,255,255,0.8), 0 0 25px rgba(0,242,254,0.7);
+      font-size: 8px; padding: 2px 8px; border-radius: 8px;
+      border: 1px solid var(--border); color: var(--txt3);
+      display: flex; align-items: center; gap: 5px;
       transition: all 0.3s;
     }
-    .orb-container:hover .orb-core { transform: scale(1.1); }
-    .orb-container.active .orb-glow {
-      background: radial-gradient(circle, rgba(255,0,127,0.7) 0%, rgba(121,40,202,0.4) 60%, transparent 70%);
+    .hdr-status.online { color: var(--success); border-color: rgba(52,211,153,0.2); }
+    .hdr-status.offline { color: var(--pink); border-color: rgba(255,45,135,0.2); }
+    .hdr-status.listening { color: var(--pink); border-color: rgba(255,45,135,0.3); }
+    .hdr-dot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: currentColor;
     }
-    .orb-container.active .orb-core {
-      animation: orbPulse 1.5s ease-in-out infinite;
-    }
-    @keyframes orbPulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.08);} }
+    .hdr-status.online .hdr-dot { animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:0.4;} 50%{opacity:1;} }
 
-    /* Wave Canvas */
-    #wave-canvas { width: 100%; height: 32px; display: block; }
+    /* ── Divider ── */
+    .divider { height: 1px; background: var(--border); margin: 0 14px; }
 
-    /* Mic Button */
-    .mic-btn {
-      width: 100%; padding: 10px; margin-top: 4px;
-      background: linear-gradient(135deg, rgba(0,242,254,0.1), rgba(255,0,127,0.1));
-      border: 1px solid rgba(0,242,254,0.25); border-radius: 10px;
-      color: #fff; font-family: var(--mono); font-size: 10px; font-weight: 700;
-      letter-spacing: 1.5px; cursor: pointer;
-      display: flex; align-items: center; justify-content: center; gap: 8px;
-      transition: all 0.2s;
+    /* ── Orb + Input ── */
+    .orb-stage {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px 10px;
     }
-    .mic-btn:hover {
-      background: linear-gradient(135deg, rgba(0,242,254,0.2), rgba(255,0,127,0.2));
-      border-color: var(--cyan); box-shadow: 0 0 16px rgba(0,242,254,0.2);
-      transform: translateY(-1px);
+    .orb-wrap {
+      position: relative; width: 60px; height: 60px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: transform 0.2s;
     }
-    .mic-btn.active {
-      background: linear-gradient(135deg, rgba(255,0,127,0.3), rgba(121,40,202,0.3));
-      border-color: var(--pink); box-shadow: 0 0 20px rgba(255,0,127,0.3);
+    .orb-wrap:hover { transform: scale(1.06); }
+    .orb-glow {
+      position: absolute; inset: -6px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,212,230,0.35) 0%, rgba(255,45,135,0.15) 60%, transparent 75%);
+      filter: blur(10px); transition: all 0.4s;
     }
-    .mic-btn i { font-size: 12px; }
+    .orb-wrap.active .orb-glow {
+      background: radial-gradient(circle, rgba(255,45,135,0.5) 0%, rgba(139,92,246,0.25) 60%, transparent 75%);
+      filter: blur(12px); animation: orb-active-pulse 2s ease-in-out infinite;
+    }
+    .orb-wrap.speaking .orb-glow {
+      background: radial-gradient(circle, rgba(0,212,230,0.55) 0%, rgba(0,212,230,0.2) 60%, transparent 75%);
+      filter: blur(14px); animation: orb-speak-pulse 1s ease-in-out infinite;
+    }
+    @keyframes orb-active-pulse { 0%,100%{transform:scale(1);opacity:1;} 50%{transform:scale(1.15);opacity:0.8;} }
+    @keyframes orb-speak-pulse { 0%,100%{transform:scale(1);opacity:1;} 50%{transform:scale(1.2);opacity:0.9;} }
 
-    /* Stats Grid */
-    .stats-grid {
+    .orb-ring {
+      position: absolute; inset: -2px; border-radius: 50%;
+      border: 1px solid rgba(0,212,230,0.2);
+      transition: all 0.3s;
+    }
+    .orb-wrap.active .orb-ring { border-color: rgba(255,45,135,0.4); animation: ring-spin 4s linear infinite; }
+    .orb-wrap.speaking .orb-ring { border-color: rgba(0,212,230,0.4); animation: ring-spin 2s linear infinite; }
+    @keyframes ring-spin { from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
+
+    .orb-core {
+      position: relative; width: 42px; height: 42px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, var(--cyan), var(--pink));
+      box-shadow: inset 0 1px 4px rgba(255,255,255,0.5), 0 0 20px rgba(0,212,230,0.5);
+      transition: all 0.3s; z-index: 1;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .orb-core i { font-size: 18px; color: rgba(255,255,255,0.9); transition: all 0.3s; }
+    .orb-wrap:hover .orb-core { transform: scale(1.05); }
+    .orb-wrap.active .orb-core {
+      background: radial-gradient(circle at 35% 30%, var(--pink), var(--purple));
+      box-shadow: inset 0 1px 4px rgba(255,255,255,0.5), 0 0 24px rgba(255,45,135,0.6);
+      animation: orbPulse 1.8s ease-in-out infinite;
+    }
+    .orb-wrap.active .orb-core i { color: #fff; }
+    .orb-wrap.speaking .orb-core {
+      background: radial-gradient(circle at 35% 30%, #fff, var(--cyan));
+      box-shadow: inset 0 1px 4px rgba(255,255,255,0.7), 0 0 30px rgba(0,212,230,0.6);
+    }
+    .orb-wrap.speaking .orb-core i { animation: speak-icon 0.8s ease-in-out infinite; }
+    @keyframes orbPulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.06);} }
+    @keyframes speak-icon { 0%,100%{transform:scale(1);opacity:0.8;} 50%{transform:scale(1.15);opacity:1;} }
+
+    /* ── Quick Input ── */
+    .quick-input-wrap { flex: 1; display: flex; flex-direction: column; gap: 0; min-width: 0; }
+    .quick-input {
+      width: 100%; padding: 9px 12px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(0,212,230,0.15);
+      border-radius: var(--radius-sm); color: var(--txt);
+      font-family: var(--mono); font-size: 11px;
+      outline: none; transition: all 0.2s;
+    }
+    .quick-input::placeholder { color: var(--txt3); }
+    .quick-input:focus { border-color: rgba(0,212,230,0.4); background: rgba(0,212,230,0.06); box-shadow: 0 0 12px rgba(0,212,230,0.08); }
+
+    /* ── Wave ── */
+    .wave-wrap { height: 28px; position: relative; margin: 2px 0; }
+    #wave-canvas { width: 100%; height: 100%; display: block; }
+
+    /* ── Stats ── */
+    .stats-row {
       display: grid; grid-template-columns: 1fr 1fr 1fr;
-      gap: 6px; padding: 8px 12px;
+      gap: 6px; padding: 4px 14px;
     }
-    .stat-card {
+    .stat {
       background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; padding: 8px; text-align: center;
-      transition: all 0.2s;
+      border-radius: var(--radius-sm); padding: 6px 8px;
+      text-align: center; transition: border-color 0.2s;
     }
-    .stat-card:hover { border-color: rgba(255,255,255,0.12); }
-    .stat-val { font-size: 14px; font-weight: 700; color: var(--txt); }
-    .stat-lbl { font-size: 7px; color: var(--txt3); letter-spacing: 1px; margin-top: 2px; }
+    .stat:hover { border-color: var(--border-hover); }
+    .stat-v { font-size: 14px; font-weight: 700; color: var(--txt); }
+    .stat-l { font-size: 7px; color: var(--txt3); letter-spacing: 1.2px; margin-top: 1px; }
 
-    /* Action Grid */
-    .actions-grid {
+    /* ── Actions ── */
+    .actions {
       display: grid; grid-template-columns: 1fr 1fr;
-      gap: 6px; padding: 6px 12px;
+      gap: 5px; padding: 6px 14px;
     }
-    .action-btn {
+    .act {
       display: flex; align-items: center; gap: 6px;
-      padding: 8px 10px; background: var(--surface);
-      border: 1px solid var(--border); border-radius: 8px;
+      padding: 7px 10px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
       color: var(--txt2); font-family: var(--mono);
-      font-size: 9px; cursor: pointer; transition: all 0.2s;
-      letter-spacing: 0.5px;
+      font-size: 9px; cursor: pointer; transition: all 0.15s;
+      letter-spacing: 0.3px;
     }
-    .action-btn:hover {
-      background: rgba(0,242,254,0.08); border-color: rgba(0,242,254,0.2);
-      color: var(--txt);
+    .act:hover {
+      background: var(--cyan-dim); border-color: rgba(0,212,230,0.25);
+      color: var(--txt); transform: translateY(-1px);
     }
-    .action-btn i { color: var(--cyan); font-size: 10px; width: 14px; text-align: center; }
+    .act i { color: var(--cyan); font-size: 10px; width: 14px; text-align: center; flex-shrink: 0; }
 
-    /* Transcript */
+    /* ── Transcript ── */
     .transcript {
-      flex: 1; margin: 0 12px 10px; padding: 10px;
+      flex: 1; margin: 4px 14px 0; padding: 8px 10px;
       background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; overflow-y: auto;
-      font-size: 10px; color: var(--txt2); line-height: 1.6;
+      border-radius: var(--radius-sm); overflow-y: auto;
+      font-size: 9px; color: var(--txt2); line-height: 1.6;
       min-height: 0;
     }
     .transcript::-webkit-scrollbar { width: 2px; }
-    .transcript::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
-    .transcript-label {
-      font-size: 8px; color: var(--txt3); letter-spacing: 1px; margin-bottom: 4px;
+    .transcript::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
+    .tr-label {
+      font-size: 7px; color: var(--txt3); letter-spacing: 1.5px;
+      margin-bottom: 6px; text-transform: uppercase;
+      display: flex; align-items: center; gap: 6px;
     }
-    .transcript-msg { margin-bottom: 6px; }
-    .transcript-msg.user { color: var(--cyan); }
-    .transcript-msg.ai { color: var(--txt); }
+    .tr-label::before { content: ''; flex: 0 0 4px; height: 4px; border-radius: 50%; background: var(--cyan); }
+    .tr-msg { margin-bottom: 5px; word-wrap: break-word; padding: 3px 0; }
+    .tr-msg.user { color: var(--cyan); }
+    .tr-msg.user::before { content: '> '; opacity: 0.4; }
+    .tr-msg.ai { color: var(--txt); }
+    .tr-msg.system { color: var(--txt3); font-style: italic; font-size: 8px; }
 
-    /* Footer */
+    /* ── Footer ── */
     .footer {
-      display: flex; justify-content: center; gap: 8px;
-      padding: 6px 12px 10px; border-top: 1px solid var(--border);
+      display: flex; justify-content: center; gap: 6px;
+      padding: 8px 14px 10px; border-top: 1px solid var(--border);
     }
-    .footer-btn {
-      padding: 5px 10px; background: var(--surface);
-      border: 1px solid var(--border); border-radius: 6px;
+    .fbtn {
+      padding: 5px 12px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
       color: var(--txt3); font-family: var(--mono); font-size: 8px;
-      cursor: pointer; transition: all 0.2s; letter-spacing: 0.5px;
+      cursor: pointer; transition: all 0.15s; letter-spacing: 0.5px;
+      display: flex; align-items: center; gap: 5px;
     }
-    .footer-btn:hover { border-color: rgba(255,255,255,0.12); color: var(--txt2); }
+    .fbtn:hover { border-color: rgba(0,212,230,0.25); color: var(--txt2); background: rgba(0,212,230,0.04); }
+    .fbtn i { font-size: 8px; }
+
+    /* ── Scrollbar global ── */
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 3px; }
   </style>
 </head>
 <body>
   <!-- Header -->
   <div class="hdr">
-    <div class="hdr-title"><i class="fa-solid fa-brain"></i> JENNY MINI</div>
-    <div class="hdr-status" id="status-badge"><span class="dot"></span><span id="status-text">ONLINE</span></div>
+    <div class="hdr-left">
+      <div class="hdr-logo"><i class="fa-solid fa-brain"></i></div>
+      <div class="hdr-title">J.E.N.N.Y.</div>
+    </div>
+    <div class="hdr-status online" id="status-badge">
+      <span class="hdr-dot"></span>
+      <span id="status-text">ONLINE</span>
+    </div>
   </div>
+  <div class="divider"></div>
 
-  <!-- Orb -->
+  <!-- Orb + Quick Input -->
   <div class="orb-stage">
-    <div class="orb-container" id="orb-container" onclick="toggleMic()">
+    <div class="orb-wrap" id="orb-wrap" onclick="toggleMic()">
       <div class="orb-glow"></div>
-      <div class="orb-core"></div>
+      <div class="orb-ring"></div>
+      <div class="orb-core"><i class="fa-solid fa-microphone"></i></div>
     </div>
-    <canvas id="wave-canvas" width="356" height="32"></canvas>
-    <button class="mic-btn" id="mic-btn" onclick="toggleMic()">
-      <i class="fa-solid fa-microphone"></i> <span id="mic-label">TAP TO SPEAK</span>
-    </button>
+    <div class="quick-input-wrap">
+      <input class="quick-input" id="chat-input" type="text"
+             placeholder="Ask anything, BOSS..." autocomplete="off">
+    </div>
   </div>
 
-  <!-- System Stats -->
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-val" id="s-cpu">--</div>
-      <div class="stat-lbl">CPU</div>
+  <!-- Wave -->
+  <div class="wave-wrap">
+    <canvas id="wave-canvas" width="352" height="28"></canvas>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat">
+      <div class="stat-v" id="s-cpu">--</div>
+      <div class="stat-l">CPU</div>
     </div>
-    <div class="stat-card">
-      <div class="stat-val" id="s-ram">--</div>
-      <div class="stat-lbl">RAM</div>
+    <div class="stat">
+      <div class="stat-v" id="s-ram">--</div>
+      <div class="stat-l">RAM</div>
     </div>
-    <div class="stat-card">
-      <div class="stat-val" id="s-batt">--</div>
-      <div class="stat-lbl">BATTERY</div>
+    <div class="stat">
+      <div class="stat-v" id="s-batt">--</div>
+      <div class="stat-l">BATT</div>
     </div>
   </div>
 
   <!-- Quick Actions -->
-  <div class="actions-grid">
-    <button class="action-btn" onclick="quickCmd('briefing')"><i class="fa-solid fa-clipboard-list"></i> Briefing</button>
-    <button class="action-btn" onclick="quickCmd('what is the weather')"><i class="fa-solid fa-cloud-sun"></i> Weather</button>
-    <button class="action-btn" onclick="quickCmd('system status')"><i class="fa-solid fa-microchip"></i> System</button>
-    <button class="action-btn" onclick="quickCmd('tell me a joke')"><i class="fa-solid fa-face-laugh"></i> Joke</button>
+  <div class="actions">
+    <button class="act" onclick="quickCmd('briefing')"><i class="fa-solid fa-clipboard-list"></i> Briefing</button>
+    <button class="act" onclick="quickCmd('what is the weather')"><i class="fa-solid fa-cloud-sun"></i> Weather</button>
+    <button class="act" onclick="quickCmd('system status')"><i class="fa-solid fa-microchip"></i> System</button>
+    <button class="act" onclick="quickCmd('tell me a joke')"><i class="fa-solid fa-face-laugh"></i> Joke</button>
   </div>
 
   <!-- Transcript -->
   <div class="transcript" id="transcript">
-    <div class="transcript-label">NEURAL STREAM</div>
+    <div class="tr-label">Neural Stream</div>
     <div id="transcript-content">
-      <div class="transcript-msg ai">Ready, BOSS. Tap the orb or use quick actions.</div>
+      <div class="tr-msg ai">Ready, BOSS. Tap the orb or type a command.</div>
     </div>
   </div>
 
   <!-- Footer -->
   <div class="footer">
-    <button class="footer-btn" onclick="openMain()"><i class="fa-solid fa-expand"></i> FULL APP</button>
-    <button class="footer-btn" onclick="refreshStats()"><i class="fa-solid fa-arrow-rotate-right"></i> REFRESH</button>
+    <button class="fbtn" onclick="openDesktop()"><i class="fa-solid fa-expand"></i> DESKTOP APP</button>
+    <button class="fbtn" onclick="refreshStats()"><i class="fa-solid fa-arrow-rotate-right"></i> REFRESH</button>
   </div>
 
   <script>
     let isListening = false;
     const API = '';
 
-    // Mic toggle
+    /* ── Status ── */
+    function setStatus(online) {
+      const badge = document.getElementById('status-badge');
+      const text = document.getElementById('status-text');
+      badge.className = 'hdr-status ' + (online ? 'online' : 'offline');
+      text.textContent = online ? 'ONLINE' : 'OFFLINE';
+    }
+
+    /* ── Mic toggle ── */
     function toggleMic() {
+      selfToggledAt = Date.now();
       fetch(API + '/api/toggle-mic').then(() => {
         isListening = !isListening;
-        const btn = document.getElementById('mic-btn');
-        const label = document.getElementById('mic-label');
-        const orb = document.getElementById('orb-container');
-        const st = document.getElementById('status-text');
-        if (isListening) {
-          btn.classList.add('active');
-          orb.classList.add('active');
-          label.textContent = 'LISTENING...';
-          st.textContent = 'LISTENING';
-          st.style.color = '#ff007f';
-          addMsg('Listening...', 'user');
-        } else {
-          btn.classList.remove('active');
-          orb.classList.remove('active');
-          label.textContent = 'TAP TO SPEAK';
-          st.textContent = 'ONLINE';
-          st.style.color = '';
-        }
+        syncMicUI();
+        if (isListening) addMsg('Listening...', 'system');
       });
     }
 
-    // Quick command
+    /* ── Chat input ── */
+    const chatInput = document.getElementById('chat-input');
+    chatInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        const text = chatInput.value.trim();
+        if (!text) return;
+        chatInput.value = '';
+        quickCmd(text);
+      }
+    });
+
+    /* ── Quick command ── */
     function quickCmd(cmd) {
       addMsg(cmd, 'user');
       fetch(API + '/api/chat', {
@@ -269,31 +340,42 @@
       })
       .then(r => r.json())
       .then(d => {
-        if (d.success && d.reply) addMsg(d.reply.text, 'ai');
-        else addMsg('No response.', 'ai');
+        if (d.success && d.reply) {
+          addMsg(d.reply.text, 'ai');
+          if (d.reply.command && d.reply.command.action !== 'vault-save') {
+            fetch(API + '/api/control', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(d.reply.command)
+            });
+          }
+        } else addMsg('No response.', 'system');
       })
-      .catch(() => addMsg('Connection error.', 'ai'));
+      .catch(() => addMsg('Connection error.', 'system'));
     }
 
-    // Add message to transcript
+    /* ── Messages ── */
     function addMsg(text, role) {
       const el = document.getElementById('transcript-content');
       const div = document.createElement('div');
-      div.className = 'transcript-msg ' + role;
+      div.className = 'tr-msg ' + role;
       div.textContent = text;
       el.appendChild(div);
       const box = document.getElementById('transcript');
       box.scrollTop = box.scrollHeight;
-      // Keep only last 20 messages
-      while (el.children.length > 21) el.removeChild(el.children[1]);
+      while (el.children.length > 25) el.removeChild(el.children[1]);
     }
 
-    // Open main app
-    function openMain() {
-      window.open('http://localhost:3000', '_blank');
+    /* ── Open desktop app ── */
+    function openDesktop() {
+      if (window.webkit && window.webkit.messageHandlers) {
+        window.webkit.messageHandlers.openDesktopApp.postMessage('open');
+      } else {
+        window.open('http://localhost:3000', '_blank');
+      }
     }
 
-    // Refresh stats
+    /* ── Stats ── */
     function refreshStats() {
       fetch(API + '/api/system-status')
         .then(r => r.json())
@@ -301,45 +383,68 @@
           if (!d.success) return;
           document.getElementById('s-cpu').textContent = (d.cpu?.usage || 0) + '%';
           document.getElementById('s-ram').textContent = (d.ram?.usage || 0) + '%';
-          document.getElementById('s-batt').textContent = (d.battery?.level ?? '--') + '%';
+          const b = d.battery?.level;
+          document.getElementById('s-batt').textContent = (b != null ? b : '--') + '%';
         })
-        .catch(() => {});
+        .catch(() => setStatus(false));
     }
-
-    // Auto-refresh stats every 5s
     setInterval(refreshStats, 5000);
     refreshStats();
 
-    // Poll mic state from server
+    /* ── Mic state poll ── */
     let lastToggle = 0;
+    let selfToggledAt = 0;
     function pollMicState() {
       fetch(API + '/api/toggle-mic-poll')
         .then(r => r.json())
         .then(d => {
           if (d.lastToggle && d.lastToggle !== lastToggle) {
             lastToggle = d.lastToggle;
-            toggleMic();
+            if (Date.now() - selfToggledAt > 1500) {
+              isListening = !isListening;
+              syncMicUI();
+            }
           }
         })
         .catch(() => {});
     }
+    function syncMicUI() {
+      const orb = document.getElementById('orb-wrap');
+      const st = document.getElementById('status-text');
+      const badge = document.getElementById('status-badge');
+      if (isListening) {
+        orb.classList.add('active');
+        orb.classList.remove('speaking');
+        st.textContent = 'LISTENING';
+        badge.className = 'hdr-status listening';
+      } else {
+        orb.classList.remove('active');
+        orb.classList.remove('speaking');
+        st.textContent = 'ONLINE';
+        badge.className = 'hdr-status online';
+      }
+    }
     setInterval(pollMicState, 2000);
 
-    // Wave animation
+    /* ── Wave animation ── */
     const canvas = document.getElementById('wave-canvas');
     const ctx = canvas.getContext('2d');
     let step = 0;
     function drawWave() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       step += 0.06;
-      const amp = isListening ? 10 : 3;
-      const colors = ['rgba(0,242,254,0.6)', 'rgba(255,0,127,0.5)', 'rgba(121,40,202,0.4)'];
-      colors.forEach((color, i) => {
+      const amp = isListening ? 10 : 2.5;
+      const colors = [
+        ['rgba(0,212,230,0.5)', 0],
+        ['rgba(255,45,135,0.35)', 1.2],
+        ['rgba(139,92,246,0.25)', 2.4]
+      ];
+      colors.forEach(([color, offset]) => {
         ctx.beginPath();
         ctx.strokeStyle = color;
         ctx.lineWidth = isListening ? 1.5 : 1;
-        for (let x = 0; x < canvas.width; x += 3) {
-          const y = canvas.height / 2 + Math.sin(x * 0.04 + step + i * 1.2) * amp * Math.sin((x / canvas.width) * Math.PI);
+        for (let x = 0; x < canvas.width; x += 2) {
+          const y = canvas.height / 2 + Math.sin(x * 0.04 + step + offset) * amp * Math.sin((x / canvas.width) * Math.PI);
           x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
         }
         ctx.stroke();
@@ -347,6 +452,17 @@
       requestAnimationFrame(drawWave);
     }
     drawWave();
+
+    /* ── Server health check ── */
+    function checkHealth() {
+      fetch(API + '/api/system-status')
+        .then(r => { setStatus(r.ok); })
+        .catch(() => setStatus(false));
+    }
+    setInterval(checkHealth, 10000);
+
+    /* ── Focus input on load ── */
+    window.addEventListener('load', () => { chatInput.focus(); });
   </script>
 </body>
 </html>

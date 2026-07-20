@@ -309,7 +309,13 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function getGreeting() {
   const mem = loadOfflineMemory();
   const name = mem.name ? ` ${mem.name}` : '';
-  return `Good evening${name}, BOSS. I am JENNY, your personal assistant. All Systems are working fine. What are we doing today, BOSS?`;
+  const hour = new Date().getHours();
+  let timeOfDay;
+  if (hour >= 5 && hour < 12) timeOfDay = 'morning';
+  else if (hour >= 12 && hour < 17) timeOfDay = 'afternoon';
+  else if (hour >= 17 && hour < 21) timeOfDay = 'evening';
+  else timeOfDay = 'night';
+  return `Good ${timeOfDay}${name}, BOSS. I am JENNY, your personal assistant. All Systems are working fine. What are we doing today, BOSS?`;
 }
 
 // ================================================
@@ -420,10 +426,31 @@ async function fetchSysStats() {
     drawSparkline('spark-cpu', sparkHistory.cpu, 'rgb(255,255,255)');
     drawSparkline('spark-ram', sparkHistory.ram, 'rgb(255,255,255)');
     drawSparkline('spark-disk', sparkHistory.disk, 'rgb(255,255,255)');
+    updateWelcomeVitals(cpu, ram, d.battery?.level, d.uptime);
   } catch {}
 }
 
 function startSysMonitor() { fetchSysStats(); setInterval(fetchSysStats, 3000); }
+
+function updateWelcomeVitals(cpu, ram, batt, uptime) {
+  const circ = 100.5;
+  const cpuFill = document.getElementById('wv-cpu-fill');
+  const ramFill = document.getElementById('wv-ram-fill');
+  const battFill = document.getElementById('wv-batt-fill');
+  const uptimeFill = document.getElementById('wv-uptime-fill');
+  if (cpuFill) cpuFill.style.strokeDashoffset = circ - (cpu / 100) * circ;
+  if (ramFill) ramFill.style.strokeDashoffset = circ - (ram / 100) * circ;
+  if (battFill && batt != null) battFill.style.strokeDashoffset = circ - (batt / 100) * circ;
+  if (uptimeFill && uptime) { const h = Math.min(uptime / 86400, 1); uptimeFill.style.strokeDashoffset = circ - h * circ; }
+  const cpuPct = document.getElementById('wv-cpu-pct');
+  const ramPct = document.getElementById('wv-ram-pct');
+  const battPct = document.getElementById('wv-batt-pct');
+  const uptimePct = document.getElementById('wv-uptime-pct');
+  if (cpuPct) cpuPct.textContent = cpu + '%';
+  if (ramPct) ramPct.textContent = ram + '%';
+  if (battPct) battPct.textContent = batt != null ? Math.round(batt) + '%' : '--';
+  if (uptimePct && uptime) { const uh = Math.floor(uptime / 3600); uptimePct.textContent = uh + 'h'; }
+}
 
 // ================================================
 // ORB CANVAS
@@ -508,7 +535,11 @@ function setOrbState(state) {
   const clickZone = document.getElementById('orb-click');
   if (statusEl) { statusEl.textContent = state.toUpperCase(); statusEl.className = 'holo-status' + (state === 'listening' ? ' listening' : state === 'speaking' ? ' speaking' : ''); }
   if (labelEl) { const labels = { idle: 'Tap the orb or type a command', listening: 'Listening...', thinking: 'Processing...', speaking: 'Speaking...' }; labelEl.textContent = labels[state] || ''; }
-  if (clickZone) clickZone.classList.toggle('active', state === 'listening');
+  if (clickZone) {
+    clickZone.classList.toggle('active', state === 'listening');
+    clickZone.classList.toggle('speaking', state === 'speaking');
+    clickZone.classList.toggle('thinking', state === 'thinking');
+  }
 }
 
 // ================================================
@@ -665,14 +696,19 @@ async function fetchQuota() {
       badge.textContent = `${d.model.toUpperCase()}${keyInfo}`;
       badge.classList.add('active');
       if (rpmEl) rpmEl.textContent = `${d.rpm.current}/${d.rpm.max}`;
-      if (dot) dot.style.background = d.activeKeys > 0 ? 'rgba(255,255,255,0.6)' : 'rgba(255,165,0,0.6)';
-      if (stext) stext.textContent = d.activeKeys > 0 ? 'online' : 'keys exhausted';
+      if (d.activeKeys > 0) {
+        if (dot) dot.style.background = 'rgba(52,211,153,0.7)';
+        if (stext) stext.textContent = 'online';
+      } else {
+        if (dot) dot.style.background = 'rgba(251,191,36,0.7)';
+        if (stext) stext.textContent = 'quota cooldown';
+      }
     } else {
       badge.textContent = 'OFFLINE';
       badge.classList.remove('active');
       if (rpmEl) rpmEl.textContent = '--/--';
-      if (dot) dot.style.background = 'rgba(255,0,106,0.6)';
-      if (stext) stext.textContent = 'offline';
+      if (dot) dot.style.background = 'rgba(255,45,135,0.7)';
+      if (stext) stext.textContent = 'no api key';
     }
   } catch {}
 }
@@ -882,25 +918,27 @@ function saveOfflineMemory(mem) { localStorage.setItem('jenny_memory', JSON.stri
 // ================================================
 function parseCommand(text) {
   const t = text.toLowerCase().trim();
+  const panelMap = {
+    'system': 'system', 'system info': 'system', 'sysinfo': 'system',
+    'weather': 'weather', 'forecast': 'weather',
+    'processes': 'processes', 'process': 'processes', 'procs': 'processes', 'task manager': 'processes',
+    'vault': 'vault', 'memory': 'vault', 'memories': 'vault', 'save': 'vault',
+    'clipboard': 'clipboard', 'clip': 'clipboard', 'copy': 'clipboard',
+    'settings': 'settings', 'config': 'settings', 'preferences': 'settings',
+    'commands': 'commands', 'cmds': 'commands', 'help': 'commands',
+    'activity': 'activity', 'monitor': 'activity', 'pc activity': 'activity', 'system monitor': 'activity',
+    'emails': 'emails', 'email': 'emails', 'mail': 'emails', 'inbox': 'emails',
+    'files': 'files', 'file explorer': 'files', 'files explorer': 'files', 'finder': 'files',
+    'notes': 'notes', 'todo': 'notes', 'todos': 'notes', 'task': 'notes', 'tasks': 'notes'
+  };
   const summonMatch = t.match(/^(?:summon|open|show|launch|display)\s+(.+)$/i);
   if (summonMatch) {
     const panel = summonMatch[1].trim();
-    const panelMap = {
-      'system': 'system', 'system info': 'system', 'sysinfo': 'system',
-      'weather': 'weather', 'forecast': 'weather',
-      'processes': 'processes', 'process': 'processes', 'procs': 'processes', 'task manager': 'processes',
-      'vault': 'vault', 'memory': 'vault', 'memories': 'vault', 'save': 'vault',
-      'clipboard': 'clipboard', 'clip': 'clipboard', 'copy': 'clipboard',
-      'settings': 'settings', 'config': 'settings', 'preferences': 'settings',
-      'commands': 'commands', 'cmds': 'commands', 'help': 'commands',
-      'activity': 'activity', 'monitor': 'activity', 'pc activity': 'activity', 'system monitor': 'activity',
-      'emails': 'emails', 'email': 'emails', 'mail': 'emails', 'inbox': 'emails',
-      'files': 'files', 'file explorer': 'files', 'files explorer': 'files', 'finder': 'files',
-      'notes': 'notes', 'todo': 'notes', 'todos': 'notes', 'task': 'notes', 'tasks': 'notes'
-    };
-    const matched = panelMap[panel] || panel;
-    openPanel(matched);
-    return { handled: true, response: `Opening ${matched} panel, BOSS.` };
+    if (panelMap[panel]) {
+      openPanel(panelMap[panel]);
+      return { handled: true, response: `Opening ${panelMap[panel]} panel, BOSS.` };
+    }
+    return null;
   }
   const closeMatch = t.match(/^(?:close|dismiss|hide|shut)\s+(.+)$/i);
   if (closeMatch) { closePanel(closeMatch[1].trim()); return { handled: true, response: `Panel closed, BOSS.` }; }
