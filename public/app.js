@@ -2,27 +2,6 @@
 // J.E.N.N.Y. — Core Application v1.0
 // ================================================
 
-// Auth check — redirect to /login if token required but not set
-(function checkAuth() {
-  fetch('/api/auth/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: localStorage.getItem('jenny_token') || '' }) })
-    .then(r => r.json()).then(d => {
-      if (!d.success && d.message !== 'No auth configured') { window.location.href = '/login'; }
-    }).catch(() => {});
-})();
-
-// Override global fetch to auto-include auth token
-const _origFetch = window.fetch;
-window.fetch = function(url, opts = {}) {
-  const token = localStorage.getItem('jenny_token');
-  if (token) {
-    opts.headers = opts.headers || {};
-    if (opts.headers instanceof Headers) { opts.headers.set('Authorization', 'Bearer ' + token); }
-    else { opts.headers['Authorization'] = 'Bearer ' + token; }
-  }
-  return _origFetch(url, opts);
-};
-
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx;
 function getCtx() { if (!audioCtx) audioCtx = new AudioCtx(); return audioCtx; }
