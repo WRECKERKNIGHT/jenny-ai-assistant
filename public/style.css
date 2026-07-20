@@ -357,6 +357,9 @@ html,body { height:100%; background:var(--bg); color:var(--txt); font-family:var
 .ambient-chip { display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:9px; color:var(--txt2); background:rgba(0,212,230,0.04); border:1px solid rgba(0,212,230,0.08); border-radius:12px; padding:4px 10px; transition:all 0.3s ease; white-space:nowrap; }
 .ambient-chip:hover { color:var(--txt); background:rgba(0,212,230,0.08); border-color:rgba(0,212,230,0.15); }
 .ambient-chip i { font-size:8px; color:var(--cyan); }
+#ambient-remote { border-color:rgba(255,45,135,0.15); background:rgba(255,45,135,0.04); }
+#ambient-remote i { color:var(--pink); }
+#ambient-remote:hover { border-color:rgba(255,45,135,0.3); background:rgba(255,45,135,0.08); }
 
 .chat-area { flex:1; overflow:hidden; display:flex; flex-direction:column; position:relative; background: var(--bg); }
 .chat-area::before { content:''; position:absolute; inset:0; background: radial-gradient(ellipse at 30% 40%, rgba(0,212,230,0.012) 0%, transparent 40%), radial-gradient(ellipse at 70% 60%, rgba(255,45,135,0.006) 0%, transparent 35%); animation:chat-ambient 8s ease-in-out infinite alternate; pointer-events:none; z-index:0; }
@@ -618,4 +621,64 @@ body.light-mode .welcome-footer-hint i { color: rgba(8,145,178,0.5); }
   .boot-core { width:40px; height:40px; }
   .boot-terminal { width:calc(100vw - 48px); }
   .boot-progress-wrap { width:260px; }
+}
+
+/* PHONE — max-width 480px */
+@media (max-width:480px) {
+  #main-app { flex-direction:column; }
+  .holo-panel { width:100%; max-width:none; height:35vh; min-width:0; border-right:none; border-bottom:1px solid rgba(255,255,255,0.06); }
+  .chat-panel { height:65vh; }
+  .sys-monitor { display:none; }
+  .orb-section { min-height:0; }
+  .holo-orb-stage { min-height:80px; }
+  #orb-canvas { width:160px; height:160px; }
+  .orb-click-zone { width:80px; height:80px; }
+  .orb-click-zone .mic-icon { font-size:24px; }
+  .holo-projection { display:none; }
+  .orb-rgb-glow { display:none; }
+  .holo-status { font-size:8px; letter-spacing:2px; margin-top:2px; }
+  .holo-label { font-size:8px; }
+  .speech-waves { height:16px; margin-top:2px; }
+  .timer-pill { font-size:8px; padding:2px 8px; }
+  .holo-dock { gap:2px; padding:4px 8px; }
+  .dock-btn { width:30px; height:30px; font-size:11px; }
+  .holo-header { padding:6px 10px; }
+  .mode-badge { font-size:7px; padding:2px 6px; }
+
+  /* Chat panel phone */
+  .hdr { padding:8px 14px; }
+  .logo { font-size:12px; letter-spacing:2px; }
+  .ver { display:none; }
+  .hdr-r { gap:6px; font-size:9px; }
+  .hdr-date { display:none; }
+  .chat-ambient { gap:3px; padding:3px 10px; flex-wrap:nowrap; overflow-x:auto; }
+  .ambient-chip { font-size:7px; padding:2px 6px; white-space:nowrap; }
+  .chat-scroll { padding:10px 12px; }
+  .msgs { gap:8px; }
+  .msg-user { max-width:80%; }
+  .msg-ai { max-width:85%; }
+  .msg-bubble { font-size:12px; padding:8px 12px; }
+
+  /* Welcome screen phone */
+  .welcome-orb { width:60px; height:60px; margin-bottom:12px; }
+  .welcome-title { font-size:16px; letter-spacing:4px; }
+  .welcome-sub { font-size:10px; margin-bottom:16px; }
+  .welcome-vitals { gap:8px; margin-bottom:16px; }
+  .wv-ring { width:36px; height:36px; }
+  .wv-pct { font-size:8px; }
+  .welcome-actions { grid-template-columns:repeat(3, 1fr); gap:5px; }
+  .welcome-card { padding:10px 6px 8px; }
+  .welcome-card i { font-size:16px; }
+  .wc-title { font-size:9px; }
+  .wc-desc { font-size:7px; }
+  .welcome-footer-hint { font-size:7px; margin-top:12px; }
+
+  /* Input bar phone */
+  .input-bar { padding:6px 12px; gap:8px; }
+  .input-stats { display:none !important; }
+  .txt-wrap input { font-size:13px; padding:10px 12px; }
+  .send { width:36px; height:36px; font-size:14px; }
+
+  /* Panels phone */
+  .panel { width:calc(100% - 16px); top:60px; max-height:calc(100vh - 80px); }
 }

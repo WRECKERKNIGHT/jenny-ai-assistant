@@ -2,6 +2,27 @@
 // J.E.N.N.Y. — Core Application v1.0
 // ================================================
 
+// Auth check — redirect to /login if token required but not set
+(function checkAuth() {
+  fetch('/api/auth/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: localStorage.getItem('jenny_token') || '' }) })
+    .then(r => r.json()).then(d => {
+      if (!d.success && d.message !== 'No auth configured') { window.location.href = '/login'; }
+    }).catch(() => {});
+})();
+
+// Override global fetch to auto-include auth token
+const _origFetch = window.fetch;
+window.fetch = function(url, opts = {}) {
+  const token = localStorage.getItem('jenny_token');
+  if (token) {
+    opts.headers = opts.headers || {};
+    if (opts.headers instanceof Headers) { opts.headers.set('Authorization', 'Bearer ' + token); }
+    else { opts.headers['Authorization'] = 'Bearer ' + token; }
+  }
+  return _origFetch(url, opts);
+};
+
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx;
 function getCtx() { if (!audioCtx) audioCtx = new AudioCtx(); return audioCtx; }
@@ -431,6 +452,23 @@ async function fetchSysStats() {
 }
 
 function startSysMonitor() { fetchSysStats(); setInterval(fetchSysStats, 3000); }
+
+// Remote mode status polling
+async function fetchRemoteStatus() {
+  try {
+    const res = await fetch('/api/remote-status');
+    const d = await res.json();
+    const chip = document.getElementById('ambient-remote');
+    if (d.remoteMode && chip) {
+      chip.classList.remove('hidden');
+      document.getElementById('ambient-remote-text').textContent = d.tunnelUrl ? 'Remote ACTIVE' : 'Remote Mode';
+    } else if (chip) {
+      chip.classList.add('hidden');
+    }
+  } catch {}
+}
+setInterval(fetchRemoteStatus, 15000);
+fetchRemoteStatus();
 
 function updateWelcomeVitals(cpu, ram, batt, uptime) {
   const circ = 100.5;
@@ -1532,7 +1570,30 @@ function deleteNote(idx) {
 }
 
 function loadCommandsPanel(el) {
-  el.innerHTML = `<div class="cmd-ref-item"><div class="cc">summon activity / system / weather / emails / processes / vault / clipboard / settings / commands / files / notes</div><div class="cd">Open a panel</div></div><div class="cmd-ref-item"><div class="cc">close [panel] / close all</div><div class="cd">Dismiss panels</div></div><div class="cmd-ref-item"><div class="cc">set a timer for 5 minutes</div><div class="cd">Timer with voice alert</div></div><div class="cmd-ref-item"><div class="cc">briefing / daily briefing</div><div class="cd">Full system overview</div></div><div class="cmd-ref-item"><div class="cc">tell me a joke / fun fact / quote</div><div class="cd">Entertainment</div></div><div class="cmd-ref-item"><div class="cc">what is 42 * 7 / calculate 100 / 3</div><div class="cd">Quick math</div></div><div class="cmd-ref-item"><div class="cc">lock pc / sleep pc / screenshot</div><div class="cd">System controls</div></div><div class="cmd-ref-item"><div class="cc">volume [0-100] / mute / unmute</div><div class="cd">Audio controls</div></div><div class="cmd-ref-item"><div class="cc">open [app] / close [app]</div><div class="cd">Launch or quit app</div></div><div class="cmd-ref-item"><div class="cc">play / pause / next / previous</div><div class="cd">Media controls</div></div><div class="cmd-ref-item"><div class="cc">remember [fact]</div><div class="cd">Save to vault</div></div><div class="cmd-ref-item"><div class="cc">check emails / read mail</div><div class="cd">Read Mail.app</div></div><div class="cmd-ref-item"><div class="cc">shutdown / restart</div><div class="cd">Power controls</div></div><div class="cmd-ref-item"><div class="cc">tell me about [topic]</div><div class="cd">Ask anything (Gemini)</div></div><div class="cmd-ref-item"><div class="cc">Keyboard: Esc = close panels, Cmd+K = focus input</div><div class="cd">Shortcuts</div></div>`;
+  el.innerHTML = `
+<div class="cmd-ref-item"><div class="cc">summon activity / system / weather / emails / processes / vault / clipboard / settings / commands / files / notes</div><div class="cd">Open a panel</div></div>
+<div class="cmd-ref-item"><div class="cc">close [panel] / close all</div><div class="cd">Dismiss panels</div></div>
+<div class="cmd-ref-item"><div class="cc">set a timer for 5 minutes</div><div class="cd">Timer with voice alert</div></div>
+<div class="cmd-ref-item"><div class="cc">briefing / daily briefing</div><div class="cd">Full system overview</div></div>
+<div class="cmd-ref-item"><div class="cc">tell me a joke / fun fact / quote</div><div class="cd">Entertainment</div></div>
+<div class="cmd-ref-item"><div class="cc">what is 42 * 7 / calculate 100 / 3</div><div class="cd">Quick math</div></div>
+<div class="cmd-ref-item"><div class="cc">lock pc / sleep pc / screenshot</div><div class="cd">System controls</div></div>
+<div class="cmd-ref-item"><div class="cc">volume [0-100] / mute / unmute</div><div class="cd">Audio controls</div></div>
+<div class="cmd-ref-item"><div class="cc">open [app] / close [app]</div><div class="cd">Launch or quit app</div></div>
+<div class="cmd-ref-item"><div class="cc">play / pause / next / previous</div><div class="cd">Media controls</div></div>
+<div class="cmd-ref-item"><div class="cc">remember [fact]</div><div class="cd">Save to vault</div></div>
+<div class="cmd-ref-item"><div class="cc">check emails / read mail</div><div class="cd">Read Mail.app</div></div>
+<div class="cmd-ref-item"><div class="cc">shutdown / restart</div><div class="cd">Power controls</div></div>
+<div class="cmd-ref-item"><div class="cc">battery / wifi</div><div class="cd">Quick status checks</div></div>
+<div class="cmd-ref-item"><div class="cc">flip a coin / roll dice / random number 1-100</div><div class="cd">Randomizers</div></div>
+<div class="cmd-ref-item"><div class="cc">convert 100 miles to km / 72 fahrenheit to celsius</div><div class="cd">Unit conversion</div></div>
+<div class="cmd-ref-item"><div class="cc">brightness up / down</div><div class="cd">Screen brightness</div></div>
+<div class="cmd-ref-item"><div class="cc">remote mode / stay awake</div><div class="cd">Keep Mac awake for remote access</div></div>
+<div class="cmd-ref-item"><div class="cc">remote mode off / allow sleep</div><div class="cd">Resume normal sleep</div></div>
+<div class="cmd-ref-item"><div class="cc">I'm on my way home</div><div class="cd">Activate remote mode + show URL</div></div>
+<div class="cmd-ref-item"><div class="cc">wake up / sleep</div><div class="cd">Display wake/sleep</div></div>
+<div class="cmd-ref-item"><div class="cc">tell me about [topic]</div><div class="cd">Ask anything (Gemini)</div></div>
+<div class="cmd-ref-item"><div class="cc">Keyboard: Esc = close panels, Cmd+K = focus input</div><div class="cd">Shortcuts</div></div>`;
 }
 
 // ================================================

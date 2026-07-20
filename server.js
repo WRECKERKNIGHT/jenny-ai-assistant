@@ -20,6 +20,191 @@ app.use(express.json());
 // Serve static frontend files from 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ================================================
+// REMOTE ACCESS AUTHENTICATION
+// ================================================
+const REMOTE_ACCESS_TOKEN = process.env.REMOTE_ACCESS_TOKEN || '';
+const REQUIRE_AUTH = process.env.REQUIRE_AUTH === 'true';
+
+function authMiddleware(req, res, next) {
+  if (!REQUIRE_AUTH || !REMOTE_ACCESS_TOKEN) return next();
+  // Check Authorization header, query param, or cookie
+  const token = req.headers.authorization?.replace('Bearer ', '') ||
+                req.query.token ||
+                req.cookies?.jenny_token;
+  if (token === REMOTE_ACCESS_TOKEN) return next();
+  // Also allow the login page and static assets
+  if (req.path === '/login' || req.path === '/api/auth/verify' || !req.path.startsWith('/api/')) return next();
+  return res.status(401).json({ success: false, message: 'Unauthorized. Provide a valid token.' });
+}
+app.use(authMiddleware);
+
+// Simple cookie parser for auth
+app.use((req, res, next) => {
+  req.cookies = {};
+  const cookieHeader = req.headers.cookie;
+  if (cookieHeader) {
+    cookieHeader.split(';').forEach(c => {
+      const [key, val] = c.trim().split('=');
+      if (key && val) req.cookies[key] = decodeURIComponent(val);
+    });
+  }
+  next();
+});
+
+// Auth verify endpoint
+app.post('/api/auth/verify', (req, res) => {
+  const { token } = req.body;
+  if (!REMOTE_ACCESS_TOKEN) {
+    return res.json({ success: true, message: 'No auth configured' });
+  }
+  if (token === REMOTE_ACCESS_TOKEN) {
+    return res.json({ success: true, message: 'Authenticated' });
+  }
+  return res.status(401).json({ success: false, message: 'Invalid token' });
+});
+
+// Login page
+app.get('/login', (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JENNY — Login</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#08080e;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'SF Mono',monospace;
+display:flex;align-items:center;justify-content:center;min-height:100vh;overflow:hidden}
+.login-box{width:340px;padding:32px;background:rgba(255,255,255,0.04);border:1px solid rgba(0,212,230,0.15);
+border-radius:16px;backdrop-filter:blur(40px);text-align:center}
+.logo{font-size:18px;font-weight:700;letter-spacing:5px;
+background:linear-gradient(90deg,#00d4e6,#ff2d87);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px}
+.sub{font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:1px;margin-bottom:24px}
+.input-wrap{position:relative;margin-bottom:16px}
+.input-wrap input{width:100%;padding:12px 16px 12px 40px;background:rgba(255,255,255,0.06);
+border:1px solid rgba(0,212,230,0.15);border-radius:10px;color:#fff;font-family:inherit;
+font-size:14px;outline:none;transition:all 0.2s}
+.input-wrap input:focus{border-color:rgba(0,212,230,0.4);box-shadow:0 0 16px rgba(0,212,230,0.1)}
+.input-wrap input::placeholder{color:rgba(255,255,255,0.25)}
+.input-wrap i{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:rgba(0,212,230,0.5);font-size:14px}
+.btn{width:100%;padding:12px;background:linear-gradient(135deg,rgba(0,212,230,0.15),rgba(255,45,135,0.1));
+border:1px solid rgba(0,212,230,0.3);border-radius:10px;color:#fff;font-family:inherit;
+font-size:12px;letter-spacing:1.5px;cursor:pointer;transition:all 0.2s}
+.btn:hover{background:linear-gradient(135deg,rgba(0,212,230,0.25),rgba(255,45,135,0.2));box-shadow:0 0 24px rgba(0,212,230,0.15)}
+.error{color:#ff2d87;font-size:10px;margin-top:8px;min-height:16px}
+</style></head><body>
+<div class="login-box">
+<div class="logo">J.E.N.N.Y.</div>
+<div class="sub">Neural Assistant — Access Portal</div>
+<form onsubmit="login(event)">
+<div class="input-wrap">
+<i class="fa-solid fa-key"></i>
+<input type="password" id="token" placeholder="Enter access token" autocomplete="off" autofocus>
+</div>
+<button class="btn" type="submit"><i class="fa-solid fa-arrow-right-to-bracket"></i> &nbsp;AUTHENTICATE</button>
+<div class="error" id="error"></div>
+</form>
+</div>
+<script>
+function login(e){e.preventDefault();
+const t=document.getElementById('token').value;
+fetch('/api/auth/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:t})})
+.then(r=>r.json()).then(d=>{if(d.success){document.cookie='jenny_token='+encodeURIComponent(t)+';path=/;max-age=86400';localStorage.setItem('jenny_token',t);window.location.href='/';}
+else{document.getElementById('error').textContent='Invalid token. Access denied.';}}).catch(()=>{document.getElementById('error').textContent='Connection error.';});
+}
+</script></body></html>`);
+});
+
+// ================================================
+// REMOTE MODE — Caffeinate Manager
+// ================================================
+let caffeinateProcess = null;
+let remoteModeActive = false;
+
+function startCaffeinate() {
+  if (caffeinateProcess) return true;
+  try {
+    const { spawn } = require('child_process');
+    caffeinateProcess = spawn('/usr/bin/caffeinate', ['-u', '-s', '-d', '-i'], {
+      detached: true, stdio: 'ignore'
+    });
+    caffeinateProcess.unref();
+    remoteModeActive = true;
+    console.log('[JENNY] Remote mode ON — caffeinate started (PID:', caffeinateProcess.pid, ')');
+    return true;
+  } catch (e) {
+    console.error('[JENNY] Failed to start caffeinate:', e.message);
+    return false;
+  }
+}
+
+function stopCaffeinate() {
+  if (caffeinateProcess) {
+    try { process.kill(caffeinateProcess.pid, 'SIGTERM'); } catch {}
+    caffeinateProcess = null;
+  }
+  remoteModeActive = false;
+  console.log('[JENNY] Remote mode OFF — caffeinate stopped');
+}
+
+// Remote mode endpoints
+app.post('/api/remote-mode', (req, res) => {
+  const { action } = req.body;
+  if (action === 'on') {
+    const ok = startCaffeinate();
+    // Also start ngrok tunnel if available
+    let tunnelUrl = '';
+    try { tunnelUrl = fs.readFileSync('/tmp/jenny-remote-url.txt', 'utf8').trim(); } catch {}
+    res.json({ success: ok, remoteMode: true, tunnelUrl, message: ok ? 'Remote mode activated. Mac will stay awake.' : 'Failed to start remote mode.' });
+  } else if (action === 'off') {
+    stopCaffeinate();
+    res.json({ success: true, remoteMode: false, message: 'Remote mode deactivated. Mac can sleep normally.' });
+  } else {
+    res.json({ success: true, remoteMode: remoteModeActive, caffeinatePid: caffeinateProcess?.pid || null });
+  }
+});
+
+app.post('/api/wake', (req, res) => {
+  // Wake the display
+  exec('/usr/bin/pmset displaysleepnow', (err) => {
+    // Then immediately wake
+    exec('/usr/bin/pmset sleepnow', () => {
+      // Use a small delay then wake
+      setTimeout(() => {
+        exec('/usr/bin/pmset wake', (err2) => {
+          if (err2) {
+            // Fallback: simulate a keypress to wake
+            exec('/usr/bin/cliclick kp:space', () => {
+              res.json({ success: true, message: 'Wake signal sent, BOSS.' });
+            });
+          } else {
+            res.json({ success: true, message: 'Display woken, BOSS.' });
+          }
+        });
+      }, 500);
+    });
+  });
+});
+
+app.post('/api/sleep', (req, res) => {
+  exec('/usr/bin/pmset displaysleepnow', (err) => {
+    res.json({ success: !err, message: err ? 'Failed to sleep display.' : 'Display sleeping, BOSS.' });
+  });
+});
+
+// Remote access status endpoint
+app.get('/api/remote-status', (req, res) => {
+  let tunnelUrl = '';
+  try { tunnelUrl = fs.readFileSync('/tmp/jenny-remote-url.txt', 'utf8').trim(); } catch {}
+  res.json({
+    success: true,
+    remoteMode: remoteModeActive,
+    caffeinatePid: caffeinateProcess?.pid || null,
+    tunnelUrl,
+    authRequired: REQUIRE_AUTH,
+    hostname: os.hostname()
+  });
+});
+
 // Sanitize inputs to prevent shell command injection
 function isValidAppName(name) {
   return /^[a-zA-Z0-9\s.\-_]+$/.test(name);
@@ -1429,6 +1614,17 @@ DO NOT wrap JSON in code fences. Output raw JSON only.`
     } catch { return null; }
   }
 
+  // I'm on my way home (early return to avoid "i am" false match with name handler)
+  if (query.match(/on (?:my )?way (?:home|back)|coming home|heading home|almost home/i)) {
+    const ok = startCaffeinate();
+    let tunnelUrl = '';
+    try { tunnelUrl = fs.readFileSync('/tmp/jenny-remote-url.txt', 'utf8').trim(); } catch {}
+    const tunnelMsg = tunnelUrl ? ` Your remote access URL is: ${tunnelUrl}` : '';
+    text = `Got it, BOSS! Remote mode is ON — your Mac will stay awake and ready.${tunnelMsg} Everything's waiting for you.`;
+    speech = `Remote mode activated. Your Mac is staying awake and ready for you.`;
+    return res.json({ success: true, reply: { text, speech } });
+  }
+
   // Name handling
   const nameMatch = message.match(/my name is\s+(.+)$/i) || message.match(/call me\s+(.+)$/i) || message.match(/i am\s+(.+)$/i);
   if (nameMatch) {
@@ -1691,6 +1887,54 @@ DO NOT wrap JSON in code fences. Output raw JSON only.`
   } else if (query.match(/^(dark mode|light mode|toggle dark|toggle light|night mode)/i)) {
     text = "I'd toggle dark mode for you, BOSS. Use the Settings panel for now, or I can handle it when the full API is active.";
     speech = "Dark mode toggle is available in the settings panel.";
+
+  // Remote mode — activate/deactivate
+  } else if (query.match(/remote mode|stay awake|prevent sleep|don('t| not) sleep/i) && !query.match(/off|stop|deactivate/i)) {
+    const ok = startCaffeinate();
+    let tunnelUrl = '';
+    try { tunnelUrl = fs.readFileSync('/tmp/jenny-remote-url.txt', 'utf8').trim(); } catch {}
+    if (ok) {
+      text = tunnelUrl
+        ? `Remote mode activated, BOSS. Your Mac will stay awake. Access URL: ${tunnelUrl}`
+        : `Remote mode activated, BOSS. Your Mac will stay awake. Start the tunnel with: bash scripts/start-remote.sh`;
+      speech = `Remote mode is on. Your Mac will stay awake and ready for remote access.`;
+    } else {
+      text = "Failed to activate remote mode, BOSS. Caffeinate might need permissions.";
+      speech = "Could not activate remote mode.";
+    }
+
+  } else if (query.match(/remote mode off|allow sleep|stop remote|normal mode|go to sleep/i)) {
+    stopCaffeinate();
+    text = "Remote mode deactivated, BOSS. Your Mac can sleep normally now.";
+    speech = "Remote mode is off. Your Mac can sleep normally.";
+
+  // Wake up display
+  } else if (query.match(/^(wake|wake up|turn on (?:the )?(?:display|screen|monitor)|unlock)/i)) {
+    exec('/usr/bin/cliclick kp:space 2>/dev/null || /usr/bin/osascript -e "tell application \\"System Events\\" to keystroke \\" \\"" 2>/dev/null', (err) => {
+      text = err ? "I sent a wake signal, BOSS. If the display is still off, try moving the mouse." : "Wake signal sent, BOSS. Display should be on now.";
+      speech = "Wake signal sent.";
+      return res.json({ success: true, reply: { text, speech, command: { action: 'wake' } } });
+    });
+    return;
+
+  // Sleep display
+  } else if (query.match(/^(sleep|go to sleep|turn off (?:the )?(?:display|screen|monitor))/i)) {
+    exec('/usr/bin/pmset displaysleepnow', (err) => {
+      text = err ? "Couldn't put display to sleep, BOSS." : "Display is sleeping, BOSS. Sweet dreams.";
+      speech = err ? "Could not sleep the display." : "Display sleeping.";
+      return res.json({ success: true, reply: { text, speech, command: { action: 'sleep' } } });
+    });
+    return;
+
+  // I'm on my way home
+  } else if (query.match(/on (?:my )?way (?:home|back)|coming home|heading home|almost home/i)) {
+    const ok = startCaffeinate();
+    let tunnelUrl = '';
+    try { tunnelUrl = fs.readFileSync('/tmp/jenny-remote-url.txt', 'utf8').trim(); } catch {}
+    const tunnelMsg = tunnelUrl ? ` Your remote access URL is: ${tunnelUrl}` : '';
+    text = `Got it, BOSS! Remote mode is ON — your Mac will stay awake and ready.${tunnelMsg} Everything's waiting for you.`;
+    speech = `Remote mode activated. Your Mac is staying awake and ready for you.`;
+    return res.json({ success: true, reply: { text, speech } });
 
   // Battery status
   } else if (query.match(/^(battery|how('s| is) (?:the )?battery|charge|power level)/i)) {

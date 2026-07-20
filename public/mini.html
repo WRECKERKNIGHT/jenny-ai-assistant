@@ -298,6 +298,18 @@
   </div>
 
   <script>
+    /* ── Auth override ── */
+    const _origFetch = window.fetch;
+    window.fetch = function(url, opts = {}) {
+      const token = localStorage.getItem('jenny_token');
+      if (token) {
+        opts.headers = opts.headers || {};
+        if (opts.headers instanceof Headers) { opts.headers.set('Authorization', 'Bearer ' + token); }
+        else { opts.headers['Authorization'] = 'Bearer ' + token; }
+      }
+      return _origFetch(url, opts);
+    };
+
     let isListening = false;
     const API = '';
 
