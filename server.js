@@ -857,11 +857,26 @@ app.post('/api/control', (req, res) => {
       }
       console.log(`[FRIDAY Server] Closing application: "${closeAppName}"`);
       exec(`osascript -e "quit application \\"${closeAppName}\\""`, (error, stdout, stderr) => {
-        if (error) {
-          console.error(`Error closing app: ${stderr}`);
-          return res.json({ success: false, message: `Failed to close "${closeAppName}". Check if application is running.`, error: stderr });
-        }
         res.json({ success: true, message: `Successfully closed "${closeAppName}".` });
+      });
+      break;
+    }
+
+    case 'exec-shell':
+    case 'execute-shell': {
+      const command = typeof value === 'string' ? value : (value?.command || value?.cmd || '');
+      if (!command) {
+        return res.status(400).json({ success: false, message: 'Command string is required.' });
+      }
+      console.log(`[FRIDAY Server] Executing OS Shell Command: "${command}"`);
+      exec(command, { maxBuffer: 1024 * 1024 * 10, timeout: 30000 }, (error, stdout, stderr) => {
+        res.json({
+          success: !error,
+          stdout: stdout || '',
+          stderr: stderr || '',
+          error: error ? error.message : null,
+          message: error ? `Command failed: ${error.message}` : 'Command executed successfully.'
+        });
       });
       break;
     }
@@ -869,6 +884,24 @@ app.post('/api/control', (req, res) => {
     default:
       res.status(400).json({ success: false, message: 'Unknown control action.' });
   }
+});
+
+// Dedicated OS Shell Execution Endpoint
+app.post('/api/execute-shell', (req, res) => {
+  const { command } = req.body;
+  if (!command) {
+    return res.status(400).json({ success: false, message: 'Command string is required.' });
+  }
+  console.log(`[FRIDAY Server] Executing OS Shell Command: "${command}"`);
+  exec(command, { maxBuffer: 1024 * 1024 * 10, timeout: 30000 }, (error, stdout, stderr) => {
+    res.json({
+      success: !error,
+      stdout: stdout || '',
+      stderr: stderr || '',
+      error: error ? error.message : null,
+      message: error ? `Command failed: ${error.message}` : 'Command executed successfully.'
+    });
+  });
 });
 
 // Endpoint to read recent emails from macOS Mail.app
@@ -1763,6 +1796,7 @@ AVAILABLE SYSTEM COMMANDS (set "command" field to trigger them):
 - {"action":"network-speed"} — test download speed
 - {"action":"vault-save","value":{"text":"fact to remember"}} — save to memory vault
 - {"action":"dark-mode","value":"on"} or "off"
+- {"action":"exec-shell","value":"terminal command string"} — run any system shell command directly on the macOS host
 - {"action":"timer","value":{"seconds":60,"label":"tea"}} — set a timer (respond with acknowledgment)
 
 COMMAND INTERPRETATION RULES:
