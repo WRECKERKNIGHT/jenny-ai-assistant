@@ -1,69 +1,290 @@
 import Cocoa
+import WebKit
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+let SERVER_URL = "http://localhost:3000"
+let MINI_URL = "\(SERVER_URL)/mini.html"
+let HEALTH_CHECK_INTERVAL: TimeInterval = 3.0
+let HEALTH_CHECK_TIMEOUT: TimeInterval = 2.0
+
+func loadingHTML(status: String = "Connecting to JENNY server...") -> String {
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta charset="UTF-8">
+    <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+        background: #08080e; color: #fff;
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Mono', monospace;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        height: 100vh; overflow: hidden;
+    }
+    .loader {
+        width: 60px; height: 60px; border-radius: 50%;
+        border: 2px solid rgba(0,242,254,0.15); border-top-color: #00f2fe;
+        animation: spin 1s linear infinite; margin-bottom: 20px; position: relative;
+    }
+    .loader::after {
+        content: ''; position: absolute; inset: 6px; border-radius: 50%;
+        border: 2px solid rgba(255,0,127,0.15); border-bottom-color: #ff007f;
+        animation: spin 1.5s linear infinite reverse;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .title {
+        font-size: 14px; font-weight: 700; letter-spacing: 4px;
+        background: linear-gradient(90deg, #00f2fe, #ff007f);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px;
+    }
+    .status { font-size: 10px; color: rgba(255,255,255,0.4); letter-spacing: 1px; }
+    .retry-btn {
+        margin-top: 20px; padding: 8px 20px; background: rgba(0,242,254,0.1);
+        border: 1px solid rgba(0,242,254,0.3); border-radius: 8px; color: #00f2fe;
+        font-family: inherit; font-size: 10px; letter-spacing: 1px; cursor: pointer;
+    }
+    .retry-btn:hover { background: rgba(0,242,254,0.2); border-color: #00f2fe; }
+    .dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:#ff3b30; margin-right:6px; animation: blink 1.5s ease-in-out infinite; }
+    @keyframes blink { 0%,100%{opacity:0.3;} 50%{opacity:1;} }
+    </style>
+    </head>
+    <body>
+    <div class="loader"></div>
+    <div class="title">J.E.N.N.Y.</div>
+    <div class="status"><span class="dot"></span>\(status)</div>
+    <button class="retry-btn" onclick="window.webkit.messageHandlers.retry.postMessage('retry')">RETRY</button>
+    </body>
+    </html>
+    """
+}
+
+class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     var statusItem: NSStatusItem!
+    var popover: NSPopover!
+    var webView: WKWebView!
+    var eventMonitor: Any?
+    var serverOnline = false
+    var healthTimer: Timer?
+    var serverMenuItem = NSMenuItem(title: "  ● Checking server...", action: nil, keyEquivalent: "")
+    var statusMenuItem = NSMenuItem(title: "  Status: Starting", action: nil, keyEquivalent: "")
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        // Create status bar item in macOS menu bar
+        NSApp.setActivationPolicy(.accessory)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        
         if let button = statusItem.button {
-            button.title = "🌌 Siri / Jenny"
-            button.action = #selector(menuItemClicked(_:))
+            button.image = NSImage(systemSymbolName: "brain.head.profile", accessibilityDescription: "JENNY")
+            button.image?.isTemplate = true
+            button.action = #selector(statusBarButtonClicked(_:))
             button.target = self
         }
-        
+        setupPopover()
         constructMenu()
-        print("[Jenny AI] macOS Menu Bar Siri Status Item initialized.")
+        startHealthCheck()
+        print("[JENNY MenuBar] Initialized")
+    }
+
+    func setupPopover() {
+        popover = NSPopover()
+        popover.contentSize = NSSize(width: 380, height: 540)
+        popover.behavior = .transient
+        popover.animates = true
+        popover.appearance = NSAppearance(named: .darkAqua)
+
+        let config = WKWebViewConfiguration()
+        config.preferences.setValue(true, forKey: "developerExtrasEnabled")
+        config.userContentController.add(self, name: "retry")
+
+        webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 380, height: 540), configuration: config)
+        webView.navigationDelegate = self
+        webView.setValue(false, forKey: "drawsBackground")
+        webView.loadHTMLString(loadingHTML(), baseURL: nil)
+
+        let viewController = NSViewController()
+        viewController.view = webView
+        popover.contentViewController = viewController
+
+        eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            if let popover = self?.popover, popover.isShown { popover.performClose(nil) }
+        }
     }
 
     func constructMenu() {
         let menu = NSMenu()
-        
-        let toggleItem = NSMenuItem(title: "🎙️ Speak to Siri / Jenny", action: #selector(toggleMic), keyEquivalent: "m")
-        toggleItem.target = self
-        menu.addItem(toggleItem)
-        
+        menu.autoenablesItems = false
+
+        menu.addItem(NSMenuItem(title: "  J.E.N.N.Y. Neural Assistant", action: nil, keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
-        
-        let openItem = NSMenuItem(title: "🌐 Open Siri Interface", action: #selector(openWebUI), keyEquivalent: "o")
-        openItem.target = self
-        menu.addItem(openItem)
-        
+
+        serverMenuItem.isEnabled = false
+        menu.addItem(serverMenuItem)
+
+        statusMenuItem.isEnabled = false
+        menu.addItem(statusMenuItem)
         menu.addItem(NSMenuItem.separator())
-        
-        let quitItem = NSMenuItem(title: "❌ Quit Menu Bar App", action: #selector(quitApp), keyEquivalent: "q")
+
+        let miniItem = NSMenuItem(title: "  Open Mini HUD", action: #selector(togglePopover(_:)), keyEquivalent: "j")
+        miniItem.target = self
+        menu.addItem(miniItem)
+
+        let micItem = NSMenuItem(title: "  Toggle Microphone", action: #selector(toggleMic), keyEquivalent: "m")
+        micItem.target = self
+        menu.addItem(micItem)
+
+        let mainItem = NSMenuItem(title: "  Open Main Interface", action: #selector(openMainApp), keyEquivalent: "o")
+        mainItem.target = self
+        menu.addItem(mainItem)
+        menu.addItem(NSMenuItem.separator())
+
+        let weatherItem = NSMenuItem(title: "  Quick Weather", action: #selector(quickWeather), keyEquivalent: "w")
+        weatherItem.target = self
+        menu.addItem(weatherItem)
+
+        let systemItem = NSMenuItem(title: "  System Status", action: #selector(quickSystem), keyEquivalent: "s")
+        systemItem.target = self
+        menu.addItem(systemItem)
+        menu.addItem(NSMenuItem.separator())
+
+        let refreshItem = NSMenuItem(title: "  Refresh Connection", action: #selector(refreshConnection), keyEquivalent: "r")
+        refreshItem.target = self
+        menu.addItem(refreshItem)
+
+        let startServerItem = NSMenuItem(title: "  Start Server", action: #selector(startServer), keyEquivalent: "n")
+        startServerItem.target = self
+        menu.addItem(startServerItem)
+        menu.addItem(NSMenuItem.separator())
+
+        let quitItem = NSMenuItem(title: "  Quit JENNY", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
-        
+
         statusItem.menu = menu
     }
 
+    func startHealthCheck() {
+        checkServer()
+        healthTimer = Timer.scheduledTimer(withTimeInterval: HEALTH_CHECK_INTERVAL, repeats: true) { [weak self] _ in
+            self?.checkServer()
+        }
+    }
+
+    func checkServer() {
+        guard let url = URL(string: "\(SERVER_URL)/api/system-status?t=\(Int(Date().timeIntervalSince1970))") else { return }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = HEALTH_CHECK_TIMEOUT
+        let task = URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
+            let online = error == nil && (response as? HTTPURLResponse)?.statusCode == 200
+            DispatchQueue.main.async { self?.updateServerStatus(online) }
+        }
+        task.resume()
+    }
+
+    func updateServerStatus(_ online: Bool) {
+        serverOnline = online
+        serverMenuItem.title = online ? "  ● Server Online" : "  ● Server Offline"
+        statusMenuItem.title = online ? "  Status: Ready" : "  Status: Disconnected"
+        if online { loadMiniHUD() }
+    }
+
+    func loadMiniHUD() {
+        guard let url = URL(string: MINI_URL) else { return }
+        let currentURL = webView.url?.absoluteString ?? ""
+        if !currentURL.contains("mini.html") || !serverOnline {
+            webView.load(URLRequest(url: url))
+        }
+    }
+
+    @objc func statusBarButtonClicked(_ sender: Any?) { togglePopover(sender as AnyObject?) }
+
+    @objc func togglePopover(_ sender: AnyObject?) {
+        guard let button = statusItem.button else { return }
+        if popover.isShown {
+            popover.performClose(sender)
+        } else {
+            if serverOnline { loadMiniHUD() }
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            popover.contentViewController?.view.window?.makeKey()
+        }
+    }
+
     @objc func toggleMic() {
-        print("[Jenny AI] Menu bar mic toggle clicked.")
-        guard let url = URL(string: "http://localhost:3000/api/toggle-mic") else { return }
-        let task = URLSession.shared.dataTask(with: url) { data, response, error in
-            if let error = error {
-                print("[Jenny AI] Error toggling mic: \(error)")
-            } else {
-                print("[Jenny AI] Mic toggle signal sent successfully.")
+        guard let url = URL(string: "\(SERVER_URL)/api/toggle-mic") else { return }
+        let task = URLSession.shared.dataTask(with: url) { [weak self] _, _, error in
+            DispatchQueue.main.async {
+                if error == nil { self?.togglePopover(nil) }
             }
         }
         task.resume()
     }
 
-    @objc func openWebUI() {
-        if let url = URL(string: "http://localhost:3000") {
-            NSWorkspace.shared.open(url)
+    @objc func openMainApp() {
+        if let url = URL(string: SERVER_URL) { NSWorkspace.shared.open(url) }
+    }
+
+    @objc func quickWeather() {
+        guard let url = URL(string: "\(SERVER_URL)/api/weather") else { return }
+        let task = URLSession.shared.dataTask(with: url) { data, _, _ in
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  json["success"] as? Bool == true else { return }
+            let city = json["city"] as? String ?? "Unknown"
+            let temp = json["tempC"] as? Int ?? 0
+            let cond = json["condition"] as? String ?? "Unknown"
+            DispatchQueue.main.async {
+                let alert = NSAlert()
+                alert.messageText = "Weather - \(city)"
+                alert.informativeText = "\(temp)C, \(cond)"
+                alert.alertStyle = .informational
+                alert.addButton(withTitle: "OK")
+                alert.runModal()
+            }
         }
+        task.resume()
+    }
+
+    @objc func quickSystem() {
+        guard let url = URL(string: "\(SERVER_URL)/api/system-status") else { return }
+        let task = URLSession.shared.dataTask(with: url) { data, _, _ in
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  json["success"] as? Bool == true else { return }
+            let cpu = (json["cpu"] as? [String: Any])?["usage"] as? Int ?? 0
+            let ram = (json["ram"] as? [String: Any])?["usage"] as? Int ?? 0
+            let batt = (json["battery"] as? [String: Any])?["level"] as? Int ?? 0
+            let uptime = json["uptime"] as? Int ?? 0
+            DispatchQueue.main.async {
+                let alert = NSAlert()
+                alert.messageText = "System Status"
+                alert.informativeText = "CPU: \(cpu)%\nRAM: \(ram)%\nBattery: \(batt)%\nUptime: \(uptime/3600)h \((uptime%3600)/60)m"
+                alert.alertStyle = .informational
+                alert.addButton(withTitle: "OK")
+                alert.runModal()
+            }
+        }
+        task.resume()
+    }
+
+    @objc func refreshConnection() {
+        serverMenuItem.title = "  ● Checking..."
+        checkServer()
+    }
+
+    @objc func startServer() {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/bash")
+        let appPath = Bundle.main.bundlePath
+        let appDir = (appPath as NSString).deletingLastPathComponent.replacingOccurrences(of: "/bin/JennyAI.app", with: "")
+        task.arguments = ["-c", "cd \"\(appDir)\" && node server.js &"]
+        try? task.run()
+        serverMenuItem.title = "  ● Starting server..."
     }
 
     @objc func quitApp() {
+        if let monitor = eventMonitor { NSEvent.removeMonitor(monitor) }
+        healthTimer?.invalidate()
         NSApplication.shared.terminate(nil)
     }
 
-    @objc func menuItemClicked(_ sender: Any?) {
-        toggleMic()
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "retry" { refreshConnection() }
     }
 }
 

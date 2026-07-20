@@ -3,315 +3,350 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JENNY AI MINI HUD</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <title>JENNY Mini HUD</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
     :root {
-      --bg-dark: #08080e;
-      --text-main: #ffffff;
-      --text-sub: #94a3b8;
-      --border-glass: rgba(255, 255, 255, 0.12);
-      --font-orbitron: 'Orbitron', sans-serif;
-      --font-rajdhani: 'Rajdhani', sans-serif;
-      --font-code: 'Share Tech Mono', monospace;
+      --bg: #08080e;
+      --surface: rgba(255,255,255,0.04);
+      --border: rgba(255,255,255,0.08);
+      --txt: rgba(255,255,255,0.9);
+      --txt2: rgba(255,255,255,0.5);
+      --txt3: rgba(255,255,255,0.3);
+      --cyan: #00f2fe;
+      --pink: #ff007f;
+      --purple: #7928ca;
+      --mono: 'SF Mono', 'Fira Code', 'Menlo', monospace;
     }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      user-select: none;
-    }
-
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background: var(--bg-dark);
-      color: var(--text-main);
-      font-family: var(--font-rajdhani);
+      background: var(--bg);
+      color: var(--txt);
+      font-family: var(--mono);
       width: 380px;
-      height: 520px;
+      height: 540px;
       overflow: hidden;
-      padding: 16px;
       display: flex;
       flex-direction: column;
-      gap: 14px;
-      border: 1px solid rgba(0, 242, 254, 0.3);
-      border-radius: 20px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.9);
     }
 
-    /* Header Bar */
-    .mini-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-bottom: 10px;
-      border-bottom: 1px solid var(--border-glass);
+    /* Header */
+    .hdr {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px; border-bottom: 1px solid var(--border);
     }
-
-    .mini-title {
-      font-family: var(--font-orbitron);
-      font-size: 13px;
-      font-weight: 800;
-      letter-spacing: 1.5px;
-      background: linear-gradient(90deg, #ffffff, #00f2fe, #ff007f);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      display: flex;
-      align-items: center;
-      gap: 8px;
+    .hdr-title {
+      font-size: 11px; font-weight: 700; letter-spacing: 2px;
+      background: linear-gradient(90deg, var(--cyan), var(--pink));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      display: flex; align-items: center; gap: 6px;
     }
-
-    .status-badge {
-      font-family: var(--font-code);
-      font-size: 10px;
-      color: #00f3ff;
-      background: rgba(0, 243, 255, 0.1);
-      padding: 3px 8px;
-      border-radius: 12px;
-      border: 1px solid rgba(0, 243, 255, 0.3);
+    .hdr-title i { -webkit-text-fill-color: var(--cyan); font-size: 10px; }
+    .hdr-status {
+      font-size: 9px; padding: 2px 8px; border-radius: 10px;
+      border: 1px solid rgba(0,242,254,0.2); color: var(--cyan);
+      background: rgba(0,242,254,0.06); display: flex; align-items: center; gap: 4px;
     }
+    .hdr-status .dot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: var(--cyan); animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:0.3;} 50%{opacity:1;} }
 
-    /* Siri Liquid Orb Stage */
+    /* Orb Stage */
     .orb-stage {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 20px 10px;
-      background: rgba(15, 15, 25, 0.6);
-      border: 1px solid var(--border-glass);
-      border-radius: 16px;
-      position: relative;
-      gap: 12px;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 16px 12px 12px; position: relative;
+      background: linear-gradient(180deg, rgba(0,242,254,0.02) 0%, transparent 100%);
     }
-
-    .siri-orb-container {
-      position: relative;
-      width: 90px;
-      height: 90px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    .orb-container {
+      position: relative; width: 80px; height: 80px;
+      display: flex; align-items: center; justify-content: center;
       cursor: pointer;
     }
-
-    .siri-orb-glow {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(0,242,254,0.7) 0%, rgba(255,0,127,0.5) 50%, rgba(121,40,202,0) 75%);
-      filter: blur(14px);
-      animation: mini-glow-pulse 3s infinite ease-in-out;
+    .orb-glow {
+      position: absolute; inset: 0; border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,242,254,0.5) 0%, rgba(255,0,127,0.3) 50%, transparent 70%);
+      filter: blur(12px); animation: glow 3s ease-in-out infinite;
     }
-
-    @keyframes mini-glow-pulse {
-      0%, 100% { transform: scale(0.85); opacity: 0.6; }
-      50% { transform: scale(1.2); opacity: 1; }
+    @keyframes glow { 0%,100%{transform:scale(0.8);opacity:0.5;} 50%{transform:scale(1.3);opacity:1;} }
+    .orb-core {
+      position: relative; width: 50px; height: 50px; border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, var(--cyan), var(--pink), var(--purple));
+      box-shadow: inset 0 0 12px rgba(255,255,255,0.8), 0 0 25px rgba(0,242,254,0.7);
+      transition: all 0.3s;
     }
-
-    .siri-orb-core {
-      position: relative;
-      width: 65px;
-      height: 65px;
-      border-radius: 50%;
-      background: radial-gradient(circle at 30% 30%, #00f2fe, #ff007f, #7928ca);
-      box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.9), 0 0 30px rgba(0, 242, 254, 0.9);
-      animation: mini-orb-morph 4s infinite alternate ease-in-out;
+    .orb-container:hover .orb-core { transform: scale(1.1); }
+    .orb-container.active .orb-glow {
+      background: radial-gradient(circle, rgba(255,0,127,0.7) 0%, rgba(121,40,202,0.4) 60%, transparent 70%);
     }
-
-    @keyframes mini-orb-morph {
-      0% { border-radius: 50% 50% 50% 50%; transform: rotate(0deg) scale(1); }
-      50% { border-radius: 40% 60% 60% 40%; transform: rotate(180deg) scale(1.08); }
-      100% { border-radius: 60% 40% 50% 50%; transform: rotate(360deg) scale(0.95); }
+    .orb-container.active .orb-core {
+      animation: orbPulse 1.5s ease-in-out infinite;
     }
+    @keyframes orbPulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.08);} }
 
     /* Wave Canvas */
-    #mini-wave-canvas {
-      width: 100%;
-      height: 40px;
-      display: block;
-    }
+    #wave-canvas { width: 100%; height: 32px; display: block; }
 
-    /* Voice Speak Button */
-    .speak-btn {
-      width: 100%;
-      padding: 12px;
-      background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(255, 0, 127, 0.2));
-      border: 1px solid rgba(0, 242, 254, 0.5);
-      border-radius: 12px;
-      color: #ffffff;
-      font-family: var(--font-orbitron);
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      transition: all 0.2s ease;
+    /* Mic Button */
+    .mic-btn {
+      width: 100%; padding: 10px; margin-top: 4px;
+      background: linear-gradient(135deg, rgba(0,242,254,0.1), rgba(255,0,127,0.1));
+      border: 1px solid rgba(0,242,254,0.25); border-radius: 10px;
+      color: #fff; font-family: var(--mono); font-size: 10px; font-weight: 700;
+      letter-spacing: 1.5px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: all 0.2s;
     }
+    .mic-btn:hover {
+      background: linear-gradient(135deg, rgba(0,242,254,0.2), rgba(255,0,127,0.2));
+      border-color: var(--cyan); box-shadow: 0 0 16px rgba(0,242,254,0.2);
+      transform: translateY(-1px);
+    }
+    .mic-btn.active {
+      background: linear-gradient(135deg, rgba(255,0,127,0.3), rgba(121,40,202,0.3));
+      border-color: var(--pink); box-shadow: 0 0 20px rgba(255,0,127,0.3);
+    }
+    .mic-btn i { font-size: 12px; }
 
-    .speak-btn:hover {
-      background: linear-gradient(135deg, rgba(0, 242, 254, 0.4), rgba(255, 0, 127, 0.4));
-      border-color: #00f2fe;
-      box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
-      transform: translateY(-2px);
+    /* Stats Grid */
+    .stats-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px; padding: 8px 12px;
     }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px; text-align: center;
+      transition: all 0.2s;
+    }
+    .stat-card:hover { border-color: rgba(255,255,255,0.12); }
+    .stat-val { font-size: 14px; font-weight: 700; color: var(--txt); }
+    .stat-lbl { font-size: 7px; color: var(--txt3); letter-spacing: 1px; margin-top: 2px; }
 
-    .speak-btn.listening {
-      background: linear-gradient(135deg, rgba(255, 0, 127, 0.6), rgba(121, 40, 202, 0.6));
-      border-color: #ff007f;
-      box-shadow: 0 0 25px rgba(255, 0, 127, 0.6);
+    /* Action Grid */
+    .actions-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 6px; padding: 6px 12px;
     }
+    .action-btn {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 10px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--txt2); font-family: var(--mono);
+      font-size: 9px; cursor: pointer; transition: all 0.2s;
+      letter-spacing: 0.5px;
+    }
+    .action-btn:hover {
+      background: rgba(0,242,254,0.08); border-color: rgba(0,242,254,0.2);
+      color: var(--txt);
+    }
+    .action-btn i { color: var(--cyan); font-size: 10px; width: 14px; text-align: center; }
 
-    /* Response & Transcript Box */
-    .transcript-box {
-      background: rgba(10, 10, 18, 0.8);
-      border: 1px solid var(--border-glass);
-      border-radius: 12px;
-      padding: 12px;
-      flex-grow: 1;
-      overflow-y: auto;
-      font-family: var(--font-code);
-      font-size: 11px;
-      color: #cbd5e1;
-      line-height: 1.5;
+    /* Transcript */
+    .transcript {
+      flex: 1; margin: 0 12px 10px; padding: 10px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; overflow-y: auto;
+      font-size: 10px; color: var(--txt2); line-height: 1.6;
+      min-height: 0;
     }
+    .transcript::-webkit-scrollbar { width: 2px; }
+    .transcript::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+    .transcript-label {
+      font-size: 8px; color: var(--txt3); letter-spacing: 1px; margin-bottom: 4px;
+    }
+    .transcript-msg { margin-bottom: 6px; }
+    .transcript-msg.user { color: var(--cyan); }
+    .transcript-msg.ai { color: var(--txt); }
 
-    .transcript-title {
-      font-family: var(--font-orbitron);
-      font-size: 10px;
-      color: #00f2fe;
-      margin-bottom: 6px;
-      letter-spacing: 1px;
+    /* Footer */
+    .footer {
+      display: flex; justify-content: center; gap: 8px;
+      padding: 6px 12px 10px; border-top: 1px solid var(--border);
     }
-
-    /* Action Chips */
-    .chips-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 8px;
+    .footer-btn {
+      padding: 5px 10px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 6px;
+      color: var(--txt3); font-family: var(--mono); font-size: 8px;
+      cursor: pointer; transition: all 0.2s; letter-spacing: 0.5px;
     }
-
-    .chip-btn {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 8px;
-      padding: 8px;
-      color: var(--text-main);
-      font-family: var(--font-rajdhani);
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.2s ease;
-    }
-
-    .chip-btn:hover {
-      background: rgba(0, 242, 254, 0.2);
-      border-color: #00f2fe;
-      color: #ffffff;
-    }
-
-    .chip-btn i {
-      color: #00f2fe;
-    }
+    .footer-btn:hover { border-color: rgba(255,255,255,0.12); color: var(--txt2); }
   </style>
 </head>
 <body>
-
-  <div class="mini-header">
-    <div class="mini-title">
-      <i class="fa-solid fa-compact-disc"></i> JENNY MINI HUD
-    </div>
-    <div class="status-badge" id="mini-status-tag">MAC MENU BAR</div>
+  <!-- Header -->
+  <div class="hdr">
+    <div class="hdr-title"><i class="fa-solid fa-brain"></i> JENNY MINI</div>
+    <div class="hdr-status" id="status-badge"><span class="dot"></span><span id="status-text">ONLINE</span></div>
   </div>
 
+  <!-- Orb -->
   <div class="orb-stage">
-    <div class="siri-orb-container" onclick="toggleListening()">
-      <div class="siri-orb-glow" id="mini-orb-glow"></div>
-      <div class="siri-orb-core" id="mini-orb-core"></div>
+    <div class="orb-container" id="orb-container" onclick="toggleMic()">
+      <div class="orb-glow"></div>
+      <div class="orb-core"></div>
     </div>
-    <canvas id="mini-wave-canvas" width="300" height="40"></canvas>
+    <canvas id="wave-canvas" width="356" height="32"></canvas>
+    <button class="mic-btn" id="mic-btn" onclick="toggleMic()">
+      <i class="fa-solid fa-microphone"></i> <span id="mic-label">TAP TO SPEAK</span>
+    </button>
   </div>
 
-  <button class="speak-btn" id="mini-speak-btn" onclick="toggleListening()">
-    <i class="fa-solid fa-microphone"></i> <span id="speak-btn-text">SPEAK TO JENNY</span>
-  </button>
-
-  <div class="transcript-box" id="mini-transcript">
-    <div class="transcript-title">[ NEURAL STREAM ]</div>
-    <div id="transcript-content">Hi, I am Jenny, your neural assistant. All systems are online and fully operational. How can I help you today, BOSS?</div>
+  <!-- System Stats -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-val" id="s-cpu">--</div>
+      <div class="stat-lbl">CPU</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="s-ram">--</div>
+      <div class="stat-lbl">RAM</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="s-batt">--</div>
+      <div class="stat-lbl">BATTERY</div>
+    </div>
   </div>
 
-  <div class="chips-grid">
-    <button class="chip-btn" onclick="sendQuickCmd('system report')"><i class="fa-solid fa-chart-pie"></i> Reports</button>
-    <button class="chip-btn" onclick="sendQuickCmd('show todo')"><i class="fa-solid fa-list-check"></i> To-Do</button>
-    <button class="chip-btn" onclick="sendQuickCmd('countdown tracker')"><i class="fa-solid fa-stopwatch"></i> Countdowns</button>
-    <button class="chip-btn" onclick="sendQuickCmd('google api quota')"><i class="fa-solid fa-gauge-high"></i> API Quota</button>
+  <!-- Quick Actions -->
+  <div class="actions-grid">
+    <button class="action-btn" onclick="quickCmd('briefing')"><i class="fa-solid fa-clipboard-list"></i> Briefing</button>
+    <button class="action-btn" onclick="quickCmd('what is the weather')"><i class="fa-solid fa-cloud-sun"></i> Weather</button>
+    <button class="action-btn" onclick="quickCmd('system status')"><i class="fa-solid fa-microchip"></i> System</button>
+    <button class="action-btn" onclick="quickCmd('tell me a joke')"><i class="fa-solid fa-face-laugh"></i> Joke</button>
+  </div>
+
+  <!-- Transcript -->
+  <div class="transcript" id="transcript">
+    <div class="transcript-label">NEURAL STREAM</div>
+    <div id="transcript-content">
+      <div class="transcript-msg ai">Ready, BOSS. Tap the orb or use quick actions.</div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <button class="footer-btn" onclick="openMain()"><i class="fa-solid fa-expand"></i> FULL APP</button>
+    <button class="footer-btn" onclick="refreshStats()"><i class="fa-solid fa-arrow-rotate-right"></i> REFRESH</button>
   </div>
 
   <script>
     let isListening = false;
+    const API = '';
 
-    function toggleListening() {
-      fetch('/api/toggle-mic').then(() => {
+    // Mic toggle
+    function toggleMic() {
+      fetch(API + '/api/toggle-mic').then(() => {
         isListening = !isListening;
-        const btn = document.getElementById('mini-speak-btn');
-        const text = document.getElementById('speak-btn-text');
-        const tag = document.getElementById('mini-status-tag');
-        const trans = document.getElementById('transcript-content');
-
+        const btn = document.getElementById('mic-btn');
+        const label = document.getElementById('mic-label');
+        const orb = document.getElementById('orb-container');
+        const st = document.getElementById('status-text');
         if (isListening) {
-          btn.classList.add('listening');
-          text.textContent = 'LISTENING...';
-          tag.textContent = 'LISTENING';
-          tag.style.color = '#ff007f';
-          trans.textContent = 'Listening to your voice command, BOSS...';
+          btn.classList.add('active');
+          orb.classList.add('active');
+          label.textContent = 'LISTENING...';
+          st.textContent = 'LISTENING';
+          st.style.color = '#ff007f';
+          addMsg('Listening...', 'user');
         } else {
-          btn.classList.remove('listening');
-          text.textContent = 'SPEAK TO JENNY';
-          tag.textContent = 'READY';
-          tag.style.color = '#00f3ff';
+          btn.classList.remove('active');
+          orb.classList.remove('active');
+          label.textContent = 'TAP TO SPEAK';
+          st.textContent = 'ONLINE';
+          st.style.color = '';
         }
       });
     }
 
-    function sendQuickCmd(cmd) {
-      document.getElementById('transcript-content').textContent = `Executing command: "${cmd}"...`;
-      fetch('/api/toggle-mic');
+    // Quick command
+    function quickCmd(cmd) {
+      addMsg(cmd, 'user');
+      fetch(API + '/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: cmd })
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.reply) addMsg(d.reply.text, 'ai');
+        else addMsg('No response.', 'ai');
+      })
+      .catch(() => addMsg('Connection error.', 'ai'));
     }
 
-    // 60FPS Wave animation
-    const canvas = document.getElementById('mini-wave-canvas');
+    // Add message to transcript
+    function addMsg(text, role) {
+      const el = document.getElementById('transcript-content');
+      const div = document.createElement('div');
+      div.className = 'transcript-msg ' + role;
+      div.textContent = text;
+      el.appendChild(div);
+      const box = document.getElementById('transcript');
+      box.scrollTop = box.scrollHeight;
+      // Keep only last 20 messages
+      while (el.children.length > 21) el.removeChild(el.children[1]);
+    }
+
+    // Open main app
+    function openMain() {
+      window.open('http://localhost:3000', '_blank');
+    }
+
+    // Refresh stats
+    function refreshStats() {
+      fetch(API + '/api/system-status')
+        .then(r => r.json())
+        .then(d => {
+          if (!d.success) return;
+          document.getElementById('s-cpu').textContent = (d.cpu?.usage || 0) + '%';
+          document.getElementById('s-ram').textContent = (d.ram?.usage || 0) + '%';
+          document.getElementById('s-batt').textContent = (d.battery?.level ?? '--') + '%';
+        })
+        .catch(() => {});
+    }
+
+    // Auto-refresh stats every 5s
+    setInterval(refreshStats, 5000);
+    refreshStats();
+
+    // Poll mic state from server
+    let lastToggle = 0;
+    function pollMicState() {
+      fetch(API + '/api/toggle-mic-poll')
+        .then(r => r.json())
+        .then(d => {
+          if (d.lastToggle && d.lastToggle !== lastToggle) {
+            lastToggle = d.lastToggle;
+            toggleMic();
+          }
+        })
+        .catch(() => {});
+    }
+    setInterval(pollMicState, 2000);
+
+    // Wave animation
+    const canvas = document.getElementById('wave-canvas');
     const ctx = canvas.getContext('2d');
     let step = 0;
-
-    function animateWave() {
+    function drawWave() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      step += 0.08;
-      const amp = isListening ? 12 : 3;
-      const colors = ['rgba(0, 242, 254, 0.8)', 'rgba(255, 0, 127, 0.8)', 'rgba(121, 40, 202, 0.8)'];
-
+      step += 0.06;
+      const amp = isListening ? 10 : 3;
+      const colors = ['rgba(0,242,254,0.6)', 'rgba(255,0,127,0.5)', 'rgba(121,40,202,0.4)'];
       colors.forEach((color, i) => {
         ctx.beginPath();
         ctx.strokeStyle = color;
-        ctx.lineWidth = isListening ? 2 : 1;
-        for (let x = 0; x < canvas.width; x += 4) {
-          const y = canvas.height / 2 + Math.sin(x * 0.04 + step + i) * amp * Math.sin((x / canvas.width) * Math.PI);
-          if (x === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+        ctx.lineWidth = isListening ? 1.5 : 1;
+        for (let x = 0; x < canvas.width; x += 3) {
+          const y = canvas.height / 2 + Math.sin(x * 0.04 + step + i * 1.2) * amp * Math.sin((x / canvas.width) * Math.PI);
+          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
         }
         ctx.stroke();
       });
-      requestAnimationFrame(animateWave);
+      requestAnimationFrame(drawWave);
     }
-    animateWave();
+    drawWave();
   </script>
 </body>
 </html>

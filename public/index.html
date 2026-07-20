@@ -10,19 +10,48 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 <body>
-  <!-- BOOT SCREEN -->
+  <!-- BOOT SCREEN — CINEMATIC -->
   <div id="boot-screen">
-    <div class="boot-grid"></div>
-    <div class="boot-rings">
-      <div class="ring r1"></div>
-      <div class="ring r2"></div>
-      <div class="ring r3"></div>
+    <!-- Layer 1: Star field -->
+    <canvas id="boot-stars" class="boot-layer"></canvas>
+    <!-- Layer 2: Grid with perspective -->
+    <div class="boot-layer boot-grid-perspective"></div>
+    <!-- Layer 3: Data streams -->
+    <canvas id="boot-datastreams" class="boot-layer"></canvas>
+    <!-- Layer 4: Central orb + rings -->
+    <div class="boot-center">
+      <div class="boot-energy-ring er1"></div>
+      <div class="boot-energy-ring er2"></div>
+      <div class="boot-energy-ring er3"></div>
+      <div class="boot-energy-ring er4"></div>
+      <div class="boot-core">
+        <div class="boot-core-inner"></div>
+        <div class="boot-core-pulse"></div>
+      </div>
+      <div class="boot-scan-beam"></div>
     </div>
-    <div class="boot-orb"></div>
-    <h1 class="boot-title" id="boot-title"></h1>
-    <p class="boot-sub" id="boot-sub">JUST ENHANCED NEURAL NETWORK YIELDING</p>
-    <div class="boot-bar-track"><div class="boot-bar-fill" id="boot-bar"></div></div>
-    <div class="boot-logs" id="boot-logs"></div>
+    <!-- Layer 5: Title + text -->
+    <div class="boot-text-layer">
+      <div class="boot-glitch-wrap">
+        <h1 class="boot-title" id="boot-title" data-text="J.E.N.N.Y.">J.E.N.N.Y.</h1>
+      </div>
+      <p class="boot-sub" id="boot-sub">JUST ENHANCED NEURAL NETWORK YIELDING</p>
+      <div class="boot-progress-wrap">
+        <div class="boot-bar-track"><div class="boot-bar-fill" id="boot-bar"></div></div>
+        <div class="boot-percentage" id="boot-percentage">0%</div>
+      </div>
+      <div class="boot-terminal" id="boot-terminal">
+        <div class="boot-terminal-header">
+          <span class="bt-dot red"></span><span class="bt-dot yellow"></span><span class="bt-dot green"></span>
+          <span class="bt-title">FRIDAY CORE v3.7.1</span>
+        </div>
+        <div class="boot-terminal-body" id="boot-logs"></div>
+      </div>
+    </div>
+    <!-- Layer 6: Flash overlay -->
+    <div class="boot-flash" id="boot-flash"></div>
+    <!-- Layer 7: Scanlines -->
+    <div class="boot-scanlines"></div>
   </div>
 
   <!-- MAIN APP -->
@@ -137,6 +166,8 @@
           <button class="dock-btn" data-panel="processes" title="Processes"><i class="fa-solid fa-list-ol"></i></button>
           <button class="dock-btn" data-panel="vault" title="Vault"><i class="fa-solid fa-database"></i></button>
           <button class="dock-btn" data-panel="clipboard" title="Clipboard"><i class="fa-solid fa-clipboard"></i></button>
+          <button class="dock-btn" data-panel="files" title="Files"><i class="fa-solid fa-folder-tree"></i></button>
+          <button class="dock-btn" data-panel="notes" title="Notes"><i class="fa-solid fa-note-sticky"></i></button>
           <button class="dock-btn" data-panel="settings" title="Settings"><i class="fa-solid fa-gear"></i></button>
           <button class="dock-btn" data-panel="commands" title="Commands"><i class="fa-solid fa-terminal"></i></button>
         </nav>
@@ -179,6 +210,10 @@
         <div class="ambient-chip" id="ambient-ping">
           <i class="fa-solid fa-signal"></i>
           <span id="ambient-ping-text">--ms</span>
+        </div>
+        <div class="ambient-chip" id="ambient-net">
+          <i class="fa-solid fa-arrow-down"></i>
+          <span id="ambient-net-text">--</span>
         </div>
       </div>
 

@@ -64,50 +64,220 @@ function startParticles() {
 }
 
 // ================================================
-// BOOT SEQUENCE
+// BOOT SEQUENCE — CINEMATIC
 // ================================================
-const bootLines = [
-  'Initializing neural acoustic core...',
-  'Loading voice synthesis modules...',
-  'Connecting to sensor array...',
-  'Calibrating holographic display...',
-  'Loading secure memory vault...',
-  'Establishing encrypted channels...',
-  'System diagnostics: ALL PASS',
-  'Welcome, BOSS.'
+const bootPhases = [
+  { logs: [
+    { prefix: '$ ', text: 'friday --init-core', type: 'info' },
+    { prefix: '[ ', text: 'NEURAL ACOUSTIC CORE', type: 'ok', suffix: ' ]' },
+    { prefix: '[ ', text: 'VOICE SYNTHESIS MODULES', type: 'ok', suffix: ' ]' },
+    { prefix: '[ ', text: 'SENSOR ARRAY LINK', type: 'ok', suffix: ' ]' },
+  ], progress: 15 },
+  { logs: [
+    { prefix: '$ ', text: 'loading holographic_display.fw', type: 'info' },
+    { prefix: '[ ', text: 'HOLOGRAPHIC DISPLAY', type: 'ok', suffix: ' ]' },
+    { prefix: '[ ', text: 'MEMORY VAULT DECRYPT', type: 'ok', suffix: ' ]' },
+    { prefix: '>> ', text: 'establishing encrypted_channel...', type: 'warn' },
+    { prefix: '[ ', text: 'ENCRYPTED CHANNEL ESTABLISHED', type: 'ok', suffix: ' ]' },
+  ], progress: 40 },
+  { logs: [
+    { prefix: '$ ', text: 'friday --diagnostics --full', type: 'info' },
+    { prefix: '[ ', text: 'CPU .............. NOMINAL', type: 'ok', suffix: ' ]' },
+    { prefix: '[ ', text: 'RAM .............. NOMINAL', type: 'ok', suffix: ' ]' },
+    { prefix: '[ ', text: 'NETWORK .......... NOMINAL', type: 'ok', suffix: ' ]' },
+    { prefix: '[ ', text: 'GEMINI API ....... CONNECTED', type: 'ok', suffix: ' ]' },
+  ], progress: 70 },
+  { logs: [
+    { prefix: '$ ', text: 'friday --boot-complete', type: 'info' },
+    { prefix: '>> ', text: 'ALL SYSTEMS: PASS', type: 'ok' },
+    { prefix: '', text: '', type: '' },
+    { prefix: '', text: '>> WELCOME, BOSS.', type: 'ok' },
+  ], progress: 100 },
 ];
+
+// Star field
+let bootStarsFrame = 0;
+let bootStarsRafId = null;
+function initBootStars() {
+  const canvas = document.getElementById('boot-stars');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const stars = [];
+  const count = 200;
+  for (let i = 0; i < count; i++) {
+    stars.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      size: Math.random() * 1.5 + 0.3,
+      speed: Math.random() * 0.5 + 0.1,
+      brightness: Math.random(),
+      twinkleSpeed: Math.random() * 0.02 + 0.005
+    });
+  }
+  function draw() {
+    if (document.getElementById('boot-screen')?.classList.contains('done')) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    bootStarsFrame++;
+    stars.forEach(s => {
+      const alpha = 0.3 + Math.sin(bootStarsFrame * s.twinkleSpeed) * 0.3 + s.brightness * 0.2;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+      ctx.fill();
+      s.y += s.speed;
+      if (s.y > canvas.height) { s.y = 0; s.x = Math.random() * canvas.width; }
+    });
+    ctx.strokeStyle = 'rgba(255,255,255,0.015)';
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i < stars.length; i++) {
+      for (let j = i + 1; j < stars.length; j++) {
+        const dx = stars[i].x - stars[j].x;
+        const dy = stars[i].y - stars[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 80) {
+          ctx.beginPath();
+          ctx.moveTo(stars[i].x, stars[i].y);
+          ctx.lineTo(stars[j].x, stars[j].y);
+          ctx.stroke();
+        }
+      }
+    }
+    bootStarsRafId = requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+// Data streams effect
+let bootStreamsRafId = null;
+function initDataStreams() {
+  const canvas = document.getElementById('boot-datastreams');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const columns = [];
+  const fontSize = 10;
+  const colCount = Math.floor(canvas.width / fontSize);
+  for (let i = 0; i < colCount; i++) {
+    if (Math.random() > 0.7) {
+      columns.push({
+        x: i * fontSize,
+        y: Math.random() * canvas.height * -1,
+        speed: Math.random() * 3 + 1,
+        chars: '01アイウエオカキクケコ>_/\\|{}[]'.split(''),
+        height: Math.floor(Math.random() * 15) + 5,
+        active: true
+      });
+    }
+  }
+  function draw() {
+    if (document.getElementById('boot-screen')?.classList.contains('done')) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.05)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.font = `${fontSize}px monospace`;
+    columns.forEach(col => {
+      if (!col.active) return;
+      for (let j = 0; j < col.height; j++) {
+        const char = col.chars[Math.floor(Math.random() * col.chars.length)];
+        const alpha = j === 0 ? 0.9 : Math.max(0.05, 0.5 - (j / col.height) * 0.5);
+        ctx.fillStyle = j === 0 ? `rgba(255,255,255,${alpha})` : `rgba(255,255,255,${alpha * 0.4})`;
+        ctx.fillText(char, col.x, col.y + j * fontSize);
+      }
+      col.y += col.speed;
+      if (col.y > canvas.height + col.height * fontSize) {
+        col.y = Math.random() * canvas.height * -0.5;
+        col.speed = Math.random() * 3 + 1;
+      }
+    });
+    bootStreamsRafId = requestAnimationFrame(draw);
+  }
+  draw();
+}
 
 async function runBoot() {
   const titleEl = document.getElementById('boot-title');
   const subEl = document.getElementById('boot-sub');
   const barEl = document.getElementById('boot-bar');
+  const pctEl = document.getElementById('boot-percentage');
   const logsEl = document.getElementById('boot-logs');
+  const termEl = document.getElementById('boot-terminal');
+  const flashEl = document.getElementById('boot-flash');
+  const bootScreen = document.getElementById('boot-screen');
 
+  // Initialize visual layers
+  initBootStars();
+  initDataStreams();
+
+  // Apply saved dark mode immediately
+  const savedMem = loadOfflineMemory();
+  applyDarkMode(savedMem.darkMode !== false);
+
+  // Phase 0: Dramatic pause — let rings and core materialize
+  await sleep(1800);
+
+  // Phase 1: Title typewriter with glitch
   const title = 'J.E.N.N.Y.';
+  titleEl.classList.add('glitching');
   for (let i = 0; i < title.length; i++) {
     titleEl.textContent += title[i];
-    await sleep(70);
+    await sleep(80);
   }
-  await sleep(250);
+  await sleep(200);
+  titleEl.classList.remove('glitching');
+
+  // Phase 2: Subtitle fade in
+  await sleep(300);
   subEl.classList.add('show');
 
-  for (let i = 0; i < bootLines.length; i++) {
-    barEl.style.width = Math.round(((i + 1) / bootLines.length) * 100) + '%';
-    logsEl.textContent = bootLines[i];
-    sfx.hover();
-    await sleep(350 + Math.random() * 250);
+  // Phase 3: Show terminal
+  await sleep(400);
+  termEl.classList.add('show');
+
+  // Phase 4: Run through boot phases
+  let logIndex = 0;
+  for (const phase of bootPhases) {
+    for (const log of phase.logs) {
+      await sleep(200 + Math.random() * 200);
+      const line = document.createElement('div');
+      line.className = 'log-line';
+      let html = '';
+      if (log.prefix) html += `<span class="log-prefix">${log.prefix}</span>`;
+      html += `<span class="log-${log.type}">${log.text}</span>`;
+      if (log.suffix) html += `<span class="log-prefix">${log.suffix}</span>`;
+      line.innerHTML = html;
+      logsEl.appendChild(line);
+      logsEl.scrollTop = logsEl.scrollHeight;
+      sfx.hover();
+    }
+    barEl.style.width = phase.progress + '%';
+    pctEl.textContent = phase.progress + '%';
   }
 
+  // Phase 5: Flash + energy burst
+  await sleep(300);
+  flashEl.classList.add('fire');
   sfx.boot();
-  await sleep(500);
 
-  document.getElementById('boot-screen').classList.add('done');
+  // Phase 6: Dramatic exit
+  await sleep(400);
+  bootScreen.classList.add('exiting');
+  await sleep(800);
+  bootScreen.classList.add('done');
   const app = document.getElementById('main-app');
   app.style.display = 'flex';
 
   await sleep(100);
+  restoreChatHistory();
   const greeting = getGreeting();
-  addAIMessage(greeting);
+  if (document.getElementById('msgs').children.length === 0) addAIMessage(greeting);
   startClock();
   startOrb();
   initSpeechWaves();
@@ -120,6 +290,8 @@ async function runBoot() {
   fetchQuota();
   setInterval(fetchQuota, 60000);
   setInterval(updateTimerDisplay, 1000);
+  checkPermissions();
+  startConnectionMonitor();
 
   document.querySelectorAll('.welcome-card').forEach(card => {
     card.addEventListener('click', () => {
@@ -243,7 +415,7 @@ async function fetchSysStats() {
     const uptimeH = d.uptime ? Math.floor(d.uptime / 3600) : 0;
     const uptimeM = d.uptime ? Math.floor((d.uptime % 3600) / 60) : 0;
     document.getElementById('sys-uptime').textContent = `${uptimeH}h ${uptimeM}m`;
-    document.getElementById('sys-battery').textContent = d.battery?.level != null ? `${Math.round(d.battery.level * 100)}%` : '--';
+    document.getElementById('sys-battery').textContent = d.battery?.level != null ? `${Math.round(d.battery.level)}%` : '--';
     document.getElementById('sys-wifi').textContent = d.hostname ? d.hostname.split('.')[0] : '--';
     drawSparkline('spark-cpu', sparkHistory.cpu, 'rgb(255,255,255)');
     drawSparkline('spark-ram', sparkHistory.ram, 'rgb(255,255,255)');
@@ -418,6 +590,23 @@ async function fetchAmbientData() {
       if (wEl) wEl.textContent = `${d.tempC}° ${d.condition}`;
     }
   } catch {}
+  // Network speed indicator
+  try {
+    const netEl = document.getElementById('ambient-net-text');
+    if (netEl && !netEl.dataset.loading) {
+      netEl.dataset.loading = '1';
+      const res = await fetch('/api/control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'network-speed' })
+      });
+      const d = await res.json();
+      if (d.success && d.speedMbps) {
+        netEl.textContent = `${d.speedMbps} Mbps`;
+      }
+      delete netEl.dataset.loading;
+    }
+  } catch {}
 }
 
 // ================================================
@@ -457,23 +646,27 @@ function startInputStats() {
 }
 
 // ================================================
-// QUOTA
+// QUOTA (Real usage tracking with multi-key support)
 // ================================================
+let quotaData = null;
+
 async function fetchQuota() {
   try {
     const res = await fetch('/api/gemini-quota');
     const d = await res.json();
     if (!d.success) return;
+    quotaData = d;
     const badge = document.getElementById('mode-badge');
     const rpmEl = document.getElementById('quota-rpm');
     const dot = document.getElementById('status-dot');
     const stext = document.getElementById('status-text');
     if (d.isKeyPresent) {
-      badge.textContent = d.model.toUpperCase();
+      const keyInfo = d.keysCount > 1 ? ` [${d.activeKeys}/${d.keysCount}]` : '';
+      badge.textContent = `${d.model.toUpperCase()}${keyInfo}`;
       badge.classList.add('active');
       if (rpmEl) rpmEl.textContent = `${d.rpm.current}/${d.rpm.max}`;
-      if (dot) dot.style.background = 'rgba(255,255,255,0.6)';
-      if (stext) stext.textContent = 'online';
+      if (dot) dot.style.background = d.activeKeys > 0 ? 'rgba(255,255,255,0.6)' : 'rgba(255,165,0,0.6)';
+      if (stext) stext.textContent = d.activeKeys > 0 ? 'online' : 'keys exhausted';
     } else {
       badge.textContent = 'OFFLINE';
       badge.classList.remove('active');
@@ -482,6 +675,113 @@ async function fetchQuota() {
       if (stext) stext.textContent = 'offline';
     }
   } catch {}
+}
+
+// Show key details in toast
+function showKeyDetails() {
+  if (!quotaData || !quotaData.keys || quotaData.keys.length === 0) {
+    toast('No API keys configured', 'info');
+    return;
+  }
+  quotaData.keys.forEach((k, i) => {
+    const status = k.active ? 'ACTIVE' : 'RATE LIMITED';
+    toast(`Key ${i + 1}: ${k.masked} — ${status} (${k.requestsToday} req, ${k.tokensTotal} tokens, ${k.errors429} errors)`, k.active ? 'ok' : 'err');
+  });
+}
+
+// ================================================
+// PERMISSIONS CHECK (macOS)
+// ================================================
+async function checkPermissions() {
+  try {
+    const res = await fetch('/api/permissions-check');
+    const d = await res.json();
+    if (!d.success || d.platform !== 'darwin') return;
+    
+    const missing = Object.entries(d.permissions)
+      .filter(([_, v]) => v.status === 'missing')
+      .map(([name, info]) => ({ name, ...info }));
+    
+    if (missing.length > 0) {
+      // Show permissions guide modal after a delay
+      setTimeout(() => showPermissionsModal(missing), 2000);
+    }
+  } catch {}
+}
+
+function showPermissionsModal(missing) {
+  const existing = document.getElementById('permissions-modal');
+  if (existing) return;
+  
+  const modal = document.createElement('div');
+  modal.id = 'permissions-modal';
+  modal.style.cssText = `
+    position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center;
+    background:rgba(0,0,0,0.7); backdrop-filter:blur(10px);
+  `;
+  
+  const iconMap = {
+    accessibility: 'fa-hand-pointer',
+    automation: 'fa-gear',
+    fullDiskAccess: 'fa-hard-drive'
+  };
+  
+  const steps = missing.map(p => `
+    <div style="margin-bottom:16px; padding:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+        <i class="fa-solid ${iconMap[p.name] || 'fa-lock'}" style="color:rgba(255,255,0,0.8); font-size:12px;"></i>
+        <span style="font-family:var(--mono); font-size:10px; font-weight:600; color:var(--txt); letter-spacing:1px; text-transform:uppercase;">${p.name.replace(/([A-Z])/g, ' $1')}</span>
+      </div>
+      <div style="font-size:10px; color:var(--txt2); margin-bottom:6px;">${p.message}</div>
+      <div style="font-size:9px; color:var(--txt3); font-family:var(--mono);">${p.fix}</div>
+    </div>
+  `).join('');
+  
+  modal.innerHTML = `
+    <div style="width:420px; max-width:90vw; background:rgba(20,20,25,0.95); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:24px; box-shadow:0 24px 80px rgba(0,0,0,0.6);">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+        <i class="fa-solid fa-shield-halved" style="color:rgba(255,200,0,0.8); font-size:18px;"></i>
+        <span style="font-family:var(--mono); font-size:12px; font-weight:700; color:var(--txt); letter-spacing:2px;">PERMISSIONS REQUIRED</span>
+      </div>
+      <div style="font-size:11px; color:var(--txt2); margin-bottom:16px; line-height:1.5;">
+        JENNY needs macOS permissions to control your system. Grant these in System Settings:
+      </div>
+      ${steps}
+      <div style="display:flex; gap:8px; margin-top:16px;">
+        <button onclick="openSystemSettings()" style="flex:1; padding:10px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:var(--txt); font-family:var(--mono); font-size:10px; cursor:pointer; transition:all 0.2s;">
+          <i class="fa-solid fa-gear"></i> Open System Settings
+        </button>
+        <button onclick="dismissPermissions()" style="flex:1; padding:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; color:var(--txt2); font-family:var(--mono); font-size:10px; cursor:pointer; transition:all 0.2s;">
+          Dismiss
+        </button>
+      </div>
+      <div style="font-size:8px; color:var(--txt3); margin-top:10px; text-align:center;">
+        You can check permissions anytime by typing "check permissions"
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  sfx.error();
+}
+
+function openSystemSettings() {
+  // Try to open the Privacy & Security pane
+  fetch('/api/control', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'open-app', value: 'System Settings' })
+  });
+  toast('Opening System Settings...', 'info');
+}
+
+function dismissPermissions() {
+  const modal = document.getElementById('permissions-modal');
+  if (modal) {
+    modal.style.opacity = '0';
+    modal.style.transition = 'opacity 0.3s ease';
+    setTimeout(() => modal.remove(), 300);
+  }
 }
 
 // ================================================
@@ -594,7 +894,9 @@ function parseCommand(text) {
       'settings': 'settings', 'config': 'settings', 'preferences': 'settings',
       'commands': 'commands', 'cmds': 'commands', 'help': 'commands',
       'activity': 'activity', 'monitor': 'activity', 'pc activity': 'activity', 'system monitor': 'activity',
-      'emails': 'emails', 'email': 'emails', 'mail': 'emails', 'inbox': 'emails'
+      'emails': 'emails', 'email': 'emails', 'mail': 'emails', 'inbox': 'emails',
+      'files': 'files', 'file explorer': 'files', 'files explorer': 'files', 'finder': 'files',
+      'notes': 'notes', 'todo': 'notes', 'todos': 'notes', 'task': 'notes', 'tasks': 'notes'
     };
     const matched = panelMap[panel] || panel;
     openPanel(matched);
@@ -616,6 +918,7 @@ function parseCommand(text) {
   }
   if (/^(?:timer|alarm|set timer)\s*$/i.test(t)) { setFrontendTimer(60, '1 min'); return { handled: true, response: 'Setting a 1-minute timer, BOSS.' }; }
   if (/^(?:briefing|daily briefing|morning briefing|what'?s the status|give me a briefing)/i.test(t)) { return { handled: true, response: '__FETCH_BRIEFING__' }; }
+  if (/^(?:check permissions|permissions|macos permissions|system permissions)/i.test(t)) { return { handled: true, response: '__CHECK_PERMISSIONS__' }; }
   return null;
 }
 
@@ -675,7 +978,9 @@ function openPanel(name) {
     'vault': 'fa-database MEMORY VAULT',
     'clipboard': 'fa-clipboard CLIPBOARD',
     'settings': 'fa-gear CONFIGURATION',
-    'commands': 'fa-terminal COMMANDS'
+    'commands': 'fa-terminal COMMANDS',
+    'files': 'fa-folder-tree FILE EXPLORER',
+    'notes': 'fa-note-sticky NOTES'
   };
   const titleStr = titles[name] || `fa-circle ${name.toUpperCase()}`;
   const parts = titleStr.split(' ');
@@ -693,18 +998,28 @@ function openPanel(name) {
 function closePanel(name) {
   const panel = document.querySelector(`.panel[data-panel="${name}"]`);
   if (!panel) return;
+  const cleanup = dragCleanupFns.get(panel);
+  if (cleanup) { cleanup(); dragCleanupFns.delete(panel); }
   panel.classList.add('closing');
   setTimeout(() => panel.remove(), 200);
   openPanels.delete(name);
   document.querySelector(`.dock-btn[data-panel="${name}"]`)?.classList.remove('active');
 }
 
+const dragCleanupFns = new Map();
+
 function initDraggable(panel) {
   const handle = panel.querySelector('.panel-hdr');
   if (!handle) return;
   let isDragging = false;
   let startX, startY, startLeft, startTop;
-  handle.addEventListener('mousedown', (e) => {
+
+  const onMouseMove = (e) => { if (!isDragging) return; panel.style.left = (startLeft + e.clientX - startX) + 'px'; panel.style.top = (startTop + e.clientY - startY) + 'px'; };
+  const onMouseUp = () => { if (!isDragging) return; isDragging = false; panel.style.transition = ''; };
+  const onTouchMove = (e) => { if (!isDragging) return; const touch = e.touches[0]; panel.style.left = (startLeft + touch.clientX - startX) + 'px'; panel.style.top = (startTop + touch.clientY - startY) + 'px'; };
+  const onTouchEnd = () => { if (!isDragging) return; isDragging = false; panel.style.transition = ''; };
+
+  const onMouseDown = (e) => {
     if (e.target.closest('.panel-close')) return;
     isDragging = true;
     startX = e.clientX;
@@ -717,10 +1032,8 @@ function initDraggable(panel) {
     panel.style.left = startLeft + 'px';
     panel.style.top = startTop + 'px';
     e.preventDefault();
-  });
-  document.addEventListener('mousemove', (e) => { if (!isDragging) return; panel.style.left = (startLeft + e.clientX - startX) + 'px'; panel.style.top = (startTop + e.clientY - startY) + 'px'; });
-  document.addEventListener('mouseup', () => { if (!isDragging) return; isDragging = false; panel.style.transition = ''; });
-  handle.addEventListener('touchstart', (e) => {
+  };
+  const onTouchStart = (e) => {
     if (e.target.closest('.panel-close')) return;
     isDragging = true;
     const touch = e.touches[0];
@@ -733,9 +1046,23 @@ function initDraggable(panel) {
     panel.style.transform = 'none';
     panel.style.left = startLeft + 'px';
     panel.style.top = startTop + 'px';
-  }, { passive: true });
-  document.addEventListener('touchmove', (e) => { if (!isDragging) return; const touch = e.touches[0]; panel.style.left = (startLeft + touch.clientX - startX) + 'px'; panel.style.top = (startTop + touch.clientY - startY) + 'px'; }, { passive: true });
-  document.addEventListener('touchend', () => { if (!isDragging) return; isDragging = false; panel.style.transition = ''; });
+  };
+
+  handle.addEventListener('mousedown', onMouseDown);
+  handle.addEventListener('touchstart', onTouchStart, { passive: true });
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+  document.addEventListener('touchmove', onTouchMove, { passive: true });
+  document.addEventListener('touchend', onTouchEnd);
+
+  dragCleanupFns.set(panel, () => {
+    handle.removeEventListener('mousedown', onMouseDown);
+    handle.removeEventListener('touchstart', onTouchStart);
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+    document.removeEventListener('touchmove', onTouchMove);
+    document.removeEventListener('touchend', onTouchEnd);
+  });
 }
 
 async function loadPanelContent(name) {
@@ -751,6 +1078,8 @@ async function loadPanelContent(name) {
     case 'clipboard': return loadClipboardPanel(body);
     case 'settings': return loadSettingsPanel(body);
     case 'commands': return loadCommandsPanel(body);
+    case 'files': return loadFilesPanel(body);
+    case 'notes': return loadNotesPanel(body);
   }
 }
 
@@ -774,7 +1103,7 @@ async function loadActivityPanel(el) {
     const bat = d.battery?.level ?? 0;
     const uptimeH = d.uptime ? Math.floor(d.uptime / 3600) : 0;
     const uptimeM = d.uptime ? Math.floor((d.uptime % 3600) / 60) : 0;
-    el.innerHTML = `<div class="panel-stat-grid"><div class="panel-stat-box">${makeCircularGauge(cpu, 'CPU')}</div><div class="panel-stat-box">${makeCircularGauge(ram, 'RAM')}</div><div class="panel-stat-box">${makeCircularGauge(disk, 'DISK')}</div><div class="panel-stat-box">${makeCircularGauge(Math.round(bat*100), 'BATTERY')}</div></div><div class="panel-row"><span class="lbl">UPTIME</span><span class="val">${uptimeH}h ${uptimeM}m</span></div><div class="panel-row"><span class="lbl">HOST</span><span class="val">${d.hostname || '---'}</span></div><div class="panel-row"><span class="lbl">RAM</span><span class="val">${d.ram?.usedMB || 0} / ${d.ram?.totalMB || 0} MB</span></div><div class="panel-row"><span class="lbl">DISK FREE</span><span class="val">${d.disk?.free || '--'}</span></div><div class="panel-row"><span class="lbl">CPU</span><span class="val" style="font-size:8px">${d.cpu?.model || '---'}</span></div>`;
+    el.innerHTML = `<div class="panel-stat-grid"><div class="panel-stat-box">${makeCircularGauge(cpu, 'CPU')}</div><div class="panel-stat-box">${makeCircularGauge(ram, 'RAM')}</div><div class="panel-stat-box">${makeCircularGauge(disk, 'DISK')}</div><div class="panel-stat-box">${makeCircularGauge(Math.round(bat), 'BATTERY')}</div></div><div class="panel-row"><span class="lbl">UPTIME</span><span class="val">${uptimeH}h ${uptimeM}m</span></div><div class="panel-row"><span class="lbl">HOST</span><span class="val">${d.hostname || '---'}</span></div><div class="panel-row"><span class="lbl">RAM</span><span class="val">${d.ram?.usedMB || 0} / ${d.ram?.totalMB || 0} MB</span></div><div class="panel-row"><span class="lbl">DISK FREE</span><span class="val">${d.disk?.free || '--'}</span></div><div class="panel-row"><span class="lbl">CPU</span><span class="val" style="font-size:8px">${d.cpu?.model || '---'}</span></div>`;
   } catch { el.innerHTML = '<div class="panel-empty">Error.</div>'; }
 }
 
@@ -869,19 +1198,303 @@ async function writeClip() {
 
 function loadSettingsPanel(el) {
   const mem = loadOfflineMemory();
-  el.innerHTML = `<div class="setting-row"><label>VOICE</label><select id="voice-select" style="width:140px"><optgroup label="ElevenLabs"><option value="21m00Tcm4TlvDq8ikWAM">Rachel</option><option value="EXAVITQu4vr4xnSDxMaL">Bella</option><option value="MF3mGyEYCl7XYWbV9V6O">Elli</option><option value="pFZP5JQG7iQjIQuC4Bku">Lily</option><option value="AZnzlk1XvdvUeBnXmlld">Domi</option><option value="TxGEqnHWrfWFTfGW9XjX">Josh</option><option value="VR6AewLTigWG4xSOukaG">Arnold</option><option value="yoZ06aMxZJJ28mfd3POQ">Sam</option></optgroup><optgroup label="Web Speech (Free)"><option value="web-samantha">Samantha (macOS)</option><option value="web-karen">Karen (macOS)</option><option value="web-moira">Moira (macOS)</option><option value="web-tessa">Tessa (macOS)</option></optgroup></select></div><div class="setting-row"><label>SPEECH RATE</label><input type="range" id="speech-rate" min="0.5" max="2" step="0.1" value="1.0" style="width:100px"></div><div class="setting-row"><label>SPEECH PITCH</label><input type="range" id="speech-pitch" min="0.5" max="2" step="0.1" value="1.0" style="width:100px"></div><div class="setting-row"><label>CONTINUOUS LISTEN</label><input type="checkbox" id="cont-listen" ${mem.continuousListen ? 'checked' : ''}></div><div class="setting-row"><label>YOUR NAME</label><input type="text" id="name-input" value="${mem.name || ''}" placeholder="Tell me your name" style="width:130px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:var(--txt);border-radius:6px;padding:3px 7px;font-family:var(--mono);font-size:9px;"></div>`;
+  
+  // Build settings HTML
+  let html = `
+    <div class="setting-row"><label>VOICE</label><select id="voice-select" style="width:140px"><optgroup label="ElevenLabs"><option value="21m00Tcm4TlvDq8ikWAM">Rachel</option><option value="EXAVITQu4vr4xnSDxMaL">Bella</option><option value="MF3mGyEYCl7XYWbV9V6O">Elli</option><option value="pFZP5JQG7iQjIQuC4Bku">Lily</option><option value="AZnzlk1XvdvUeBnXmlld">Domi</option><option value="TxGEqnHWrfWFTfGW9XjX">Josh</option><option value="VR6AewLTigWG4xSOukaG">Arnold</option><option value="yoZ06aMxZJJ28mfd3POQ">Sam</option></optgroup><optgroup label="Web Speech (Free)"><option value="web-samantha">Samantha (macOS)</option><option value="web-karen">Karen (macOS)</option><option value="web-moira">Moira (macOS)</option><option value="web-tessa">Tessa (macOS)</option></optgroup></select></div>
+    <div class="setting-row"><label>SPEECH RATE</label><input type="range" id="speech-rate" min="0.5" max="2" step="0.1" value="1.0" style="width:100px"></div>
+    <div class="setting-row"><label>SPEECH PITCH</label><input type="range" id="speech-pitch" min="0.5" max="2" step="0.1" value="1.0" style="width:100px"></div>
+    <div class="setting-row"><label>CONTINUOUS LISTEN</label><input type="checkbox" id="cont-listen" ${mem.continuousListen ? 'checked' : ''}></div>
+    <div class="setting-row"><label>YOUR NAME</label><input type="text" id="name-input" value="${mem.name || ''}" placeholder="Tell me your name" style="width:130px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:var(--txt);border-radius:6px;padding:3px 7px;font-family:var(--mono);font-size:9px;"></div>
+  `;
+  
+  // Dark mode toggle
+  const isDark = mem.darkMode !== false; // default dark
+  html += `<div class="setting-row"><label>DARK MODE</label><input type="checkbox" id="dark-mode-toggle" ${isDark ? 'checked' : ''}></div>`;
+  
+  // Location settings
+  html += `
+    <div style="border-top:1px solid rgba(255,255,255,0.06); margin:8px 0; padding-top:8px;">
+      <div style="font-family:var(--mono); font-size:8px; color:var(--txt3); letter-spacing:1px; margin-bottom:8px;">LOCATION</div>
+      <div class="setting-row"><label>CITY NAME</label><input type="text" id="city-name-input" placeholder="New Delhi, IN" style="width:130px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:var(--txt);border-radius:6px;padding:3px 7px;font-family:var(--mono);font-size:9px;"></div>
+      <div class="setting-row"><label>LATITUDE</label><input type="number" id="lat-input" step="0.0001" style="width:80px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:var(--txt);border-radius:6px;padding:3px 7px;font-family:var(--mono);font-size:9px;"></div>
+      <div class="setting-row"><label>LONGITUDE</label><input type="number" id="lon-input" step="0.0001" style="width:80px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:var(--txt);border-radius:6px;padding:3px 7px;font-family:var(--mono);font-size:9px;"></div>
+      <div class="setting-row"><label></label><button id="save-location-btn" style="padding:4px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--txt2);font-family:var(--mono);font-size:9px;cursor:pointer;">Save Location</button></div>
+      <div class="setting-row"><label></label><button id="detect-location-btn" style="padding:4px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:var(--txt3);font-family:var(--mono);font-size:9px;cursor:pointer;">Auto-detect</button></div>
+    </div>
+  `;
+  
+  // API Keys section
+  html += `
+    <div style="border-top:1px solid rgba(255,255,255,0.06); margin:8px 0; padding-top:8px;">
+      <div style="font-family:var(--mono); font-size:8px; color:var(--txt3); letter-spacing:1px; margin-bottom:8px;">API KEYS</div>
+      <div id="api-keys-list" style="font-family:var(--mono); font-size:9px; color:var(--txt2);">Loading...</div>
+      <div class="setting-row"><label></label><button id="show-keys-btn" style="padding:4px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:var(--txt3);font-family:var(--mono);font-size:9px;cursor:pointer;">Show Key Details</button></div>
+    </div>
+  `;
+  
+  // Permissions section
+  html += `
+    <div style="border-top:1px solid rgba(255,255,255,0.06); margin:8px 0; padding-top:8px;">
+      <div style="font-family:var(--mono); font-size:8px; color:var(--txt3); letter-spacing:1px; margin-bottom:8px;">SYSTEM</div>
+      <div class="setting-row"><label></label><button id="check-perms-btn" style="padding:4px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:var(--txt3);font-family:var(--mono);font-size:9px;cursor:pointer;">Check Permissions</button></div>
+    </div>
+  `;
+  
+  el.innerHTML = html;
+  
+  // Event listeners
   document.getElementById('voice-select').addEventListener('change', (e) => { mem.voiceId = e.target.value; saveOfflineMemory(mem); toast('Voice updated, BOSS.', 'ok'); });
   document.getElementById('speech-rate').addEventListener('input', (e) => { mem.speechRate = parseFloat(e.target.value); saveOfflineMemory(mem); });
   document.getElementById('speech-pitch').addEventListener('input', (e) => { mem.speechPitch = parseFloat(e.target.value); saveOfflineMemory(mem); });
   document.getElementById('cont-listen').addEventListener('change', (e) => { mem.continuousListen = e.target.checked; saveOfflineMemory(mem); });
   document.getElementById('name-input').addEventListener('change', (e) => { mem.name = e.target.value.trim(); saveOfflineMemory(mem); toast(`Name set to ${mem.name}, BOSS.`, 'ok'); });
+  
+  // Dark mode toggle
+  document.getElementById('dark-mode-toggle').addEventListener('change', (e) => {
+    mem.darkMode = e.target.checked;
+    saveOfflineMemory(mem);
+    applyDarkMode(e.target.checked);
+    toast(`Dark mode ${e.target.checked ? 'enabled' : 'disabled'}`, 'ok');
+  });
+  
+  // Load current location settings
+  fetch('/api/settings').then(r => r.json()).then(d => {
+    if (d.success && d.settings) {
+      document.getElementById('city-name-input').value = d.settings.cityName || '';
+      document.getElementById('lat-input').value = d.settings.latitude || '';
+      document.getElementById('lon-input').value = d.settings.longitude || '';
+    }
+  }).catch(() => {});
+  
+  // Save location button
+  document.getElementById('save-location-btn').addEventListener('click', async () => {
+    const cityName = document.getElementById('city-name-input').value.trim();
+    const lat = parseFloat(document.getElementById('lat-input').value);
+    const lon = parseFloat(document.getElementById('lon-input').value);
+    if (isNaN(lat) || isNaN(lon)) {
+      toast('Invalid coordinates', 'err');
+      return;
+    }
+    await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ latitude: lat, longitude: lon, cityName: cityName || `${lat}, ${lon}` })
+    });
+    toast('Location saved, BOSS.', 'ok');
+  });
+  
+  // Auto-detect location button
+  document.getElementById('detect-location-btn').addEventListener('click', () => {
+    if (!navigator.geolocation) {
+      toast('Geolocation not supported', 'err');
+      return;
+    }
+    toast('Detecting location...', 'info');
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const { latitude, longitude } = pos.coords;
+      // Reverse geocode
+      try {
+        const res = await fetch(`/api/reverse-geocode?lat=${latitude}&lon=${longitude}`);
+        const d = await res.json();
+        const cityName = d.success ? d.cityName : `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+        await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ latitude, longitude, cityName })
+        });
+        document.getElementById('city-name-input').value = cityName;
+        document.getElementById('lat-input').value = latitude.toFixed(4);
+        document.getElementById('lon-input').value = longitude.toFixed(4);
+        toast(`Location set to ${cityName}`, 'ok');
+      } catch {
+        toast('Geocoding failed', 'err');
+      }
+    }, () => {
+      toast('Location access denied', 'err');
+    });
+  });
+  
+  // API keys details button
+  document.getElementById('show-keys-btn').addEventListener('click', () => showKeyDetails());
+  
+  // Permissions check button
+  document.getElementById('check-perms-btn').addEventListener('click', async () => {
+    try {
+      const res = await fetch('/api/permissions-check');
+      const d = await res.json();
+      if (d.platform !== 'darwin') {
+        toast('Permissions check only available on macOS', 'info');
+        return;
+      }
+      const allGranted = Object.values(d.permissions).every(p => p.status === 'granted');
+      if (allGranted) {
+        toast('All permissions granted!', 'ok');
+      } else {
+        const missing = Object.entries(d.permissions).filter(([_, v]) => v.status === 'missing').map(([k]) => k);
+        toast(`Missing: ${missing.join(', ')}`, 'err');
+        showPermissionsModal(Object.entries(d.permissions).filter(([_, v]) => v.status === 'missing').map(([name, info]) => ({ name, ...info })));
+      }
+    } catch {
+      toast('Failed to check permissions', 'err');
+    }
+  });
+  
+  // Load API keys status
+  fetch('/api/gemini-keys').then(r => r.json()).then(d => {
+    const listEl = document.getElementById('api-keys-list');
+    if (!listEl) return;
+    if (d.totalKeys === 0) {
+      listEl.innerHTML = '<span style="color:var(--txt3)">No keys configured in .env</span>';
+      return;
+    }
+    listEl.innerHTML = d.keys.map((k, i) => `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.03);">
+        <span style="color:${k.active ? 'var(--txt)' : 'var(--pink)'}">${k.masked}</span>
+        <span style="font-size:8px; color:${k.active ? 'rgba(255,255,255,0.4)' : 'var(--pink)'}">${k.active ? 'ACTIVE' : 'RATE LIMITED'} | ${k.requestsToday} req</span>
+      </div>
+    `).join('');
+  }).catch(() => {});
+  
+  // Apply saved values
   if (mem.voiceId) document.getElementById('voice-select').value = mem.voiceId;
   if (mem.speechRate) document.getElementById('speech-rate').value = mem.speechRate;
   if (mem.speechPitch) document.getElementById('speech-pitch').value = mem.speechPitch;
+  
+  // Apply dark mode
+  applyDarkMode(isDark);
+}
+
+function applyDarkMode(isDark) {
+  const root = document.documentElement;
+  if (isDark) {
+    document.body.classList.remove('light-mode');
+    root.style.setProperty('--bg', '#000000');
+    root.style.setProperty('--txt', 'rgba(255,255,255,0.92)');
+    root.style.setProperty('--txt2', 'rgba(255,255,255,0.60)');
+    root.style.setProperty('--txt3', 'rgba(255,255,255,0.40)');
+  } else {
+    document.body.classList.add('light-mode');
+    root.style.setProperty('--bg', '#f5f5f7');
+    root.style.setProperty('--txt', 'rgba(0,0,0,0.88)');
+    root.style.setProperty('--txt2', 'rgba(0,0,0,0.55)');
+    root.style.setProperty('--txt3', 'rgba(0,0,0,0.35)');
+    root.style.setProperty('--surface', 'rgba(0,0,0,0.04)');
+    root.style.setProperty('--glass-border', 'rgba(0,0,0,0.08)');
+  }
+}
+
+// ================================================
+// FILE EXPLORER PANEL
+// ================================================
+let currentFilePath = '';
+
+async function loadFilesPanel(el) {
+  currentFilePath = '';
+  el.innerHTML = '<div class="panel-empty">Loading...</div>';
+  try {
+    const res = await fetch('/api/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'list-directory', value: '' }) });
+    const d = await res.json();
+    if (!d.success) { el.innerHTML = '<div class="panel-empty">Error listing files.</div>'; return; }
+    renderFilesList(el, d.files || [], '');
+  } catch { el.innerHTML = '<div class="panel-empty">Error.</div>'; }
+}
+
+function renderFilesList(el, files, path) {
+  currentFilePath = path;
+  const items = files.map(f => {
+    const isDir = !f.includes('.');
+    const icon = isDir ? 'fa-folder' : 'fa-file';
+    return `<div class="vault-item" style="cursor:pointer;" onclick="${isDir ? `navigateDir('${path ? path + '/' : ''}${f}')` : `openFile('${path ? path + '/' : ''}${f}')`}"><i class="fa-solid ${icon}" style="color:var(--txt3);font-size:10px;margin-right:6px;"></i><span class="vt">${escHtml(f)}</span></div>`;
+  }).join('');
+  const backBtn = path ? `<div class="vault-item" style="cursor:pointer;color:var(--txt3);" onclick="navigateDir('${path.split('/').slice(0, -1).join('/')}')"><i class="fa-solid fa-arrow-left" style="font-size:10px;margin-right:6px;"></i><span class="vt">Back</span></div>` : '';
+  el.innerHTML = `<div style="font-family:var(--mono);font-size:8px;color:var(--txt3);padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.03);margin-bottom:4px;">${escHtml(path || '~/Desktop')}</div>${backBtn}${items || '<div class="panel-empty">Empty folder</div>'}`;
+}
+
+async function navigateDir(path) {
+  const body = document.getElementById('panel-body-files');
+  if (!body) return;
+  body.innerHTML = '<div class="panel-empty">Loading...</div>';
+  try {
+    const res = await fetch('/api/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'list-directory', value: path || '' }) });
+    const d = await res.json();
+    renderFilesList(body, d.files || [], path);
+  } catch { body.innerHTML = '<div class="panel-empty">Error.</div>'; }
+}
+
+function openFile(path) {
+  fetch('/api/open-url', { method: 'GET' }).catch(() => {});
+  toast(`Opening ${path.split('/').pop()}...`, 'info');
+  fetch(`/api/control`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'list-directory', value: path }) });
+}
+
+// ================================================
+// NOTES / TODO PANEL
+// ================================================
+const NOTES_KEY = 'jenny_notes';
+
+function loadNotesPanel(el) {
+  const notes = loadNotes();
+  el.innerHTML = `
+    <div class="panel-input" style="border-top:none;border-bottom:1px solid rgba(255,255,255,0.03);padding-bottom:8px;">
+      <input type="text" id="note-input" placeholder="Add a note or TODO..." onkeydown="if(event.key==='Enter')addNote()">
+      <button onclick="addNote()"><i class="fa-solid fa-plus"></i></button>
+    </div>
+    <div id="notes-list">${renderNotes(notes)}</div>
+  `;
+}
+
+function loadNotes() {
+  try { return JSON.parse(localStorage.getItem(NOTES_KEY) || '[]'); } catch { return []; }
+}
+
+function saveNotes(notes) {
+  localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+}
+
+function renderNotes(notes) {
+  if (!notes.length) return '<div class="panel-empty">No notes yet.</div>';
+  return notes.map((n, i) => `
+    <div class="vault-item">
+      <span class="vt" style="display:flex;align-items:center;gap:6px;">
+        <input type="checkbox" ${n.done ? 'checked' : ''} onchange="toggleNote(${i})" style="width:12px;height:12px;accent-color:var(--txt2);">
+        <span style="${n.done ? 'text-decoration:line-through;color:var(--txt3);' : ''}">${escHtml(n.text)}</span>
+      </span>
+      <button class="vx" onclick="deleteNote(${i})"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+  `).join('');
+}
+
+function addNote() {
+  const input = document.getElementById('note-input');
+  if (!input || !input.value.trim()) return;
+  const notes = loadNotes();
+  notes.unshift({ text: input.value.trim(), done: false, date: new Date().toLocaleDateString() });
+  saveNotes(notes);
+  input.value = '';
+  const list = document.getElementById('notes-list');
+  if (list) list.innerHTML = renderNotes(notes);
+  toast('Note added, BOSS.', 'ok');
+}
+
+function toggleNote(idx) {
+  const notes = loadNotes();
+  if (notes[idx]) { notes[idx].done = !notes[idx].done; saveNotes(notes); }
+  const list = document.getElementById('notes-list');
+  if (list) list.innerHTML = renderNotes(notes);
+}
+
+function deleteNote(idx) {
+  const notes = loadNotes();
+  notes.splice(idx, 1);
+  saveNotes(notes);
+  const list = document.getElementById('notes-list');
+  if (list) list.innerHTML = renderNotes(notes);
+  toast('Note deleted.', 'ok');
 }
 
 function loadCommandsPanel(el) {
-  el.innerHTML = `<div class="cmd-ref-item"><div class="cc">summon activity / system / weather / emails / processes / vault / clipboard / settings / commands</div><div class="cd">Open a panel</div></div><div class="cmd-ref-item"><div class="cc">close [panel] / close all</div><div class="cd">Dismiss panels</div></div><div class="cmd-ref-item"><div class="cc">set a timer for 5 minutes</div><div class="cd">Timer with voice alert</div></div><div class="cmd-ref-item"><div class="cc">briefing / daily briefing</div><div class="cd">Full system overview</div></div><div class="cmd-ref-item"><div class="cc">tell me a joke / fun fact / quote</div><div class="cd">Entertainment</div></div><div class="cmd-ref-item"><div class="cc">what is 42 * 7 / calculate 100 / 3</div><div class="cd">Quick math</div></div><div class="cmd-ref-item"><div class="cc">lock pc / sleep pc / screenshot</div><div class="cd">System controls</div></div><div class="cmd-ref-item"><div class="cc">volume [0-100] / mute / unmute</div><div class="cd">Audio controls</div></div><div class="cmd-ref-item"><div class="cc">open [app] / close [app]</div><div class="cd">Launch or quit app</div></div><div class="cmd-ref-item"><div class="cc">play / pause / next / previous</div><div class="cd">Media controls</div></div><div class="cmd-ref-item"><div class="cc">remember [fact]</div><div class="cd">Save to vault</div></div><div class="cmd-ref-item"><div class="cc">check emails / read mail</div><div class="cd">Read Mail.app</div></div><div class="cmd-ref-item"><div class="cc">shutdown / restart</div><div class="cd">Power controls</div></div><div class="cmd-ref-item"><div class="cc">tell me about [topic]</div><div class="cd">Ask anything (Gemini)</div></div>`;
+  el.innerHTML = `<div class="cmd-ref-item"><div class="cc">summon activity / system / weather / emails / processes / vault / clipboard / settings / commands / files / notes</div><div class="cd">Open a panel</div></div><div class="cmd-ref-item"><div class="cc">close [panel] / close all</div><div class="cd">Dismiss panels</div></div><div class="cmd-ref-item"><div class="cc">set a timer for 5 minutes</div><div class="cd">Timer with voice alert</div></div><div class="cmd-ref-item"><div class="cc">briefing / daily briefing</div><div class="cd">Full system overview</div></div><div class="cmd-ref-item"><div class="cc">tell me a joke / fun fact / quote</div><div class="cd">Entertainment</div></div><div class="cmd-ref-item"><div class="cc">what is 42 * 7 / calculate 100 / 3</div><div class="cd">Quick math</div></div><div class="cmd-ref-item"><div class="cc">lock pc / sleep pc / screenshot</div><div class="cd">System controls</div></div><div class="cmd-ref-item"><div class="cc">volume [0-100] / mute / unmute</div><div class="cd">Audio controls</div></div><div class="cmd-ref-item"><div class="cc">open [app] / close [app]</div><div class="cd">Launch or quit app</div></div><div class="cmd-ref-item"><div class="cc">play / pause / next / previous</div><div class="cd">Media controls</div></div><div class="cmd-ref-item"><div class="cc">remember [fact]</div><div class="cd">Save to vault</div></div><div class="cmd-ref-item"><div class="cc">check emails / read mail</div><div class="cd">Read Mail.app</div></div><div class="cmd-ref-item"><div class="cc">shutdown / restart</div><div class="cd">Power controls</div></div><div class="cmd-ref-item"><div class="cc">tell me about [topic]</div><div class="cd">Ask anything (Gemini)</div></div><div class="cmd-ref-item"><div class="cc">Keyboard: Esc = close panels, Cmd+K = focus input</div><div class="cd">Shortcuts</div></div>`;
 }
 
 // ================================================
@@ -920,6 +1533,12 @@ async function sendMessage(text) {
         } else { addAIMessage('Unable to fetch briefing, BOSS.'); }
       } catch { removeTyping(); addAIMessage('Briefing service unavailable, BOSS.'); }
       setOrbState('idle');
+      return;
+    }
+    if (cmd.response === '__CHECK_PERMISSIONS__') {
+      checkPermissions();
+      addAIMessage('Checking macOS permissions, BOSS. I\'ll show you a guide if anything is missing.');
+      speak('Checking your system permissions now.');
       return;
     }
     setTimeout(() => addAIMessage(cmd.response), 300);
@@ -1046,6 +1665,189 @@ document.getElementById('holo-dock').addEventListener('click', (e) => {
     if (verEl) verEl.textContent = 'v1.0';
   } catch {}
 })();
+
+// ================================================
+// KEYBOARD SHORTCUTS
+// ================================================
+document.addEventListener('keydown', (e) => {
+  // Escape: close all open panels, or blur input
+  if (e.key === 'Escape') {
+    const permModal = document.getElementById('permissions-modal');
+    if (permModal) { permModal.remove(); return; }
+    if (openPanels.size > 0) {
+      const last = [...openPanels].pop();
+      closePanel(last);
+    } else {
+      chatInput.blur();
+    }
+    return;
+  }
+
+  // Ctrl+K or Cmd+K: focus input (quick command access)
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    chatInput.focus();
+    chatInput.select();
+    return;
+  }
+
+  // Alt+N: open/close notifications or cycle panels
+  if (e.altKey && e.key === 'n') {
+    e.preventDefault();
+    openPanel('vault');
+    return;
+  }
+});
+
+// ================================================
+// CHAT PERSISTENCE
+// ================================================
+const CHAT_STORAGE_KEY = 'jenny_chat_history';
+const CHAT_MAX_STORED = 100;
+
+function saveChatHistory() {
+  const msgs = document.getElementById('msgs');
+  if (!msgs) return;
+  const entries = [];
+  msgs.querySelectorAll('.msg').forEach(m => {
+    const isUser = m.classList.contains('msg-user');
+    const bubble = m.querySelector('.msg-bubble');
+    const time = m.querySelector('.msg-time');
+    if (bubble) {
+      entries.push({
+        role: isUser ? 'user' : 'ai',
+        text: bubble.textContent,
+        time: time ? time.textContent : ''
+      });
+    }
+  });
+  try {
+    const trimmed = entries.slice(-CHAT_MAX_STORED);
+    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(trimmed));
+  } catch {}
+}
+
+function restoreChatHistory() {
+  try {
+    const raw = localStorage.getItem(CHAT_STORAGE_KEY);
+    if (!raw) return;
+    const entries = JSON.parse(raw);
+    if (!entries.length) return;
+    hideWelcomeScreen();
+    entries.forEach(e => {
+      if (e.role === 'user') addUserMessage(e.text);
+      else addAIMessage(e.text);
+    });
+  } catch {}
+}
+
+// ================================================
+// CONFIRMATION DIALOGS
+// ================================================
+function confirmAction(title, message, onConfirm) {
+  const existing = document.getElementById('confirm-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'confirm-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px);';
+  modal.innerHTML = `
+    <div style="width:340px;max-width:90vw;background:rgba(20,20,25,0.95);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,0.6);">
+      <div style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--txt);letter-spacing:1px;margin-bottom:8px;">${escHtml(title)}</div>
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:16px;line-height:1.5;">${escHtml(message)}</div>
+      <div style="display:flex;gap:8px;">
+        <button id="confirm-yes" style="flex:1;padding:8px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:var(--txt);font-family:var(--mono);font-size:10px;cursor:pointer;">Confirm</button>
+        <button id="confirm-no" style="flex:1;padding:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:var(--txt2);font-family:var(--mono);font-size:10px;cursor:pointer;">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  sfx.error();
+  modal.querySelector('#confirm-yes').addEventListener('click', () => { modal.remove(); onConfirm(); });
+  modal.querySelector('#confirm-no').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+}
+
+// ================================================
+// PROCESS PANEL AUTO-REFRESH
+// ================================================
+let processRefreshInterval = null;
+
+function startProcessRefresh() {
+  if (processRefreshInterval) return;
+  processRefreshInterval = setInterval(() => {
+    const body = document.getElementById('panel-body-processes');
+    if (body && openPanels.has('processes')) loadProcessPanel(body);
+    else { clearInterval(processRefreshInterval); processRefreshInterval = null; }
+  }, 5000);
+}
+
+// ================================================
+// CONNECTION STATUS MONITOR
+// ================================================
+let lastConnectionOk = true;
+
+function startConnectionMonitor() {
+  setInterval(async () => {
+    try {
+      const res = await fetch('/api/system-status?t=' + Date.now());
+      const ok = res.ok;
+      if (ok !== lastConnectionOk) {
+        lastConnectionOk = ok;
+        const dot = document.getElementById('status-dot');
+        const stext = document.getElementById('status-text');
+        if (dot) dot.style.background = ok ? 'rgba(255,255,255,0.6)' : 'rgba(255,0,106,0.6)';
+        if (stext) stext.textContent = ok ? 'online' : 'disconnected';
+        if (!ok) toast('Connection lost. Reconnecting...', 'err');
+        else toast('Connection restored.', 'ok');
+      }
+    } catch {
+      if (lastConnectionOk) {
+        lastConnectionOk = false;
+        const dot = document.getElementById('status-dot');
+        const stext = document.getElementById('status-text');
+        if (dot) dot.style.background = 'rgba(255,0,106,0.6)';
+        if (stext) stext.textContent = 'disconnected';
+      }
+    }
+  }, 10000);
+}
+
+// ================================================
+// HOOK INTO EXISTING SYSTEMS
+// ================================================
+
+// Save chat on every new message
+const _origAddUserMessage = addUserMessage;
+const _origAddAIMessage = addAIMessage;
+addUserMessage = function(text) { _origAddUserMessage(text); setTimeout(saveChatHistory, 100); };
+addAIMessage = function(text) { const el = _origAddAIMessage(text); setTimeout(saveChatHistory, 100); return el; };
+
+// Start process refresh when processes panel opens
+const _origOpenPanel = openPanel;
+openPanel = function(name) {
+  _origOpenPanel(name);
+  if (name === 'processes') startProcessRefresh();
+};
+
+// Add confirmation for dangerous commands
+const _origSendMessage = sendMessage;
+sendMessage = async function(text) {
+  const t = text.toLowerCase().trim();
+  if (/\bshutdown\b/.test(t) || /\bshut down\b/.test(t)) {
+    confirmAction('SHUTDOWN', 'Are you sure you want to shut down your Mac?', () => _origSendMessage(text));
+    return;
+  }
+  if (/\brestart\b/.test(t)) {
+    confirmAction('RESTART', 'Are you sure you want to restart your Mac?', () => _origSendMessage(text));
+    return;
+  }
+  if (/\bkill\b/.test(t) && /\bprocess\b/.test(t)) {
+    confirmAction('KILL PROCESS', 'Kill the specified process?', () => _origSendMessage(text));
+    return;
+  }
+  _origSendMessage(text);
+};
 
 // ================================================
 // INIT

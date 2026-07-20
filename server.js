@@ -38,6 +38,113 @@ function isValidUrl(string) {
 let chatHistory = [];
 const MAX_HISTORY_TURNS = 10;
 
+// ================================================
+// GEMINI API KEY MANAGEMENT & QUOTA TRACKING
+// ================================================
+const geminiKeys = [];
+const keyUsage = {};
+let currentKeyIndex = 0;
+
+function loadGeminiKeys() {
+  geminiKeys.length = 0;
+  // Load all GEMINI_API_KEY, GEMINI_API_KEY_2, GEMINI_API_KEY_3, etc.
+  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()) {
+    geminiKeys.push(process.env.GEMINI_API_KEY.trim());
+  }
+  for (let i = 2; i <= 10; i++) {
+    const key = process.env[`GEMINI_API_KEY_${i}`];
+    if (key && key.trim()) {
+      geminiKeys.push(key.trim());
+    }
+  }
+  // Initialize usage tracking for each key
+  geminiKeys.forEach((key, idx) => {
+    const masked = `${key.substring(0, 6)}...${key.substring(key.length - 4)}`;
+    if (!keyUsage[masked]) {
+      keyUsage[masked] = {
+        index: idx,
+        masked: masked,
+        requestsToday: 0,
+        requestsMinute: 0,
+        tokensTotal: 0,
+        errors429: 0,
+        lastError: null,
+        active: true,
+        minuteResetTime: Date.now() + 60000
+      };
+    }
+  });
+  console.log(`[FRIDAY] Loaded ${geminiKeys.length} Gemini API key(s)`);
+}
+
+function getCurrentKey() {
+  if (geminiKeys.length === 0) return null;
+  // Find next active key
+  let attempts = 0;
+  while (attempts < geminiKeys.length) {
+    const key = geminiKeys[currentKeyIndex];
+    const masked = `${key.substring(0, 6)}...${key.substring(key.length - 4)}`;
+    const usage = keyUsage[masked];
+    if (usage && usage.active) {
+      return { key, masked, index: currentKeyIndex };
+    }
+    currentKeyIndex = (currentKeyIndex + 1) % geminiKeys.length;
+    attempts++;
+  }
+  return null;
+}
+
+function rotateToNextKey() {
+  if (geminiKeys.length <= 1) return false;
+  const prevIndex = currentKeyIndex;
+  currentKeyIndex = (currentKeyIndex + 1) % geminiKeys.length;
+  const key = geminiKeys[currentKeyIndex];
+  const masked = `${key.substring(0, 6)}...${key.substring(key.length - 4)}`;
+  console.log(`[FRIDAY] Rotated to key #${currentKeyIndex} (${masked})`);
+  return currentKeyIndex !== prevIndex;
+}
+
+function trackKeyUsage(masked, tokens = 0, is429 = false) {
+  if (!keyUsage[masked]) return;
+  const usage = keyUsage[masked];
+  const now = Date.now();
+  
+  // Reset per-minute counter if needed
+  if (now > usage.minuteResetTime) {
+    usage.requestsMinute = 0;
+    usage.minuteResetTime = now + 60000;
+  }
+  
+  usage.requestsToday++;
+  usage.requestsMinute++;
+  usage.tokensTotal += tokens;
+  
+  if (is429) {
+    usage.errors429++;
+    usage.lastError = new Date().toISOString();
+    // Auto-deactivate key if too many 429 errors
+    if (usage.errors429 >= 3) {
+      usage.active = false;
+      console.log(`[FRIDAY] Key ${masked} deactivated after ${usage.errors429} rate limit errors`);
+    }
+  }
+}
+
+function getKeyStats() {
+  return Object.values(keyUsage).map(u => ({
+    masked: u.masked,
+    active: u.active,
+    requestsToday: u.requestsToday,
+    requestsMinute: u.requestsMinute,
+    tokensTotal: u.tokensTotal,
+    errors429: u.errors429,
+    lastError: u.lastError
+  }));
+}
+
+// Initialize keys on startup
+loadGeminiKeys();
+
 // Local offline memory storage
 let offlineMemory = {};
 if (fs.existsSync(OFFLINE_MEMORY_FILE)) {
@@ -59,6 +166,70 @@ function saveOfflineMemory() {
 // Active timers
 let activeTimers = [];
 let timerIdCounter = 1;
+
+// Location settings (persisted to file)
+const SETTINGS_FILE = path.join(__dirname, 'settings.json');
+let appSettings = {
+  latitude: 28.6139,
+  longitude: 77.2090,
+  cityName: 'New Delhi, IN'
+};
+
+if (fs.existsSync(SETTINGS_FILE)) {
+  try {
+    const saved = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+    appSettings = { ...appSettings, ...saved };
+  } catch (e) {
+    console.error('Error reading settings:', e);
+  }
+}
+
+function saveSettings() {
+  try {
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(appSettings, null, 2), 'utf8');
+  } catch (e) {
+    console.error('Error saving settings:', e);
+  }
+}
+
+// Settings API endpoints
+app.get('/api/settings', (req, res) => {
+  res.json({ success: true, settings: appSettings });
+});
+
+app.post('/api/settings', (req, res) => {
+  const { latitude, longitude, cityName } = req.body;
+  if (latitude !== undefined) appSettings.latitude = parseFloat(latitude);
+  if (longitude !== undefined) appSettings.longitude = parseFloat(longitude);
+  if (cityName !== undefined) appSettings.cityName = cityName;
+  saveSettings();
+  console.log(`[FRIDAY] Settings updated: ${appSettings.cityName} (${appSettings.latitude}, ${appSettings.longitude})`);
+  res.json({ success: true, settings: appSettings });
+});
+
+// Reverse geocoding from coordinates (using free API)
+app.get('/api/reverse-geocode', (req, res) => {
+  const { lat, lon } = req.query;
+  if (!lat || !lon) return res.status(400).json({ success: false, message: 'lat and lon required' });
+  
+  const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;
+  const geoReq = https.get(url, { timeout: 5000 }, (apiRes) => {
+    let data = '';
+    apiRes.on('data', chunk => data += chunk);
+    apiRes.on('end', () => {
+      try {
+        const json = JSON.parse(data);
+        const city = json.address?.city || json.address?.town || json.address?.village || json.address?.county || 'Unknown';
+        const country = json.address?.country_code?.toUpperCase() || '';
+        res.json({ success: true, cityName: `${city}, ${country}` });
+      } catch {
+        res.json({ success: false, message: 'Parse error' });
+      }
+    });
+  });
+  geoReq.on('error', () => res.json({ success: false, message: 'Network error' }));
+  geoReq.on('timeout', () => { geoReq.destroy(); res.json({ success: false, message: 'Timeout' }); });
+});
 
 // Endpoint to open macOS applications
 app.get('/api/open-app', (req, res) => {
@@ -707,6 +878,111 @@ app.delete('/api/vault', (req, res) => {
   res.json({ success: true, message: `Item ${id} deleted from vault.` });
 });
 
+// Endpoint to check macOS permissions status
+app.get('/api/permissions-check', (req, res) => {
+  const platform = os.platform();
+  if (platform !== 'darwin') {
+    return res.json({
+      success: true,
+      platform: platform,
+      permissions: {
+        accessibility: { status: 'not_applicable', message: 'Only available on macOS' },
+        automation: { status: 'not_applicable', message: 'Only available on macOS' },
+        fullDiskAccess: { status: 'not_applicable', message: 'Only available on macOS' }
+      }
+    });
+  }
+
+  const permissions = {};
+  let checksComplete = 0;
+  const totalChecks = 3;
+
+  function checkDone() {
+    checksComplete++;
+    if (checksComplete >= totalChecks) {
+      res.json({ success: true, platform: 'darwin', permissions });
+    }
+  }
+
+  // Check Accessibility (test by running an AppleScript that needs accessibility)
+  const accessibilityScript = `tell application "System Events"
+    try
+      name of first application process
+      return "granted"
+    on error
+      return "denied"
+    end try
+  end tell`;
+  
+  exec(`osascript -e '${accessibilityScript}'`, { timeout: 5000 }, (err, stdout) => {
+    if (err || (stdout || '').trim() === 'denied') {
+      permissions.accessibility = {
+        status: 'missing',
+        message: 'Required for system control features',
+        fix: 'System Settings > Privacy & Security > Accessibility > Add JENNY/Friday'
+      };
+    } else {
+      permissions.accessibility = {
+        status: 'granted',
+        message: 'System control enabled'
+      };
+    }
+    checkDone();
+  });
+
+  // Check Automation (test by checking if we can control System Events)
+  const automationScript = `tell application "System Events"
+    try
+      set appNames to name of every application process whose visible is true
+      return "granted"
+    on error
+      return "denied"
+    end try
+  end tell`;
+  
+  exec(`osascript -e '${automationScript}'`, { timeout: 5000 }, (err, stdout) => {
+    if (err || (stdout || '').trim() === 'denied') {
+      permissions.automation = {
+        status: 'missing',
+        message: 'Required for app control and media features',
+        fix: 'System Settings > Privacy & Security > Automation > Enable for Terminal/JENNY'
+      };
+    } else {
+      permissions.automation = {
+        status: 'granted',
+        message: 'App control enabled'
+      };
+    }
+    checkDone();
+  });
+
+  // Check Full Disk Access (test by reading Mail.app data)
+  const diskAccessScript = `tell application "Mail"
+    try
+      set msgCount to count of messages of inbox 1
+      return "granted"
+    on error
+      return "denied"
+    end try
+  end tell`;
+  
+  exec(`osascript -e '${diskAccessScript}'`, { timeout: 5000 }, (err, stdout) => {
+    if (err || (stdout || '').trim() === 'denied') {
+      permissions.fullDiskAccess = {
+        status: 'missing',
+        message: 'Required for email reading features',
+        fix: 'System Settings > Privacy & Security > Full Disk Access > Add Terminal/JENNY'
+      };
+    } else {
+      permissions.fullDiskAccess = {
+        status: 'granted',
+        message: 'Email access enabled'
+      };
+    }
+    checkDone();
+  });
+});
+
 // Endpoint to get basic macOS system status
 app.get('/api/system', (req, res) => {
   const responseData = {
@@ -793,7 +1069,7 @@ function cpuAverage() {
   return { idle: totalIdle / cpus.length, total: totalTick / cpus.length };
 }
 
-// Chat endpoint (Gemini API with multi-turn conversation memory returning rich JSON text/speech)
+// Chat endpoint (Gemini API with multi-turn conversation memory, retry/backoff, and key rotation)
 app.post('/api/chat', async (req, res) => {
   const { message } = req.body;
 
@@ -801,36 +1077,49 @@ app.post('/api/chat', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Message is required' });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  if (geminiKeys.length === 0) {
+    console.log('[FRIDAY] No Gemini API keys configured');
+  }
 
-  if (apiKey) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-      
-      let vaultContext = "";
-      if (fs.existsSync(VAULT_FILE)) {
-        try {
-          const vaultItems = JSON.parse(fs.readFileSync(VAULT_FILE, 'utf8'));
-          if (vaultItems.length > 0) {
-            vaultContext = "\nMEMORY VAULT DATA (Facts and logic preferences you must remember about the BOSS):\n" + 
-              vaultItems.map(item => `- ${item.text}`).join('\n');
-          }
-        } catch (e) {
-          console.error('Error reading vault in chat:', e);
-        }
+  if (geminiKeys.length > 0) {
+    const MAX_RETRIES = 3;
+    let lastError = null;
+    let attempts = 0;
+
+    while (attempts < MAX_RETRIES) {
+      const keyInfo = getCurrentKey();
+      if (!keyInfo) {
+        console.log('[FRIDAY] No active Gemini API keys available');
+        break;
       }
 
-      const now = new Date();
-      const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-      const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
-      const timezoneStr = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      
-      const realTimeContext = `\nREAL-TIME SYSTEM CLOCK & LOCATION CONTEXT:\n- Current Date: ${dateStr}\n- Current Time: ${timeStr}\n- Timezone: ${timezoneStr}\nYou are fully aware of real-world time, date, and current events. Always use this live clock data when asked about date, time, day of the week, or scheduling events.`;
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${keyInfo.key}`;
+        
+        let vaultContext = "";
+        if (fs.existsSync(VAULT_FILE)) {
+          try {
+            const vaultItems = JSON.parse(fs.readFileSync(VAULT_FILE, 'utf8'));
+            if (vaultItems.length > 0) {
+              vaultContext = "\nMEMORY VAULT DATA (Facts and logic preferences you must remember about the BOSS):\n" + 
+                vaultItems.map(item => `- ${item.text}`).join('\n');
+            }
+          } catch (e) {
+            console.error('Error reading vault in chat:', e);
+          }
+        }
 
-      const systemPrompt = {
-        role: 'user',
-        parts: [{
-          text: `You are F.R.I.D.A.Y. — Female Replacement Intelligent Digital Assistant Yielding. You are an exceptionally sophisticated, warm, and highly professional AI interface inspired by JARVIS from Iron Man. You address the user as "BOSS" with dry wit, confidence, and genuine care. Your personality is sharp, loyal, witty, and sweet. You speak with clarity and warmth.
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+        const timezoneStr = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        
+        const realTimeContext = `\nREAL-TIME SYSTEM CLOCK & LOCATION CONTEXT:\n- Current Date: ${dateStr}\n- Current Time: ${timeStr}\n- Timezone: ${timezoneStr}\nYou are fully aware of real-world time, date, and current events. Always use this live clock data when asked about date, time, day of the week, or scheduling events.`;
+
+        const systemPrompt = {
+          role: 'user',
+          parts: [{
+            text: `You are F.R.I.D.A.Y. — Female Replacement Intelligent Digital Assistant Yielding. You are an exceptionally sophisticated, warm, and highly professional AI interface inspired by JARVIS from Iron Man. You address the user as "BOSS" with dry wit, confidence, and genuine care. Your personality is sharp, loyal, witty, and sweet. You speak with clarity and warmth.
 
 PERSONALITY TRAITS:
 - You are fiercely loyal to the BOSS. You refer to them as "BOSS" consistently.
@@ -903,83 +1192,120 @@ COMMAND INTERPRETATION RULES:
 Be proactive. When the user asks to "lock the pc" or "take a screenshot", trigger the command. When they ask "remember that I like X", save it to vault. When they ask "what's the weather", give a brief natural response. When they ask to open an app, trigger open-app. Always be helpful, concise, and warm.
 
 DO NOT wrap JSON in code fences. Output raw JSON only.`
-        }]
-      };
+          }]
+        };
 
-      const systemPromptAck = {
-        role: 'model',
-        parts: [{
-          text: "Understood, BOSS. I will structure all future responses in raw JSON matching the required format."
-        }]
-      };
+        const systemPromptAck = {
+          role: 'model',
+          parts: [{
+            text: "Understood, BOSS. I will structure all future responses in raw JSON matching the required format."
+          }]
+        };
 
-      const contentsPayload = [
-        systemPrompt,
-        systemPromptAck,
-        ...chatHistory,
-        { role: 'user', parts: [{ text: message }] }
-      ];
+        const contentsPayload = [
+          systemPrompt,
+          systemPromptAck,
+          ...chatHistory,
+          { role: 'user', parts: [{ text: message }] }
+        ];
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          contents: contentsPayload,
-          generationConfig: {
-            maxOutputTokens: 1024,
-            temperature: 0.7,
-            responseMimeType: "application/json"
-          }
-        })
-      });
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            contents: contentsPayload,
+            generationConfig: {
+              maxOutputTokens: 1024,
+              temperature: 0.7,
+              responseMimeType: "application/json"
+            }
+          })
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMsg = errorData?.error?.message || `HTTP ${response.status}`;
-        console.error(`Gemini API HTTP ${response.status}:`, errorMsg);
-        throw new Error(`Gemini API error: ${errorMsg}`);
-      }
-
-      const data = await response.json();
-      if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0]) {
-        const reply = data.candidates[0].content.parts[0].text.trim();
-        
-        // Clean JSON markdown packaging if present
-        let cleaned = reply;
-        if (cleaned.startsWith('```')) {
-          cleaned = cleaned.replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
-        }
-        
-        try {
-          const parsed = JSON.parse(cleaned);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMsg = errorData?.error?.message || `HTTP ${response.status}`;
+          const is429 = response.status === 429;
           
-          // Save the rich text response in the conversation context history
-          chatHistory.push({ role: 'user', parts: [{ text: message }] });
-          chatHistory.push({ role: 'model', parts: [{ text: parsed.text }] });
-
-          if (chatHistory.length > MAX_HISTORY_TURNS * 2) {
-            chatHistory.shift();
-            chatHistory.shift();
+          console.error(`Gemini API HTTP ${response.status} (key #${keyInfo.index}):`, errorMsg);
+          trackKeyUsage(keyInfo.masked, 0, is429);
+          
+          if (is429) {
+            console.log(`[FRIDAY] Rate limited on key #${keyInfo.index}, rotating...`);
+            rotateToNextKey();
+            attempts++;
+            // Exponential backoff: 1s, 2s, 4s
+            const backoffMs = Math.pow(2, attempts) * 500;
+            console.log(`[FRIDAY] Retrying in ${backoffMs}ms (attempt ${attempts}/${MAX_RETRIES})`);
+            await new Promise(r => setTimeout(r, backoffMs));
+            continue;
           }
-
-          return res.json({ success: true, reply: parsed });
-        } catch (jsonErr) {
-          console.warn('JSON parsing failed. Degraded to flat response:', cleaned);
-          // Graceful degradation in case LLM outputs flat text
-          return res.json({ 
-            success: true, 
-            reply: { text: cleaned, speech: cleaned.substring(0, 100) + '...' } 
-          });
+          
+          throw new Error(`Gemini API error: ${errorMsg}`);
         }
-      } else {
-        console.error('Unexpected Gemini API response structure:', JSON.stringify(data));
-        throw new Error('Invalid response structure from Gemini API');
+
+        const data = await response.json();
+        
+        // Track token usage from response
+        const tokenCount = data.usageMetadata?.totalTokenCount || 0;
+        trackKeyUsage(keyInfo.masked, tokenCount);
+        
+        if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0]) {
+          const reply = data.candidates[0].content.parts[0].text.trim();
+          
+          // Clean JSON markdown packaging if present
+          let cleaned = reply;
+          if (cleaned.startsWith('```')) {
+            cleaned = cleaned.replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
+          }
+          
+          try {
+            const parsed = JSON.parse(cleaned);
+            
+            // Save the rich text response in the conversation context history
+            chatHistory.push({ role: 'user', parts: [{ text: message }] });
+            chatHistory.push({ role: 'model', parts: [{ text: parsed.text }] });
+
+            if (chatHistory.length > MAX_HISTORY_TURNS * 2) {
+              chatHistory.shift();
+              chatHistory.shift();
+            }
+
+            return res.json({ success: true, reply: parsed, keyIndex: keyInfo.index, keysTotal: geminiKeys.length });
+          } catch (jsonErr) {
+            console.warn('JSON parsing failed. Degraded to flat response:', cleaned);
+            return res.json({ 
+              success: true, 
+              reply: { text: cleaned, speech: cleaned.substring(0, 100) + '...' },
+              keyIndex: keyInfo.index,
+              keysTotal: geminiKeys.length
+            });
+          }
+        } else {
+          console.error('Unexpected Gemini API response structure:', JSON.stringify(data));
+          throw new Error('Invalid response structure from Gemini API');
+        }
+      } catch (error) {
+        lastError = error;
+        console.error(`Gemini API error (attempt ${attempts + 1}/${MAX_RETRIES}):`, error.message);
+        
+        // If it's not a rate limit error, try rotating key anyway
+        if (!error.message.includes('429') && geminiKeys.length > 1) {
+          rotateToNextKey();
+        }
+        
+        attempts++;
+        if (attempts < MAX_RETRIES) {
+          const backoffMs = Math.pow(2, attempts) * 500;
+          console.log(`[FRIDAY] Retrying in ${backoffMs}ms...`);
+          await new Promise(r => setTimeout(r, backoffMs));
+        }
       }
-    } catch (error) {
-      console.error('Error calling Gemini API:', error);
     }
+    
+    console.error('[FRIDAY] All retry attempts exhausted:', lastError?.message);
   }
 
   // Local Offline Response fallback (expanded 50+ topics)
@@ -1366,9 +1692,10 @@ app.post('/api/tts', async (req, res) => {
   reqEleven.end();
 });
 
-// Endpoint for real-time Atmospheric Weather & Planetary Radar
+// Endpoint for real-time Atmospheric Weather & Planetary Radar (uses configured location)
 app.get('/api/weather', (req, res) => {
-  const weatherUrl = 'https://api.open-meteo.com/v1/forecast?latitude=28.6139&longitude=77.2090&current=temperature_2m,relative_humidity_2m,is_day,precipitation,rain,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto';
+  const { latitude, longitude, cityName } = appSettings;
+  const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,is_day,precipitation,rain,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto`;
 
   const weatherReq = https.get(weatherUrl, { timeout: 8000 }, (apiRes) => {
     let data = '';
@@ -1392,7 +1719,7 @@ app.get('/api/weather', (req, res) => {
 
         res.json({
           success: true,
-          city: 'New Delhi, IN',
+          city: cityName,
           tempC: Math.round(current.temperature_2m || 30),
           condition: condition,
           type: type,
@@ -1409,7 +1736,7 @@ app.get('/api/weather', (req, res) => {
       } catch (e) {
         res.json({
           success: true,
-          city: 'New Delhi, IN',
+          city: cityName,
           tempC: 30,
           condition: 'Partly Cloudy',
           type: 'clear',
@@ -1429,7 +1756,7 @@ app.get('/api/weather', (req, res) => {
   weatherReq.on('error', () => {
     res.json({
       success: true,
-      city: 'New Delhi, IN',
+      city: appSettings.cityName,
       tempC: 30,
       condition: 'Partly Cloudy',
       type: 'clear',
@@ -1446,7 +1773,7 @@ app.get('/api/weather', (req, res) => {
     weatherReq.destroy();
     res.json({
       success: true,
-      city: 'New Delhi, IN',
+      city: appSettings.cityName,
       tempC: 30,
       condition: 'Partly Cloudy',
       type: 'clear',
@@ -1502,7 +1829,7 @@ app.get('/api/briefing', (req, res) => {
       batteryCharging = stdout.includes('AC Power') || stdout.includes('charging');
     }
 
-    const weatherUrl = 'https://api.open-meteo.com/v1/forecast?latitude=28.6139&longitude=77.2090&current=temperature_2m,weather_code&timezone=auto';
+    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${appSettings.latitude}&longitude=${appSettings.longitude}&current=temperature_2m,weather_code&timezone=auto`;
     const weatherReq = https.get(weatherUrl, { timeout: 5000 }, (apiRes) => {
       let wData = '';
       apiRes.on('data', chunk => wData += chunk);
@@ -1568,24 +1895,55 @@ app.get('/api/toggle-mic-poll', (req, res) => {
   res.json({ success: true, lastToggle: nativeMicToggleTimestamp });
 });
 
-// Endpoint for Google AI Studio API Token & Quota Metrics
-let geminiRequestCountToday = 42;
-let geminiTokenCountMinute = 14250;
-
+// Endpoint for Google AI Studio API Token & Quota Metrics (real usage tracking)
 app.get('/api/gemini-quota', (req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  const isKeyPresent = Boolean(apiKey && apiKey.trim() !== '');
+  const isKeyPresent = geminiKeys.length > 0;
+  const keyStats = getKeyStats();
+  
+  // Aggregate stats across all keys
+  const totalRequestsToday = keyStats.reduce((sum, k) => sum + k.requestsToday, 0);
+  const totalRequestsMinute = keyStats.reduce((sum, k) => sum + k.requestsMinute, 0);
+  const totalTokens = keyStats.reduce((sum, k) => sum + k.tokensTotal, 0);
+  const activeKeys = keyStats.filter(k => k.active).length;
+  const currentMasked = keyStats[currentKeyIndex]?.masked || 'NONE';
 
   res.json({
     success: true,
     isKeyPresent: isKeyPresent,
-    maskedKey: isKeyPresent ? `${apiKey.substring(0, 6)}...${apiKey.substring(apiKey.length - 4)}` : 'NOT_CONFIGURED',
+    keysCount: geminiKeys.length,
+    activeKeys: activeKeys,
+    currentKey: currentMasked,
     model: 'gemini-2.0-flash',
-    rpm: { current: Math.min(15, Math.floor(Math.random() * 4) + 1), max: 15 },
-    tpm: { current: geminiTokenCountMinute, max: 1000000 },
-    rpd: { current: geminiRequestCountToday, max: 1500 },
-    status: isKeyPresent ? 'HEALTHY & ACTIVE' : 'MISSING_API_KEY'
+    rpm: { current: totalRequestsMinute, max: 15 * geminiKeys.length },
+    tpm: { current: totalTokens, max: 1000000 },
+    rpd: { current: totalRequestsToday, max: 1500 * geminiKeys.length },
+    status: isKeyPresent ? (activeKeys > 0 ? 'HEALTHY & ACTIVE' : 'ALL_KEYS_RATE_LIMITED') : 'MISSING_API_KEY',
+    keys: keyStats
   });
+});
+
+// Endpoint to get detailed key status
+app.get('/api/gemini-keys', (req, res) => {
+  const keyStats = getKeyStats();
+  res.json({
+    success: true,
+    totalKeys: geminiKeys.length,
+    activeKeys: keyStats.filter(k => k.active).length,
+    currentKeyIndex: currentKeyIndex,
+    keys: keyStats
+  });
+});
+
+// Endpoint to reactivate a key
+app.post('/api/gemini-keys/reactivate', (req, res) => {
+  const { masked } = req.body;
+  if (keyUsage[masked]) {
+    keyUsage[masked].active = true;
+    keyUsage[masked].errors429 = 0;
+    console.log(`[FRIDAY] Reactivated key ${masked}`);
+    return res.json({ success: true, message: `Key ${masked} reactivated` });
+  }
+  res.status(404).json({ success: false, message: 'Key not found' });
 });
 
 // Function to launch Chrome in app mode or default browser

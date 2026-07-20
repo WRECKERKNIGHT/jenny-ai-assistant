@@ -9,16 +9,24 @@
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>com.jenny.app</string>
+    <string>com.jenny.menubar</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Jenny AI</string>
+    <string>JENNY</string>
+    <key>CFBundleDisplayName</key>
+    <string>JENNY</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>2.0</string>
+    <key>CFBundleVersion</key>
+    <string>2.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>12.0</string>
     <key>LSUIElement</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
     <true/>
 </dict>
 </plist>
