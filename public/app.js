@@ -987,6 +987,7 @@ function openPanel(name) {
     'vault': 'fa-database MEMORY VAULT',
     'clipboard': 'fa-clipboard CLIPBOARD',
     'settings': 'fa-gear CONFIGURATION',
+    'training': 'fa-brain AI TRAINING HUB',
     'commands': 'fa-terminal COMMANDS',
     'files': 'fa-folder-tree FILE EXPLORER',
     'notes': 'fa-note-sticky NOTES'
@@ -1086,10 +1087,96 @@ async function loadPanelContent(name) {
     case 'vault': return loadVaultPanel(body);
     case 'clipboard': return loadClipboardPanel(body);
     case 'settings': return loadSettingsPanel(body);
+    case 'training': return loadTrainingPanel(body);
     case 'commands': return loadCommandsPanel(body);
     case 'files': return loadFilesPanel(body);
     case 'notes': return loadNotesPanel(body);
   }
+}
+
+async function loadTrainingPanel(el) {
+  el.innerHTML = '<div class="panel-empty">Loading Training Hub...</div>';
+  try {
+    const res = await fetch('/api/training');
+    const d = await res.json();
+    if (!d.success) { el.innerHTML = '<div class="panel-empty">Failed to load training.</div>'; return; }
+    const t = d.training;
+    
+    const rulesHtml = (t.rules || []).map(r => `
+      <div class="vault-item">
+        <div class="vt"><strong style="color:var(--gold);">${r.trigger}</strong> &rarr; ${r.reply}</div>
+        <button class="vx" onclick="deleteTrainingItem('rule','${r.trigger}')">&times;</button>
+      </div>
+    `).join('') || '<div style="font-size:9px; color:var(--txt3); padding:4px 0;">No custom rules trained yet.</div>';
+
+    const macrosHtml = (t.macros || []).map(m => `
+      <div class="vault-item">
+        <div class="vt"><strong style="color:var(--silver);">${m.trigger}</strong> = [${(m.commands||[]).join(', ')}]</div>
+        <button class="vx" onclick="deleteTrainingItem('macro','${m.trigger}')">&times;</button>
+      </div>
+    `).join('') || '<div style="font-size:9px; color:var(--txt3); padding:4px 0;">No voice macros trained yet.</div>';
+
+    el.innerHTML = `
+      <div style="margin-bottom:12px; padding:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(229,193,88,0.2); border-radius:10px;">
+        <div class="setting-row">
+          <label>USER NAME</label>
+          <input type="text" id="train-name-input" value="${t.name || ''}" placeholder="e.g. BOSS" style="width:140px; padding:4px 8px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.12); color:#fff; font-family:var(--mono); font-size:10px; border-radius:6px;">
+        </div>
+        <div class="setting-row" style="margin-top:6px;">
+          <label>ASSISTANT TONE</label>
+          <select id="train-tone-select" style="width:140px; padding:4px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.12); color:#fff; font-family:var(--mono); font-size:10px; border-radius:6px;">
+            <option value="witty" ${t.tone === 'witty' ? 'selected' : ''}>Witty / Clever</option>
+            <option value="formal" ${t.tone === 'formal' ? 'selected' : ''}>Formal / Precise</option>
+            <option value="friendly" ${t.tone === 'friendly' ? 'selected' : ''}>Friendly / Warm</option>
+            <option value="boss" ${t.tone === 'boss' ? 'selected' : ''}>Executive Jarvis</option>
+          </select>
+        </div>
+        <button onclick="saveProfileTraining()" style="margin-top:8px; width:100%; padding:6px; background:rgba(229,193,88,0.15); border:1px solid rgba(229,193,88,0.3); border-radius:6px; color:var(--gold); font-family:var(--mono); font-size:9px; font-weight:700; cursor:pointer;">
+          <i class="fa-solid fa-floppy-disk"></i> SAVE PROFILE TRAINING
+        </button>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <div style="font-family:var(--mono); font-size:9px; color:var(--gold); letter-spacing:1px; margin-bottom:6px; font-weight:700;">
+          <i class="fa-solid fa-bolt"></i> CUSTOM VOICE RULES (${(t.rules || []).length})
+        </div>
+        ${rulesHtml}
+      </div>
+
+      <div>
+        <div style="font-family:var(--mono); font-size:9px; color:var(--silver); letter-spacing:1px; margin-bottom:6px; font-weight:700;">
+          <i class="fa-solid fa-terminal"></i> VOICE MACROS (${(t.macros || []).length})
+        </div>
+        ${macrosHtml}
+      </div>
+    `;
+  } catch { el.innerHTML = '<div class="panel-empty">Error loading training.</div>'; }
+}
+
+async function saveProfileTraining() {
+  const name = document.getElementById('train-name-input')?.value.trim();
+  const tone = document.getElementById('train-tone-select')?.value;
+  try {
+    await fetch('/api/training', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'profile', name, tone })
+    });
+    toast('Profile training saved!', 'ok');
+  } catch { toast('Failed to save profile training', 'err'); }
+}
+
+async function deleteTrainingItem(type, trigger) {
+  try {
+    await fetch('/api/training', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, trigger })
+    });
+    toast(`Deleted ${type}: ${trigger}`, 'info');
+    const body = document.getElementById('panel-body-training');
+    if (body) loadTrainingPanel(body);
+  } catch { toast('Failed to delete item', 'err'); }
 }
 
 // ================================================

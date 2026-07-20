@@ -321,6 +321,65 @@ app.post('/api/settings', (req, res) => {
   res.json({ success: true, settings: appSettings });
 });
 
+// ================================================
+// AI TRAINING HUB API ENDPOINTS
+// ================================================
+app.get('/api/training', (req, res) => {
+  if (!offlineMemory.rules) offlineMemory.rules = [];
+  if (!offlineMemory.macros) offlineMemory.macros = [];
+  if (!offlineMemory.contacts) offlineMemory.contacts = [];
+  if (!offlineMemory.facts) offlineMemory.facts = [];
+  res.json({
+    success: true,
+    training: {
+      name: offlineMemory.name || '',
+      tone: offlineMemory.tone || 'witty',
+      rules: offlineMemory.rules,
+      macros: offlineMemory.macros,
+      contacts: offlineMemory.contacts,
+      facts: offlineMemory.facts
+    }
+  });
+});
+
+app.post('/api/training', (req, res) => {
+  const { type, name, tone, rule, macro, contact, fact } = req.body;
+  if (!offlineMemory.rules) offlineMemory.rules = [];
+  if (!offlineMemory.macros) offlineMemory.macros = [];
+  if (!offlineMemory.contacts) offlineMemory.contacts = [];
+  if (!offlineMemory.facts) offlineMemory.facts = [];
+
+  if (type === 'profile') {
+    if (name) offlineMemory.name = name;
+    if (tone) offlineMemory.tone = tone;
+  } else if (type === 'rule' && rule && rule.trigger) {
+    offlineMemory.rules = offlineMemory.rules.filter(r => r.trigger.toLowerCase() !== rule.trigger.toLowerCase());
+    offlineMemory.rules.push(rule);
+  } else if (type === 'macro' && macro && macro.trigger) {
+    offlineMemory.macros = offlineMemory.macros.filter(m => m.trigger.toLowerCase() !== macro.trigger.toLowerCase());
+    offlineMemory.macros.push(macro);
+  } else if (type === 'fact' && fact && fact.topic) {
+    offlineMemory.facts = offlineMemory.facts.filter(f => f.topic.toLowerCase() !== fact.topic.toLowerCase());
+    offlineMemory.facts.push(fact);
+  }
+
+  saveOfflineMemory();
+  res.json({ success: true, message: 'Training updated successfully', training: offlineMemory });
+});
+
+app.delete('/api/training', (req, res) => {
+  const { type, trigger, topic } = req.body;
+  if (type === 'rule' && trigger && offlineMemory.rules) {
+    offlineMemory.rules = offlineMemory.rules.filter(r => r.trigger.toLowerCase() !== trigger.toLowerCase());
+  } else if (type === 'macro' && trigger && offlineMemory.macros) {
+    offlineMemory.macros = offlineMemory.macros.filter(m => m.trigger.toLowerCase() !== trigger.toLowerCase());
+  } else if (type === 'fact' && topic && offlineMemory.facts) {
+    offlineMemory.facts = offlineMemory.facts.filter(f => f.topic.toLowerCase() !== topic.toLowerCase());
+  }
+  saveOfflineMemory();
+  res.json({ success: true, message: 'Item deleted from training', training: offlineMemory });
+});
+
 // Reverse geocoding from coordinates (using free API)
 app.get('/api/reverse-geocode', (req, res) => {
   const { lat, lon } = req.query;
@@ -1738,6 +1797,79 @@ app.post('/api/chat', async (req, res) => {
     ];
     const t = trivia[Math.floor(Math.random() * trivia.length)];
     return res.json({ success: true, reply: { text: `Here's one, BOSS: ${t.q}`, speech: `Trivia time. ${t.q}` } });
+  }
+  // --- USER TRAINING & MACROS ---
+  if (query.match(/^train name[:\s]+(.+)/i) || query.match(/^call me[:\s]+(.+)/i)) {
+    const m = query.match(/^train name[:\s]+(.+)/i) || query.match(/^call me[:\s]+(.+)/i);
+    offlineMemory.name = m[1].trim();
+    saveOfflineMemory();
+    return res.json({ success: true, reply: { text: `Understood, BOSS! I will address you as "${offlineMemory.name}".`, speech: `Understood, ${offlineMemory.name}. Neural link trained.` } });
+  }
+
+  if (query.match(/^train tone[:\s]+(witty|formal|friendly|boss|jarvis)/i)) {
+    const m = query.match(/^train tone[:\s]+(witty|formal|friendly|boss|jarvis)/i);
+    offlineMemory.tone = m[1].toLowerCase();
+    saveOfflineMemory();
+    return res.json({ success: true, reply: { text: `Assistant tone trained to: "${offlineMemory.tone.toUpperCase()}".`, speech: `Tone updated to ${offlineMemory.tone}.` } });
+  }
+
+  if (query.match(/^train rule[:\s]+(.+?)\s*(?:->|=)\s*(.+)/i)) {
+    const m = query.match(/^train rule[:\s]+(.+?)\s*(?:->|=)\s*(.+)/i);
+    if (!offlineMemory.rules) offlineMemory.rules = [];
+    const trigger = m[1].trim();
+    const action = m[2].trim();
+    offlineMemory.rules = offlineMemory.rules.filter(r => r.trigger.toLowerCase() !== trigger.toLowerCase());
+    offlineMemory.rules.push({ trigger, reply: action });
+    saveOfflineMemory();
+    return res.json({ success: true, reply: { text: `Rule trained! Trigger: "${trigger}" -> "${action}".`, speech: `Rule trained for ${trigger}, BOSS.` } });
+  }
+
+  if (query.match(/^train macro[:\s]+(.+?)\s*(?:=)\s*(.+)/i)) {
+    const m = query.match(/^train macro[:\s]+(.+?)\s*(?:=)\s*(.+)/i);
+    if (!offlineMemory.macros) offlineMemory.macros = [];
+    const trigger = m[1].trim();
+    const cmds = m[2].split(',').map(c => c.trim());
+    offlineMemory.macros = offlineMemory.macros.filter(x => x.trigger.toLowerCase() !== trigger.toLowerCase());
+    offlineMemory.macros.push({ trigger, commands: cmds });
+    saveOfflineMemory();
+    return res.json({ success: true, reply: { text: `Macro trained! Trigger: "${trigger}" -> [${cmds.join(', ')}].`, speech: `Macro trained for ${trigger}, BOSS.` } });
+  }
+
+  if (query.match(/^(?:list|show|my)\s+(?:rules|training|macros|profile)/i)) {
+    const rulesStr = (offlineMemory.rules || []).map(r => `• ${r.trigger} -> ${r.reply}`).join('\n') || 'None';
+    const macrosStr = (offlineMemory.macros || []).map(m => `• ${m.trigger} = ${m.commands.join(', ')}`).join('\n') || 'None';
+    const text = `🧠 JENNY TRAINING PROFILE:\n• Name: ${offlineMemory.name || 'BOSS'}\n• Tone: ${offlineMemory.tone || 'witty'}\n\nRULES:\n${rulesStr}\n\nMACROS:\n${macrosStr}`;
+    return res.json({ success: true, reply: { text, speech: `Displaying your training profile, BOSS.` } });
+  }
+
+  // --- MAC SYSTEM HARDWARE CONTROLS ---
+  if (query.match(/purge ram|clean memory|free ram|clear memory/i)) {
+    exec('/usr/bin/purge', (err) => {
+      return res.json({ success: true, reply: { text: 'RAM purged and memory cache flushed, BOSS.', speech: 'Memory cache flushed and RAM freed, BOSS.' } });
+    });
+    return;
+  }
+
+  if (query.match(/wifi (on|off|status)/i)) {
+    const m = query.match(/wifi (on|off|status)/i)[1].toLowerCase();
+    if (m === 'status') {
+      exec('networksetup -getairportpower en0', (err, stdout) => {
+        return res.json({ success: true, reply: { text: `Wi-Fi Status: ${stdout.trim()}`, speech: `Wi-Fi status is ${stdout.trim()}` } });
+      });
+      return;
+    }
+    const state = m === 'on' ? 'on' : 'off';
+    exec(`networksetup -setairportpower en0 ${state}`, () => {
+      return res.json({ success: true, reply: { text: `Wi-Fi turned ${state.toUpperCase()}, BOSS.`, speech: `Wi-Fi turned ${state}.` } });
+    });
+    return;
+  }
+
+  if (query.match(/battery (info|status|health)/i)) {
+    exec('pmset -g batt', (err, stdout) => {
+      return res.json({ success: true, reply: { text: `🔋 BATTERY STATUS:\n${stdout.trim()}`, speech: `Battery info retrieved, BOSS.` } });
+    });
+    return;
   }
 
   // --- Thanks ---
