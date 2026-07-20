@@ -84,7 +84,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
 
     func setupPopover() {
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 380, height: 540)
+        popover.contentSize = NSSize(width: 460, height: 680)
         popover.behavior = .transient
         popover.animates = true
         popover.appearance = NSAppearance(named: .darkAqua)
@@ -95,7 +95,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
         config.userContentController.add(self, name: "openDesktopApp")
         config.userContentController.add(self, name: "openFullApp")
 
-        webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 380, height: 540), configuration: config)
+        webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 460, height: 680), configuration: config)
         webView.navigationDelegate = self
         webView.setValue(false, forKey: "drawsBackground")
         webView.loadHTMLString(loadingHTML(), baseURL: nil)

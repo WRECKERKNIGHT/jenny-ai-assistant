@@ -7,549 +7,537 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
     :root {
-      --surface: rgba(255,255,255,0.03);
-      --surface-hover: rgba(255,255,255,0.08);
-      --surface-alt: rgba(255,255,255,0.02);
-      --border: rgba(229,193,88,0.25);
-      --border-hover: rgba(229,193,88,0.5);
+      --bg: #000000;
+      --glass-bg: rgba(0, 0, 0, 0.45);
+      --glass-card: rgba(255, 255, 255, 0.03);
+      --glass-border: rgba(229, 193, 88, 0.3);
+      --gold: #e5c158;
+      --gold-glow: rgba(229, 193, 88, 0.25);
+      --silver: #c0c0c0;
       --txt: #ffffff;
       --txt2: #d1d5db;
       --txt3: #9ca3af;
-      --cyan: #e5c158;
-      --cyan-dim: rgba(229,193,88,0.15);
-      --pink: #c0c0c0;
-      --pink-dim: rgba(192,192,192,0.12);
-      --purple: #e5c158;
-      --gold: #e5c158;
-      --silver: #c0c0c0;
-      --success: #34d399;
-      --warn: #fbbf24;
       --mono: 'SF Mono', -apple-system, BlinkMacSystemFont, 'Menlo', monospace;
-      --radius: 10px;
-      --radius-sm: 6px;
+      --radius: 12px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background: rgba(0,0,0,0.5);
-      backdrop-filter: blur(30px) saturate(1.8);
-      -webkit-backdrop-filter: blur(30px) saturate(1.8);
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(40px) saturate(2.0);
+      -webkit-backdrop-filter: blur(40px) saturate(2.0);
       color: var(--txt);
       font-family: var(--mono);
-      width: 380px;
-      height: 560px;
+      width: 460px;
+      height: 680px;
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      -webkit-user-select: none;
       user-select: none;
-      border: 1px solid var(--border);
-      border-radius: 16px;
+      -webkit-user-select: none;
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.8), 0 0 30px rgba(229, 193, 88, 0.15);
     }
 
-    /* ── Header ── */
+    /* HEADER */
     .hdr {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 14px 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      background: rgba(0,0,0,0.4);
+      border-bottom: 1px solid var(--glass-border);
     }
-    .hdr-left { display: flex; align-items: center; gap: 8px; }
+    .hdr-l {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
     .hdr-logo {
-      width: 24px; height: 24px; border-radius: 50%;
-      background: linear-gradient(135deg, var(--cyan), var(--pink));
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 0 14px rgba(0,212,230,0.4);
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      border: 1px solid var(--glass-border);
     }
-    .hdr-logo i { font-size: 11px; color: #fff; }
     .hdr-title {
-      font-size: 11px; font-weight: 700; letter-spacing: 3px;
-      background: linear-gradient(90deg, var(--cyan), var(--pink));
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 3px;
+      color: #fff;
     }
-    .hdr-status {
-      font-size: 8px; padding: 2px 8px; border-radius: 8px;
-      border: 1px solid var(--border); color: var(--txt3);
-      display: flex; align-items: center; gap: 5px;
-      transition: all 0.3s;
+    .hdr-badge {
+      font-size: 9px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      background: var(--gold-glow);
+      border: 1px solid var(--glass-border);
+      color: var(--gold);
+      letter-spacing: 1px;
     }
-    .hdr-status.online { color: var(--success); border-color: rgba(52,211,153,0.2); }
-    .hdr-status.offline { color: var(--pink); border-color: rgba(255,45,135,0.2); }
-    .hdr-status.listening { color: var(--pink); border-color: rgba(255,45,135,0.3); }
-    .hdr-dot {
-      width: 5px; height: 5px; border-radius: 50%;
-      background: currentColor;
+    .hdr-r {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
-    .hdr-status.online .hdr-dot { animation: pulse 2s ease-in-out infinite; }
-    @keyframes pulse { 0%,100%{opacity:0.4;} 50%{opacity:1;} }
+    .icon-btn {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      color: var(--txt2);
+      width: 28px;
+      height: 28px;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .icon-btn:hover {
+      background: var(--gold);
+      color: #000;
+    }
 
-    /* ── Divider ── */
-    .divider { height: 1px; background: var(--border); margin: 0 14px; }
-
-    /* ── Orb + Input ── */
-    .orb-stage {
-      display: flex; align-items: center; gap: 10px;
-      padding: 12px 14px 10px;
+    /* ORB & INPUT CONTAINER */
+    .hero-stage {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 18px;
+      background: var(--glass-card);
+      border-bottom: 1px solid var(--glass-border);
     }
     .orb-wrap {
-      position: relative; width: 60px; height: 60px; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer; transition: transform 0.2s;
-    }
-    .orb-wrap:hover { transform: scale(1.06); }
-    .orb-glow {
-      position: absolute; inset: -6px; border-radius: 50%;
-      background: radial-gradient(circle, rgba(0,212,230,0.35) 0%, rgba(255,45,135,0.15) 60%, transparent 75%);
-      filter: blur(10px); transition: all 0.4s;
-    }
-    .orb-wrap.active .orb-glow {
-      background: radial-gradient(circle, rgba(255,45,135,0.5) 0%, rgba(139,92,246,0.25) 60%, transparent 75%);
-      filter: blur(12px); animation: orb-active-pulse 2s ease-in-out infinite;
-    }
-    .orb-wrap.speaking .orb-glow {
-      background: radial-gradient(circle, rgba(0,212,230,0.55) 0%, rgba(0,212,230,0.2) 60%, transparent 75%);
-      filter: blur(14px); animation: orb-speak-pulse 1s ease-in-out infinite;
-    }
-    @keyframes orb-active-pulse { 0%,100%{transform:scale(1);opacity:1;} 50%{transform:scale(1.15);opacity:0.8;} }
-    @keyframes orb-speak-pulse { 0%,100%{transform:scale(1);opacity:1;} 50%{transform:scale(1.2);opacity:0.9;} }
-
-    .orb-ring {
-      position: absolute; inset: -2px; border-radius: 50%;
-      border: 1px solid rgba(0,212,230,0.2);
-      transition: all 0.3s;
-    }
-    .orb-wrap.active .orb-ring { border-color: rgba(255,45,135,0.4); animation: ring-spin 4s linear infinite; }
-    .orb-wrap.speaking .orb-ring { border-color: rgba(0,212,230,0.4); animation: ring-spin 2s linear infinite; }
-    @keyframes ring-spin { from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
-
-    .orb-core {
-      position: relative; width: 42px; height: 42px; border-radius: 50%;
-      background: radial-gradient(circle at 35% 30%, var(--cyan), var(--pink));
-      box-shadow: inset 0 1px 4px rgba(255,255,255,0.5), 0 0 20px rgba(0,212,230,0.5);
-      transition: all 0.3s; z-index: 1;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .orb-core i { font-size: 18px; color: rgba(255,255,255,0.9); transition: all 0.3s; }
-    .orb-wrap:hover .orb-core { transform: scale(1.05); }
-    .orb-wrap.active .orb-core {
-      background: radial-gradient(circle at 35% 30%, var(--pink), var(--purple));
-      box-shadow: inset 0 1px 4px rgba(255,255,255,0.5), 0 0 24px rgba(255,45,135,0.6);
-      animation: orbPulse 1.8s ease-in-out infinite;
-    }
-    .orb-wrap.active .orb-core i { color: #fff; }
-    .orb-wrap.speaking .orb-core {
-      background: radial-gradient(circle at 35% 30%, #fff, var(--cyan));
-      box-shadow: inset 0 1px 4px rgba(255,255,255,0.7), 0 0 30px rgba(0,212,230,0.6);
-    }
-    .orb-wrap.speaking .orb-core i { animation: speak-icon 0.8s ease-in-out infinite; }
-    @keyframes orbPulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.06);} }
-    @keyframes speak-icon { 0%,100%{transform:scale(1);opacity:0.8;} 50%{transform:scale(1.15);opacity:1;} }
-
-    /* ── Quick Input ── */
-    .quick-input-wrap { flex: 1; display: flex; flex-direction: column; gap: 0; min-width: 0; }
-    .input-row {
-      display: flex; gap: 6px; align-items: stretch;
-    }
-    .quick-input {
-      flex: 1; padding: 9px 12px;
-      background: rgba(255,255,255,0.06); border: 1px solid rgba(0,212,230,0.15);
-      border-radius: var(--radius-sm); color: var(--txt);
-      font-family: var(--mono); font-size: 11px;
-      outline: none; transition: all 0.2s;
-    }
-    .quick-input::placeholder { color: var(--txt3); }
-    .quick-input:focus { border-color: rgba(0,212,230,0.4); background: rgba(0,212,230,0.06); box-shadow: 0 0 12px rgba(0,212,230,0.08); }
-    .send-btn {
-      width: 32px; flex-shrink: 0;
-      background: var(--cyan-dim); border: 1px solid rgba(0,212,230,0.2);
-      border-radius: var(--radius-sm); color: var(--cyan);
-      cursor: pointer; transition: all 0.15s;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 12px;
-    }
-    .send-btn:hover { background: rgba(0,212,230,0.25); color: #fff; }
-
-    /* ── Wave ── */
-    .wave-wrap { height: 28px; position: relative; margin: 2px 0; }
-    #wave-canvas { width: 100%; height: 100%; display: block; }
-
-    /* ── Stats ── */
-    .stats-row {
-      display: grid; grid-template-columns: 1fr 1fr 1fr;
-      gap: 6px; padding: 4px 14px;
-    }
-    .stat {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius-sm); padding: 6px 8px;
-      text-align: center; transition: border-color 0.2s;
-    }
-    .stat:hover { border-color: var(--border-hover); }
-    .stat-v { font-size: 14px; font-weight: 700; color: var(--txt); }
-    .stat-l { font-size: 7px; color: var(--txt3); letter-spacing: 1.2px; margin-top: 1px; }
-
-    /* ── Actions ── */
-    .actions {
-      display: grid; grid-template-columns: 1fr 1fr;
-      gap: 5px; padding: 6px 14px;
-    }
-    .act {
-      display: flex; align-items: center; gap: 6px;
-      padding: 7px 10px; background: var(--surface);
-      border: 1px solid var(--border); border-radius: var(--radius-sm);
-      color: var(--txt2); font-family: var(--mono);
-      font-size: 9px; cursor: pointer; transition: all 0.15s;
-      letter-spacing: 0.3px;
-    }
-    .act:hover {
-      background: var(--cyan-dim); border-color: rgba(0,212,230,0.25);
-      color: var(--txt); transform: translateY(-1px);
-    }
-    .act i { color: var(--cyan); font-size: 10px; width: 14px; text-align: center; flex-shrink: 0; }
-
-    /* ── Summon Row ── */
-    .summon-row {
-      display: flex; gap: 5px; padding: 0 14px;
-    }
-    .summon-btn {
-      flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px;
-      padding: 6px 4px; background: var(--surface-alt);
-      border: 1px solid var(--border); border-radius: var(--radius-sm);
-      color: var(--txt3); font-family: var(--mono);
-      font-size: 8px; cursor: pointer; transition: all 0.15s;
-      letter-spacing: 0.4px;
-    }
-    .summon-btn:hover {
-      background: var(--pink-dim); border-color: rgba(255,45,135,0.2);
-      color: var(--pink); transform: translateY(-1px);
-    }
-    .summon-btn i { font-size: 9px; }
-
-    /* ── Chat ── */
-    .chat {
-      flex: 1; margin: 4px 14px 0; padding: 8px 10px;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius-sm); overflow-y: auto;
-      min-height: 0; display: flex; flex-direction: column;
-    }
-    .chat::-webkit-scrollbar { width: 2px; }
-    .chat::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
-    .chat-label {
-      font-size: 7px; color: var(--txt3); letter-spacing: 1.5px;
-      margin-bottom: 8px; text-transform: uppercase;
-      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
-    }
-    .chat-label::before { content: ''; flex: 0 0 4px; height: 4px; border-radius: 50%; background: var(--cyan); }
-    .chat-msgs {
-      flex: 1; overflow-y: auto; display: flex; flex-direction: column;
-      gap: 6px; min-height: 0;
-    }
-    .chat-msgs::-webkit-scrollbar { width: 2px; }
-    .chat-msgs::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
-    .bubble {
-      max-width: 88%; padding: 7px 10px;
-      border-radius: var(--radius-sm);
-      font-size: 10px; line-height: 1.5;
-      word-wrap: break-word; animation: fadeIn 0.15s ease-out;
+      position: relative;
+      width: 76px;
+      height: 76px;
       flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
     }
-    .bubble.user {
-      align-self: flex-end;
-      background: rgba(0,212,230,0.12);
-      border: 1px solid rgba(0,212,230,0.2);
-      color: var(--cyan);
-      border-bottom-right-radius: 2px;
+    #orb-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
     }
-    .bubble.ai {
-      align-self: flex-start;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--txt2);
-      border-bottom-left-radius: 2px;
+    .mic-icon {
+      position: absolute;
+      font-size: 18px;
+      color: var(--gold);
+      pointer-events: none;
+      text-shadow: 0 0 10px var(--gold);
     }
-    .bubble.system {
-      align-self: center;
-      background: transparent;
-      border: none;
-      color: var(--txt3);
-      font-size: 8px; font-style: italic;
+
+    .hero-input-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .input-row {
+      display: flex;
+      gap: 8px;
+    }
+    .hud-input {
+      flex: 1;
+      padding: 10px 14px;
+      background: rgba(0,0,0,0.5);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 11px;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .hud-input:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 15px var(--gold-glow);
+    }
+    .hud-send {
+      width: 36px;
+      background: var(--gold-glow);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      color: var(--gold);
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .hud-send:hover {
+      background: var(--gold);
+      color: #000;
+    }
+    .mic-hint {
+      font-size: 9px;
+      color: var(--silver);
+      letter-spacing: 1px;
+    }
+
+    /* TELEMETRY GAUGES */
+    .telemetry-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      padding: 12px 18px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .t-card {
+      background: var(--glass-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      padding: 8px 6px;
       text-align: center;
     }
-    @keyframes fadeIn { from{opacity:0;transform:translateY(4px);} to{opacity:1;transform:translateY(0);} }
-
-    /* ── Footer ── */
-    .footer {
-      display: flex; justify-content: center; gap: 6px;
-      padding: 8px 14px 10px; border-top: 1px solid var(--border);
+    .t-val {
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      margin-top: 2px;
     }
-    .fbtn {
-      padding: 5px 12px; background: var(--surface);
-      border: 1px solid var(--border); border-radius: var(--radius-sm);
-      color: var(--txt3); font-family: var(--mono); font-size: 8px;
-      cursor: pointer; transition: all 0.15s; letter-spacing: 0.5px;
-      display: flex; align-items: center; gap: 5px;
+    .t-lbl {
+      font-size: 8px;
+      color: var(--silver);
+      letter-spacing: 1px;
     }
-    .fbtn:hover { border-color: rgba(0,212,230,0.25); color: var(--txt2); background: rgba(0,212,230,0.04); }
-    .fbtn i { font-size: 8px; }
 
-    /* ── Scrollbar global ── */
-    ::-webkit-scrollbar { width: 3px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 3px; }
+    /* POWER CHIPS DOCK */
+    .chips-section {
+      padding: 12px 18px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .chips-lbl {
+      font-size: 9px;
+      color: var(--gold);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+    .chips-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+    .power-btn {
+      background: var(--glass-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      padding: 8px 4px;
+      color: var(--txt2);
+      font-family: var(--mono);
+      font-size: 9px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .power-btn:hover {
+      background: var(--gold-glow);
+      border-color: var(--gold);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+    .power-btn i {
+      color: var(--gold);
+      font-size: 11px;
+    }
+
+    /* CHAT STREAM FEED */
+    .feed-stage {
+      flex: 1;
+      padding: 12px 18px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 0;
+    }
+    .feed-msg {
+      max-width: 90%;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 11px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .feed-msg.user {
+      align-self: flex-end;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #fff;
+    }
+    .feed-msg.ai {
+      align-self: flex-start;
+      background: rgba(0,0,0,0.5);
+      border: 1px solid var(--glass-border);
+      color: var(--txt2);
+      border-left: 3px solid var(--gold);
+    }
+
+    /* FOOTER */
+    .ftr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 18px;
+      background: rgba(0,0,0,0.4);
+      border-top: 1px solid var(--glass-border);
+      font-size: 9px;
+      color: var(--silver);
+    }
+    .ftr-btn {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--glass-border);
+      border-radius: 6px;
+      color: var(--gold);
+      padding: 4px 10px;
+      font-family: var(--mono);
+      font-size: 9px;
+      cursor: pointer;
+    }
+    .ftr-btn:hover {
+      background: var(--gold);
+      color: #000;
+    }
   </style>
 </head>
 <body>
-  <!-- Header -->
-  <div class="hdr">
-    <div class="hdr-left">
-      <div class="hdr-logo"><i class="fa-solid fa-brain"></i></div>
-      <div class="hdr-title">J.E.N.N.Y.</div>
-    </div>
-    <div class="hdr-status online" id="status-badge">
-      <span class="hdr-dot"></span>
-      <span id="status-text">ONLINE</span>
-    </div>
-  </div>
-  <div class="divider"></div>
 
-  <!-- Orb + Quick Input -->
-  <div class="orb-stage">
-    <div class="orb-wrap" id="orb-wrap" onclick="toggleMic()">
-      <div class="orb-glow"></div>
-      <div class="orb-ring"></div>
-      <div class="orb-core"><i class="fa-solid fa-microphone"></i></div>
+  <!-- HEADER -->
+  <header class="hdr">
+    <div class="hdr-l">
+      <img src="logo.png" class="hdr-logo" alt="Jenny">
+      <span class="hdr-title">J.E.N.N.Y.</span>
+      <span class="hdr-badge">MINI HUD 2.0</span>
     </div>
-    <div class="quick-input-wrap">
+    <div class="hdr-r">
+      <button class="icon-btn" id="open-training-btn" title="AI Training Hub"><i class="fa-solid fa-brain"></i></button>
+      <button class="icon-btn" id="open-main-btn" title="Open Full Interface"><i class="fa-solid fa-expand"></i></button>
+    </div>
+  </header>
+
+  <!-- ORB & INPUT -->
+  <div class="hero-stage">
+    <div class="orb-wrap" id="orb-trigger" title="Tap to Dictate Voice Command">
+      <canvas id="orb-canvas" width="76" height="76"></canvas>
+      <i class="fa-solid fa-microphone mic-icon"></i>
+    </div>
+    <div class="hero-input-wrap">
       <div class="input-row">
-        <input class="quick-input" id="chat-input" type="text"
-               placeholder="Ask anything, BOSS..." autocomplete="off">
-        <button class="send-btn" id="send-btn" onclick="submitChat()"><i class="fa-solid fa-paper-plane"></i></button>
+        <input type="text" id="mini-input" class="hud-input" placeholder="Ask JENNY or dictation command...">
+        <button id="mini-send-btn" class="hud-send"><i class="fa-solid fa-paper-plane"></i></button>
       </div>
+      <div class="mic-hint" id="mic-status-hint">TAP ORB OR TYPE COMMAND</div>
     </div>
   </div>
 
-  <!-- Wave -->
-  <div class="wave-wrap">
-    <canvas id="wave-canvas" width="352" height="28"></canvas>
-  </div>
-
-  <!-- Stats -->
-  <div class="stats-row">
-    <div class="stat">
-      <div class="stat-v" id="s-cpu">--</div>
-      <div class="stat-l">CPU</div>
+  <!-- TELEMETRY -->
+  <div class="telemetry-bar">
+    <div class="t-card">
+      <div class="t-lbl">CPU</div>
+      <div class="t-val" id="hud-cpu">--%</div>
     </div>
-    <div class="stat">
-      <div class="stat-v" id="s-ram">--</div>
-      <div class="stat-l">RAM</div>
+    <div class="t-card">
+      <div class="t-lbl">RAM</div>
+      <div class="t-val" id="hud-ram">--%</div>
     </div>
-    <div class="stat">
-      <div class="stat-v" id="s-batt">--</div>
-      <div class="stat-l">BATT</div>
+    <div class="t-card">
+      <div class="t-lbl">BATTERY</div>
+      <div class="t-val" id="hud-bat">--%</div>
     </div>
-  </div>
-
-  <!-- Quick Actions -->
-  <div class="actions">
-    <button class="act" onclick="quickCmd('briefing')"><i class="fa-solid fa-clipboard-list"></i> Briefing</button>
-    <button class="act" onclick="quickCmd('what is the weather')"><i class="fa-solid fa-cloud-sun"></i> Weather</button>
-    <button class="act" onclick="quickCmd('system status')"><i class="fa-solid fa-microchip"></i> System</button>
-    <button class="act" onclick="quickCmd('tell me a joke')"><i class="fa-solid fa-face-laugh"></i> Joke</button>
-  </div>
-
-  <!-- Summon Panels -->
-  <div class="summon-row">
-    <button class="summon-btn" onclick="summonPanel('system')"><i class="fa-solid fa-microchip"></i> System</button>
-    <button class="summon-btn" onclick="summonPanel('commands')"><i class="fa-solid fa-terminal"></i> Commands</button>
-    <button class="summon-btn" onclick="summonPanel('notes')"><i class="fa-solid fa-note-sticky"></i> Notes</button>
-  </div>
-
-  <!-- Chat -->
-  <div class="chat" id="chat">
-    <div class="chat-label">Neural Stream</div>
-    <div class="chat-msgs" id="chat-msgs">
-      <div class="bubble ai">Ready, BOSS. Tap the orb or type a command.</div>
+    <div class="t-card">
+      <div class="t-lbl">UPTIME</div>
+      <div class="t-val" id="hud-up">--h</div>
     </div>
   </div>
 
-  <!-- Footer -->
-  <div class="footer">
-    <button class="fbtn" onclick="openDesktop()"><i class="fa-solid fa-expand"></i> DESKTOP APP</button>
-    <button class="fbtn" onclick="refreshStats()"><i class="fa-solid fa-arrow-rotate-right"></i> REFRESH</button>
+  <!-- POWER DOCK -->
+  <div class="chips-section">
+    <div class="chips-lbl"><i class="fa-solid fa-bolt"></i> Quick Controls</div>
+    <div class="chips-grid">
+      <button class="power-btn" data-cmd="Hi I am on my way home">
+        <i class="fa-solid fa-car"></i> On Way Home
+      </button>
+      <button class="power-btn" data-cmd="wake mac display">
+        <i class="fa-solid fa-sun"></i> Wake Display
+      </button>
+      <button class="power-btn" data-cmd="lock screen">
+        <i class="fa-solid fa-lock"></i> Lock Screen
+      </button>
+      <button class="power-btn" data-cmd="purge ram">
+        <i class="fa-solid fa-broom"></i> Purge RAM
+      </button>
+      <button class="power-btn" data-cmd="battery status">
+        <i class="fa-solid fa-battery-three-quarters"></i> Battery
+      </button>
+      <button class="power-btn" data-cmd="open youtube">
+        <i class="fa-solid fa-play"></i> YouTube
+      </button>
+      <button class="power-btn" data-cmd="volume 80">
+        <i class="fa-solid fa-volume-high"></i> Volume 80%
+      </button>
+      <button class="power-btn" data-cmd="read my emails">
+        <i class="fa-solid fa-envelope"></i> Read Mail
+      </button>
+    </div>
   </div>
+
+  <!-- CHAT FEED -->
+  <div class="feed-stage" id="hud-feed">
+    <div class="feed-msg ai">
+      <strong>JENNY:</strong> Neural Link active. How can I assist you, BOSS?
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="ftr">
+    <span>SYSTEM: <strong style="color:var(--gold)">ONLINE</strong></span>
+    <button class="ftr-btn" id="open-desktop-btn">OPEN DESKTOP INTERFACE</button>
+  </footer>
 
   <script>
-    let isListening = false;
-    const API = '';
+    const feed = document.getElementById('hud-feed');
+    const input = document.getElementById('mini-input');
+    const sendBtn = document.getElementById('mini-send-btn');
+    const orbTrigger = document.getElementById('orb-trigger');
+    const micHint = document.getElementById('mic-status-hint');
 
-    /* ── Status ── */
-    function setStatus(online) {
-      const badge = document.getElementById('status-badge');
-      const text = document.getElementById('status-text');
-      badge.className = 'hdr-status ' + (online ? 'online' : 'offline');
-      text.textContent = online ? 'ONLINE' : 'OFFLINE';
+    function appendMsg(sender, text) {
+      const div = document.createElement('div');
+      div.className = `feed-msg ${sender === 'USER' ? 'user' : 'ai'}`;
+      div.innerHTML = `<strong>${sender}:</strong> ${text.replace(/\n/g, '<br>')}`;
+      feed.appendChild(div);
+      feed.scrollTop = feed.scrollHeight;
     }
 
-    /* ── Mic toggle ── */
-    function toggleMic() {
-      selfToggledAt = Date.now();
-      fetch(API + '/api/toggle-mic').then(() => {
-        isListening = !isListening;
-        syncMicUI();
-        if (isListening) addMsg('Listening...', 'system');
-      });
-    }
-
-    /* ── Chat input ── */
-    const chatInput = document.getElementById('chat-input');
-    function submitChat() {
-      const text = chatInput.value.trim();
-      if (!text) return;
-      chatInput.value = '';
-      quickCmd(text);
-    }
-    chatInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter') submitChat();
-    });
-
-    /* ── Quick command ── */
-    function quickCmd(cmd) {
-      addMsg(cmd, 'user');
-      fetch(API + '/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: cmd })
-      })
-      .then(r => r.json())
-      .then(d => {
+    async function sendCmd(msg) {
+      if (!msg.trim()) return;
+      appendMsg('USER', msg);
+      input.value = '';
+      
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: msg })
+        });
+        const d = await res.json();
         if (d.success && d.reply) {
-          addMsg(d.reply.text, 'ai');
+          appendMsg('JENNY', d.reply.text);
           if (d.reply.command && d.reply.command.action !== 'vault-save') {
-            fetch(API + '/api/control', {
+            await fetch('/api/control', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(d.reply.command)
             });
           }
-        } else addMsg('No response.', 'system');
-      })
-      .catch(() => addMsg('Connection error.', 'system'));
-    }
-
-    /* ── Messages ── */
-    function addMsg(text, role) {
-      const container = document.getElementById('chat-msgs');
-      const div = document.createElement('div');
-      div.className = 'bubble ' + role;
-      div.textContent = text;
-      container.appendChild(div);
-      const chat = document.getElementById('chat');
-      chat.scrollTop = chat.scrollHeight;
-      while (container.children.length > 25) container.removeChild(container.children[1]);
-    }
-
-    /* ── Summon panel (opens desktop app) ── */
-    function summonPanel(name) {
-      if (window.webkit && window.webkit.messageHandlers) {
-        window.webkit.messageHandlers.openDesktopApp.postMessage('summon:' + name);
-      } else {
-        window.open('http://localhost:3000?panel=' + name, '_blank');
+        }
+      } catch (e) {
+        appendMsg('JENNY', 'Command execution error.');
       }
     }
 
-    /* ── Open desktop app ── */
-    function openDesktop() {
-      if (window.webkit && window.webkit.messageHandlers) {
+    sendBtn.addEventListener('click', () => sendCmd(input.value));
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendCmd(input.value); });
+
+    document.querySelectorAll('.power-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const cmd = btn.dataset.cmd;
+        if (cmd) sendCmd(cmd);
+      });
+    });
+
+    document.getElementById('open-main-btn').addEventListener('click', () => {
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.openFullApp) {
+        window.webkit.messageHandlers.openFullApp.postMessage('open');
+      } else {
+        window.open('http://localhost:3000', '_blank');
+      }
+    });
+
+    document.getElementById('open-desktop-btn').addEventListener('click', () => {
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.openDesktopApp) {
         window.webkit.messageHandlers.openDesktopApp.postMessage('open');
       } else {
         window.open('http://localhost:3000', '_blank');
       }
-    }
+    });
 
-    /* ── Stats ── */
-    function refreshStats() {
-      fetch(API + '/api/system-status')
-        .then(r => r.json())
-        .then(d => {
-          if (!d.success) return;
-          document.getElementById('s-cpu').textContent = (d.cpu?.usage || 0) + '%';
-          document.getElementById('s-ram').textContent = (d.ram?.usage || 0) + '%';
-          const b = d.battery?.level;
-          document.getElementById('s-batt').textContent = (b != null ? b : '--') + '%';
-        })
-        .catch(() => setStatus(false));
-    }
-    setInterval(refreshStats, 5000);
-    refreshStats();
+    document.getElementById('open-training-btn').addEventListener('click', () => {
+      sendCmd('my training');
+    });
 
-    /* ── Mic state poll ── */
-    let lastToggle = 0;
-    let selfToggledAt = 0;
-    function pollMicState() {
-      fetch(API + '/api/toggle-mic-poll')
-        .then(r => r.json())
-        .then(d => {
-          if (d.lastToggle && d.lastToggle !== lastToggle) {
-            lastToggle = d.lastToggle;
-            if (Date.now() - selfToggledAt > 1500) {
-              isListening = !isListening;
-              syncMicUI();
-            }
-          }
-        })
-        .catch(() => {});
-    }
-    function syncMicUI() {
-      const orb = document.getElementById('orb-wrap');
-      const st = document.getElementById('status-text');
-      const badge = document.getElementById('status-badge');
-      if (isListening) {
-        orb.classList.add('active');
-        orb.classList.remove('speaking');
-        st.textContent = 'LISTENING';
-        badge.className = 'hdr-status listening';
-      } else {
-        orb.classList.remove('active');
-        orb.classList.remove('speaking');
-        st.textContent = 'ONLINE';
-        badge.className = 'hdr-status online';
-      }
-    }
-    setInterval(pollMicState, 2000);
-
-    /* ── Wave animation ── */
-    const canvas = document.getElementById('wave-canvas');
+    // CANVAS ORB ANIMATION
+    const canvas = document.getElementById('orb-canvas');
     const ctx = canvas.getContext('2d');
-    let step = 0;
-    function drawWave() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      step += 0.06;
-      const amp = isListening ? 10 : 2.5;
-      const colors = [
-        ['rgba(0,212,230,0.5)', 0],
-        ['rgba(255,45,135,0.35)', 1.2],
-        ['rgba(139,92,246,0.25)', 2.4]
-      ];
-      colors.forEach(([color, offset]) => {
+    let frame = 0;
+    let isListening = false;
+
+    function drawOrb() {
+      frame++;
+      const W = canvas.width, H = canvas.height;
+      const cx = W / 2, cy = H / 2;
+      ctx.clearRect(0, 0, W, H);
+      const t = frame * 0.03;
+
+      for (let i = 0; i < 3; i++) {
+        const r = 24 + i * 8;
         ctx.beginPath();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = isListening ? 1.5 : 1;
-        for (let x = 0; x < canvas.width; x += 2) {
-          const y = canvas.height / 2 + Math.sin(x * 0.04 + step + offset) * amp * Math.sin((x / canvas.width) * Math.PI);
-          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-        }
+        ctx.arc(cx, cy, r + Math.sin(t + i) * 3, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(229,193,88,${0.15 + i * 0.1})`;
+        ctx.lineWidth = 1;
         ctx.stroke();
+      }
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, 18 + Math.sin(t * 1.5) * 2, 0, Math.PI * 2);
+      ctx.fillStyle = isListening ? 'rgba(229,193,88,0.7)' : 'rgba(229,193,88,0.3)';
+      ctx.fill();
+
+      requestAnimationFrame(drawOrb);
+    }
+    drawOrb();
+
+    // SPEECH RECOGNITION
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SR) {
+      const r = new SR();
+      r.continuous = false;
+      r.interimResults = false;
+      r.onstart = () => { isListening = true; micHint.textContent = 'LISTENING FOR VOICE COMMAND...'; };
+      r.onresult = (e) => { sendCmd(e.results[0][0].transcript); };
+      r.onend = () => { isListening = false; micHint.textContent = 'TAP ORB OR TYPE COMMAND'; };
+      r.onerror = () => { isListening = false; micHint.textContent = 'TAP ORB OR TYPE COMMAND'; };
+
+      orbTrigger.addEventListener('click', () => {
+        if (isListening) r.stop();
+        else r.start();
       });
-      requestAnimationFrame(drawWave);
     }
-    drawWave();
 
-    /* ── Server health check ── */
-    function checkHealth() {
-      fetch(API + '/api/system-status')
-        .then(r => { setStatus(r.ok); })
-        .catch(() => setStatus(false));
+    // TELEMETRY REFRESH
+    async function updateTelemetry() {
+      try {
+        const res = await fetch('/api/system-status');
+        const d = await res.json();
+        if (d.success) {
+          document.getElementById('hud-cpu').textContent = (d.cpu?.usage || 0) + '%';
+          document.getElementById('hud-ram').textContent = (d.ram?.usage || 0) + '%';
+          document.getElementById('hud-bat').textContent = Math.round(d.battery?.level || 100) + '%';
+          document.getElementById('hud-up').textContent = Math.floor((d.uptime || 0) / 3600) + 'h';
+        }
+      } catch {}
     }
-    setInterval(checkHealth, 10000);
-
-    /* ── Focus input on load ── */
-    window.addEventListener('load', () => { chatInput.focus(); });
+    updateTelemetry();
+    setInterval(updateTelemetry, 4000);
   </script>
 </body>
 </html>
