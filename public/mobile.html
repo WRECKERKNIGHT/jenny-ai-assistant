@@ -383,12 +383,16 @@
     function speakMobile(text) {
       if (!('speechSynthesis' in window) || !text) return;
       window.speechSynthesis.cancel();
-      const clean = text.replace(/[*_#`~]/g, '').replace(/https?:\/\/\S+/g, 'link').trim();
-      const u = new SpeechSynthesisUtterance(clean);
-      u.rate = 1.0;
-      u.pitch = 1.05;
+      const clean = text.replace(/[*_#`~]/g, '').replace(/https?:\/\/\S+/g, '').replace(/\n+/g, '. ').trim();
+      if (!clean) return;
+      const sentences = clean.match(/[^.!?]+[.!?]+/g) || [clean];
+      const spokenText = sentences.slice(0, 2).join(' ').slice(0, 160).trim();
+
+      const u = new SpeechSynthesisUtterance(spokenText);
+      u.rate = 1.05;
+      u.pitch = 1.0;
       const voices = window.speechSynthesis.getVoices();
-      const female = voices.find(v => /samantha|karen|moira|tessa|google.*female|zira/i.test(v.name)) || voices[0];
+      const female = voices.find(v => /samantha|karen|moira|tessa|zira|google.*female/i.test(v.name)) || voices[0];
       if (female) u.voice = female;
       window.speechSynthesis.speak(u);
     }

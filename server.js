@@ -2431,10 +2431,11 @@ DO NOT wrap JSON in code fences. Output raw JSON only.`
           headers: {
             'Content-Type': 'application/json'
           },
+          signal: AbortSignal.timeout(2000),
           body: JSON.stringify({
             contents: contentsPayload,
             generationConfig: {
-              maxOutputTokens: 1024,
+              maxOutputTokens: 250,
               temperature: 0.7,
               responseMimeType: "application/json"
             }
