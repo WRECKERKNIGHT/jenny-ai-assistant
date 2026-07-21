@@ -1050,6 +1050,33 @@ app.get('/api/emails', (req, res) => {
   });
 });
 
+// Endpoint to read macOS notifications and Discord DMs
+app.get('/api/notifications', (req, res) => {
+  const pyScript = path.join(__dirname, 'scripts', 'read-notifications.py');
+  exec(`python3 "${pyScript}"`, (err, stdout) => {
+    if (err) return res.json({ success: False, error: err.message });
+    try {
+      const data = JSON.parse(stdout);
+      res.json(data);
+    } catch (e) {
+      res.json({ success: false, error: 'Failed to parse notification JSON' });
+    }
+  });
+});
+
+app.get('/api/discord-dms', (req, res) => {
+  const pyScript = path.join(__dirname, 'scripts', 'read-notifications.py');
+  exec(`python3 "${pyScript}"`, (err, stdout) => {
+    if (err) return res.json({ success: false, error: err.message });
+    try {
+      const data = JSON.parse(stdout);
+      res.json({ success: true, discord_dms: data.discord_dms || [] });
+    } catch (e) {
+      res.json({ success: false, error: 'Failed to parse Discord DMs' });
+    }
+  });
+});
+
 // Endpoint to list active applications on macOS
 app.get('/api/active-apps', (req, res) => {
   const platform = os.platform();
@@ -2142,6 +2169,46 @@ app.post('/api/chat', async (req, res) => {
           speech: `Agentic task completed, BOSS. Project ${targetProj} polished, README generated, and committed to GitHub.`
         }
       });
+    });
+    return;
+  }
+
+  // --- DISCORD DMS & MAC NOTIFICATIONS ---
+  if (query.match(/discord|cursed_king|unread message|check dm|read dm|notification/i)) {
+    const pyScript = path.join(__dirname, 'scripts', 'read-notifications.py');
+    exec(`python3 "${pyScript}"`, (err, stdout) => {
+      let data = { notifications: [], discord_dms: [] };
+      try { data = JSON.parse(stdout); } catch {}
+
+      const dms = data.discord_dms || [];
+      if (query.includes('discord') || query.includes('cursed_king') || query.includes('dm')) {
+        if (dms.length > 0) {
+          const sender = dms[0].sender || dms[0].title || 'cursed_king';
+          const speechMsg = `BOSS, there are ${dms.length} unread messages from ${sender} on Discord.`;
+          const detailedText = `💬 DISCORD DMs (${dms.length} Unread):\n` + dms.map(d => `- From ${d.sender || d.title || 'cursed_king'}: "${d.body}"`).join('\n');
+          return res.json({
+            success: true,
+            reply: { text: detailedText, speech: speechMsg }
+          });
+        } else {
+          return res.json({
+            success: true,
+            reply: { text: 'No new unread Discord DMs, BOSS.', speech: 'No new Discord messages, BOSS.' }
+          });
+        }
+      }
+
+      // General Notifications
+      const notifs = data.notifications || [];
+      if (notifs.length > 0) {
+        const topNotifs = notifs.slice(0, 5);
+        const text = `🔔 SYSTEM NOTIFICATIONS (${notifs.length} Total):\n` + topNotifs.map((n, i) => `${i+1}. [${n.app.split('.').pop()}] ${n.title ? n.title + ': ' : ''}${n.body.slice(0, 80)}`).join('\n');
+        return res.json({
+          success: true,
+          reply: { text, speech: `BOSS, you have ${notifs.length} system notifications.` }
+        });
+      }
+      return res.json({ success: true, reply: { text: 'No unread system notifications, BOSS.', speech: 'No new notifications, BOSS.' } });
     });
     return;
   }
