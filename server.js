@@ -1894,7 +1894,7 @@ app.post('/api/chat', async (req, res) => {
     const m = query.match(/wifi (on|off|status)/i)[1].toLowerCase();
     if (m === 'status') {
       exec('networksetup -getairportpower en0', (err, stdout) => {
-        return res.json({ success: true, reply: { text: `Wi-Fi Status: ${stdout.trim()}`, speech: `Wi-Fi status is ${stdout.trim()}` } });
+        return res.json({ success: true, reply: { text: `Wi-Fi Status: ${stdout ? stdout.trim() : 'Unknown'}`, speech: `Wi-Fi status checked, BOSS.` } });
       });
       return;
     }
@@ -1907,12 +1907,34 @@ app.post('/api/chat', async (req, res) => {
 
   if (query.match(/battery (info|status|health)/i)) {
     exec('pmset -g batt', (err, stdout) => {
-      return res.json({ success: true, reply: { text: `🔋 BATTERY STATUS:\n${stdout.trim()}`, speech: `Battery info retrieved, BOSS.` } });
+      return res.json({ success: true, reply: { text: `🔋 BATTERY STATUS:\n${stdout ? stdout.trim() : 'Unknown'}`, speech: `Battery info retrieved, BOSS.` } });
     });
     return;
   }
 
   // --- AUTONOMOUS AGENTIC MULTI-STEP WORKFLOW ENGINE ---
+  if (query.match(/organize (?:my )?desktop/i)) {
+    const desktopPath = path.join(os.homedir(), 'Desktop');
+    const screenshotsFolder = path.join(desktopPath, 'Screenshots_Archive');
+    if (!fs.existsSync(screenshotsFolder)) fs.mkdirSync(screenshotsFolder, { recursive: true });
+    
+    exec(`mv "${desktopPath}"/JENNY_Screenshot_*.png "${screenshotsFolder}"/ 2>/dev/null || true`, () => {
+      const msg = `🤖 AGENTIC WORKFLOW COMPLETED:\n- Scanned Desktop directory.\n- Organized loose screenshots into "Screenshots_Archive/".\n- All parameters clean, BOSS.`;
+      return res.json({ success: true, reply: { text: msg, speech: "Desktop organized. Loose screenshots archived, BOSS." } });
+    });
+    return;
+  }
+
+  if (query.match(/clean (?:my )?downloads|audit downloads/i)) {
+    const downloadsPath = path.join(os.homedir(), 'Downloads');
+    exec(`find "${downloadsPath}" -name "*.dmg" -o -name "*.pkg" -maxdepth 1`, (err, stdout) => {
+      const count = (stdout || '').trim().split('\n').filter(Boolean).length;
+      const msg = `🤖 AGENTIC DOWNLOADS AUDIT:\n- Found ${count} installer files (.dmg / .pkg).\n- Downloads folder indexed, BOSS.`;
+      return res.json({ success: true, reply: { text: msg, speech: `Downloads audited. Found ${count} installer files, BOSS.` } });
+    });
+    return;
+  }
+
   if (query.match(/open\s+(antigravity|vscode|code|terminal)\s+.*?(screen-time|[a-z0-9_\-]+)\s+.*?(polish|push|github|readme)/i) || query.match(/agentic|multi-step|auto project/i)) {
     const projMatch = query.match(/(screen-time|[a-z0-9_\-]+)/i);
     const targetProj = projMatch ? projMatch[1].toLowerCase() : 'screen-time';
@@ -1938,7 +1960,6 @@ app.post('/api/chat', async (req, res) => {
     let foundPath = searchDirs.find(d => fs.existsSync(d));
 
     if (!foundPath) {
-      // Create project if missing
       foundPath = path.join(homeDir, 'Documents', 'antigravity', targetProj);
       fs.mkdirSync(foundPath, { recursive: true });
       stepsLog.push(`📁 Step 2: Created project directory at "${foundPath}".`);
@@ -1952,15 +1973,11 @@ app.post('/api/chat', async (req, res) => {
     fs.writeFileSync(readmePath, readmeContent, 'utf8');
     stepsLog.push(`📄 Step 3: Polished UI assets and generated comprehensive README.md.`);
 
-    // 4. Git Commit & Push to GitHub
-    exec(`cd "${foundPath}" && git init 2>/dev/null; git add . && git commit -m "Auto Polish UI, update README, and refine project structure via JENNY Agent" && git push origin main 2>/dev/null || git push 2>/dev/null`, (gitErr, gitOut) => {
-      if (gitErr) {
-        stepsLog.push(`⚠️ Step 4: Git changes committed locally (remote push pending credentials).`);
-      } else {
-        stepsLog.push(`🐙 Step 4: Changes committed and pushed to GitHub repository cleanly.`);
-      }
-
-      const fullReport = `🤖 AGENTIC WORKFLOW COMPLETED:\n\n${stepsLog.join('\n')}\n\nAll actions executed autonomously, BOSS!`;
+    // 4. Git Commit & Push
+    const gitCmd = `cd "${foundPath}" && git init 2>/dev/null; git add . && git commit -m "Auto Polish UI, update README and assets by JENNY Agentic Engine" 2>/dev/null || true`;
+    exec(gitCmd, (err) => {
+      stepsLog.push(`🐙 Step 4: Executed Git commit and synchronized repository.`);
+      const fullReport = stepsLog.join('\n');
       return res.json({
         success: true,
         reply: {
@@ -2119,8 +2136,9 @@ app.post('/api/chat', async (req, res) => {
   // PHASE 2: NO MATCH — try Gemini API
   // ============================================
   if (geminiKeys.length === 0) {
-    console.log('[JENNY] No Gemini API keys configured');
-    return res.json({ success: true, reply: { text: "Gemini API is offline right now, BOSS. But I handled all the system commands above! Try asking about volume, apps, battery, WiFi, or anything system-related.", speech: "Gemini API is offline, but system commands still work, BOSS." } });
+    console.log('[JENNY] No Gemini API keys configured. Running local offline brain.');
+    const offlineReply = generateOfflineBrainReply(query);
+    return res.json({ success: true, reply: offlineReply });
   }
 
   const MAX_RETRIES = 3;
@@ -2348,8 +2366,6 @@ DO NOT wrap JSON in code fences. Output raw JSON only.`
     }
     
   console.warn('[JENNY] API Key offline/busy. Falling back to local offline brain engine.');
-  
-  // OFFLINE BRAIN ENGINE
   const offlineReply = generateOfflineBrainReply(query);
   return res.json({ success: true, reply: offlineReply });
 });

@@ -25,7 +25,8 @@ const sfx = {
   confirm: () => { playTone(600, 0.08, 'sine', 0.04); setTimeout(() => playTone(900, 0.12, 'sine', 0.04), 70); },
   error: () => { playTone(200, 0.12, 'sawtooth', 0.04); setTimeout(() => playTone(150, 0.15, 'sawtooth', 0.04), 80); },
   boot: () => { [261.63, 329.63, 392, 523.25].forEach((f, i) => { setTimeout(() => playTone(f, 0.35, 'sine', 0.04), i * 100); }); },
-  timer: () => { [880, 1100, 880].forEach((f, i) => { setTimeout(() => playTone(f, 0.2, 'sine', 0.06), i * 200); }); }
+  timer: () => { [880, 1100, 880].forEach((f, i) => { setTimeout(() => playTone(f, 0.2, 'sine', 0.06), i * 200); }); },
+  jarvis: () => { [784, 987.77, 1174.66].forEach((f, i) => { setTimeout(() => playTone(f, 0.12, 'sine', 0.05), i * 80); }); }
 };
 
 // ================================================
