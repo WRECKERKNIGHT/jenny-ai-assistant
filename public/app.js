@@ -26,7 +26,13 @@ const sfx = {
   error: () => { playTone(200, 0.12, 'sawtooth', 0.04); setTimeout(() => playTone(150, 0.15, 'sawtooth', 0.04), 80); },
   boot: () => { [261.63, 329.63, 392, 523.25].forEach((f, i) => { setTimeout(() => playTone(f, 0.35, 'sine', 0.04), i * 100); }); },
   timer: () => { [880, 1100, 880].forEach((f, i) => { setTimeout(() => playTone(f, 0.2, 'sine', 0.06), i * 200); }); },
-  jarvis: () => { [784, 987.77, 1174.66].forEach((f, i) => { setTimeout(() => playTone(f, 0.12, 'sine', 0.05), i * 80); }); }
+  jarvis: () => { [784, 987.77, 1174.66].forEach((f, i) => { setTimeout(() => playTone(f, 0.12, 'sine', 0.05), i * 80); }); },
+  startupMusic: () => {
+    const chord = [261.63, 329.63, 392.00, 493.88, 587.33, 659.25]; // Cmaj9 Ambient Chord
+    chord.forEach((freq, idx) => {
+      setTimeout(() => playTone(freq, 2.5, 'sine', 0.05), idx * 120);
+    });
+  }
 };
 
 // ================================================
@@ -305,6 +311,7 @@ async function runBoot() {
     }
     app.style.display = 'flex';
     sfx.confirm();
+    sfx.startupMusic();
     if (audioCtx && audioCtx.state === 'suspended') {
       audioCtx.resume();
     }
@@ -1685,37 +1692,72 @@ async function sendMessage(text) {
 // ================================================
 function speak(text) {
   if (!text) return;
+  const cleanText = text.replace(/[*_#`~]/g, '').replace(/https?:\/\/\S+/g, 'link').trim();
+  if (!cleanText) return;
+
   const mem = loadOfflineMemory();
-  const voiceId = mem.voiceId || '21m00Tcm4TlvDq8ikWAM';
-  if (voiceId.startsWith('web-')) { speakWeb(text, voiceId.replace('web-', '')); return; }
+  const voiceId = mem.voiceId || 'web-samantha';
+  if (voiceId.startsWith('web-')) {
+    speakWeb(cleanText, voiceId.replace('web-', ''));
+    return;
+  }
+
   setOrbState('speaking');
-  fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, voiceId }) })
+  
+  // Instant fallback controller with 1.2s timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+    speakWeb(cleanText);
+  }, 1200);
+
+  fetch('/api/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: cleanText, voiceId }),
+    signal: controller.signal
+  })
     .then(async (res) => {
+      clearTimeout(timeoutId);
       const data = await res.json().catch(() => null);
-      if (data && data.fallback) { speakWeb(text); }
+      if (data && data.fallback) { speakWeb(cleanText); }
       else {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
         audio.playbackRate = mem.speechRate || 1.0;
         audio.onended = () => setOrbState('idle');
-        audio.play().catch(() => speakWeb(text));
+        audio.play().catch(() => speakWeb(cleanText));
       }
-    }).catch(() => speakWeb(text));
+    }).catch(() => {
+      clearTimeout(timeoutId);
+      speakWeb(cleanText);
+    });
 }
 
 function speakWeb(text, voiceName) {
   if (!('speechSynthesis' in window)) { setOrbState('idle'); return; }
-  const mem = loadOfflineMemory();
+  const cleanText = text.replace(/[*_#`~]/g, '').replace(/https?:\/\/\S+/g, 'link').trim();
   setOrbState('speaking');
   window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.rate = 0.9;
-  u.pitch = 1.0;
+
+  const u = new SpeechSynthesisUtterance(cleanText);
+  u.rate = 1.0;
+  u.pitch = 1.05;
   u.volume = 1.0;
+
   const voices = window.speechSynthesis.getVoices();
-  if (voiceName) { const match = voices.find(v => v.name.toLowerCase().includes(voiceName)); if (match) u.voice = match; }
-  if (!u.voice) { const female = voices.find(v => /samantha|karen|moira|tessa|google.*female|zira|google uk english female/i.test(v.name)) || voices.find(v => /female/i.test(v.name)) || voices[0]; if (female) u.voice = female; }
+  let selectedVoice = null;
+  if (voiceName) {
+    selectedVoice = voices.find(v => v.name.toLowerCase().includes(voiceName.toLowerCase()));
+  }
+  if (!selectedVoice) {
+    selectedVoice = voices.find(v => /samantha|karen|moira|tessa|google.*female|zira|victoria|fiona/i.test(v.name))
+                 || voices.find(v => /female/i.test(v.name))
+                 || voices[0];
+  }
+  if (selectedVoice) u.voice = selectedVoice;
+
   u.onend = () => setOrbState('idle');
   u.onerror = () => setOrbState('idle');
   window.speechSynthesis.speak(u);

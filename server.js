@@ -3110,8 +3110,19 @@ function autoOpenBrowser() {
   }
 }
 
-// Start listening
-app.listen(PORT, () => {
-  console.log(`[FRIDAY] Personal Assistant Server running at http://localhost:${PORT}`);
+// Start listening on all network interfaces (0.0.0.0) so phone can connect
+app.listen(PORT, '0.0.0.0', () => {
+  const nets = os.networkInterfaces();
+  let localIp = '127.0.0.1';
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        localIp = net.address;
+        break;
+      }
+    }
+  }
+  console.log(`[JENNY] Server running at http://localhost:${PORT}`);
+  console.log(`[JENNY] Mobile Remote App URL: http://${localIp}:${PORT}/mobile.html`);
   autoOpenBrowser();
 });
