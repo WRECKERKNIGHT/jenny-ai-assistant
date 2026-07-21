@@ -2,440 +2,398 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>JENNY AI Mobile Remote</title>
-  <link rel="manifest" href="manifest.json">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>J.E.N.N.Y. Mobile Remote</title>
+  <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#000000">
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/logo.png">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
     :root {
       --bg: #000000;
-      --glass-bg: rgba(0, 0, 0, 0.55);
-      --glass-card: rgba(255, 255, 255, 0.03);
-      --glass-border: rgba(255, 255, 255, 0.12);
+      --glass-bg: rgba(0, 0, 0, 0.6);
+      --glass-card: rgba(255, 255, 255, 0.04);
+      --glass-border: rgba(229, 193, 88, 0.3);
       --gold: #e5c158;
       --gold-dim: rgba(229, 193, 88, 0.2);
       --silver: #c0c0c0;
       --txt: #ffffff;
       --txt2: #d1d5db;
-      --txt3: #9ca3af;
-      --mono: 'SF Mono', -apple-system, BlinkMacSystemFont, monospace;
+      --mono: -apple-system, BlinkMacSystemFont, 'SF Mono', monospace;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
     body {
-      background: var(--bg);
+      background: #000000;
       color: var(--txt);
       font-family: var(--mono);
-      min-height: 100vh;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
       display: flex;
       flex-direction: column;
-      overflow-x: hidden;
       -webkit-tap-highlight-color: transparent;
     }
-    .mobile-header {
+
+    /* NATIVE MOBILE HEADER */
+    .app-header {
+      padding: env(safe-area-inset-top, 16px) 20px 14px;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(30px);
+      -webkit-backdrop-filter: blur(30px);
+      border-bottom: 1px solid var(--glass-border);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 20px;
-      background: rgba(0,0,0,0.8);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--glass-border);
-      position: sticky;
-      top: 0;
-      z-index: 10;
     }
-    .brand {
+    .brand-group {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
     }
-    .brand img {
+    .app-logo {
       width: 32px;
       height: 32px;
-      border-radius: 8px;
+      border-radius: 10px;
       border: 1px solid var(--glass-border);
     }
-    .brand-title {
-      font-size: 16px;
+    .app-title {
+      font-size: 14px;
       font-weight: 800;
-      letter-spacing: 2px;
+      letter-spacing: 3px;
       color: #fff;
     }
-    .brand-subtitle {
+    .app-status {
       font-size: 9px;
       color: var(--gold);
       letter-spacing: 1px;
     }
-    .status-badge {
-      font-size: 10px;
+    .net-badge {
+      font-size: 9px;
       padding: 4px 10px;
-      border-radius: 20px;
-      background: rgba(255,255,255,0.06);
+      border-radius: 12px;
+      background: var(--gold-dim);
       border: 1px solid var(--glass-border);
-      color: var(--silver);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .status-badge.online {
-      border-color: var(--gold-dim);
       color: var(--gold);
     }
-    .dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--silver);
-    }
-    .status-badge.online .dot {
-      background: var(--gold);
-      box-shadow: 0 0 8px var(--gold);
-    }
 
-    .container {
+    /* MAIN APP BODY */
+    .app-body {
       flex: 1;
-      padding: 16px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
-      max-width: 500px;
-      margin: 0 auto;
-      width: 100%;
+      padding: 16px;
+      gap: 14px;
+      overflow-y: auto;
     }
 
-    /* ORB MIC SECTION */
-    .mic-stage {
+    /* ORB TOUCH SECTION */
+    .orb-stage {
+      background: var(--glass-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 20px 16px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 24px 16px;
-      background: var(--glass-card);
-      border: 1px solid var(--glass-border);
-      border-radius: 20px;
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      gap: 12px;
       position: relative;
     }
     .mic-orb {
-      width: 110px;
-      height: 110px;
+      width: 90px;
+      height: 90px;
       border-radius: 50%;
-      border: 2px solid var(--gold-dim);
-      background: radial-gradient(circle at 40% 40%, rgba(229,193,88,0.15), rgba(0,0,0,0.8));
+      background: radial-gradient(circle, rgba(229,193,88,0.3) 0%, rgba(0,0,0,0.8) 70%);
+      border: 2px solid var(--gold);
+      box-shadow: 0 0 30px var(--gold-dim);
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #fff;
-      font-size: 36px;
+      font-size: 28px;
+      color: var(--gold);
       cursor: pointer;
-      box-shadow: 0 0 40px rgba(229,193,88,0.15);
       transition: all 0.3s ease;
     }
-    .mic-orb:active, .mic-orb.listening {
-      transform: scale(1.08);
-      border-color: var(--gold);
-      box-shadow: 0 0 60px rgba(229,193,88,0.4);
-      color: var(--gold);
+    .mic-orb:active {
+      transform: scale(0.92);
+      box-shadow: 0 0 50px var(--gold);
     }
-    .mic-label {
-      font-size: 11px;
+    .mic-orb.listening {
+      border-color: #ff3b30;
+      color: #ff3b30;
+      box-shadow: 0 0 40px rgba(255, 59, 48, 0.5);
+      animation: pulse-red 1.2s infinite;
+    }
+    @keyframes pulse-red {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+    }
+    .orb-hint {
+      font-size: 10px;
       color: var(--silver);
-      letter-spacing: 2px;
-      margin-top: 14px;
-      text-align: center;
-    }
-
-    /* QUICK WORKFLOW CHIPS */
-    .section-title {
-      font-size: 11px;
-      color: var(--gold);
-      letter-spacing: 2px;
+      letter-spacing: 1.5px;
       text-transform: uppercase;
-      margin-bottom: 8px;
-    }
-    .chips-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-    }
-    .chip-btn {
-      background: var(--glass-card);
-      border: 1px solid var(--glass-border);
-      border-radius: 12px;
-      padding: 14px 12px;
-      color: #fff;
-      font-family: var(--mono);
-      font-size: 11px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      cursor: pointer;
-      backdrop-filter: blur(15px);
-      -webkit-backdrop-filter: blur(15px);
-      transition: all 0.2s ease;
-    }
-    .chip-btn:active {
-      background: rgba(229,193,88,0.15);
-      border-color: var(--gold);
-      transform: scale(0.97);
-    }
-    .chip-btn i {
-      font-size: 14px;
-      color: var(--gold);
+      font-weight: 600;
     }
 
-    /* SYSTEM GAUGES */
-    .gauge-grid {
+    /* TELEMETRY METERS */
+    .telemetry-row {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
+      gap: 10px;
     }
-    .gauge-card {
+    .telemeter {
       background: var(--glass-card);
       border: 1px solid var(--glass-border);
-      border-radius: 12px;
-      padding: 12px 8px;
+      border-radius: 14px;
+      padding: 10px;
       text-align: center;
     }
-    .gauge-val {
+    .meter-val {
       font-size: 16px;
-      font-weight: 700;
+      font-weight: 800;
       color: #fff;
       margin-top: 4px;
     }
-    .gauge-lbl {
-      font-size: 9px;
+    .meter-lbl {
+      font-size: 8px;
       color: var(--silver);
       letter-spacing: 1px;
     }
 
-    /* TERMINAL CHAT INPUT */
-    .input-box {
-      display: flex;
-      gap: 8px;
+    /* POWER CONTROL GRID */
+    .section-title {
+      font-size: 10px;
+      color: var(--gold);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .control-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .ctrl-card {
       background: var(--glass-card);
       border: 1px solid var(--glass-border);
       border-radius: 14px;
+      padding: 14px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: var(--txt2);
+      font-size: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .ctrl-card:active {
+      background: var(--gold);
+      color: #000;
+      transform: scale(0.95);
+    }
+    .ctrl-card i {
+      font-size: 16px;
+      color: var(--gold);
+    }
+    .ctrl-card:active i {
+      color: #000;
+    }
+
+    /* COMMAND TERMINAL INPUT */
+    .terminal-box {
+      display: flex;
+      gap: 10px;
+      background: rgba(0,0,0,0.6);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
       padding: 6px;
     }
-    .input-box input {
+    .terminal-input {
       flex: 1;
       background: transparent;
       border: none;
       outline: none;
       color: #fff;
       font-family: var(--mono);
-      font-size: 13px;
-      padding: 8px 12px;
+      font-size: 12px;
+      padding: 10px 14px;
+      user-select: text;
+      -webkit-user-select: text;
     }
-    .input-box button {
-      background: rgba(255,255,255,0.08);
+    .terminal-btn {
+      width: 44px;
+      height: 44px;
+      background: var(--gold-dim);
       border: 1px solid var(--glass-border);
-      border-radius: 10px;
+      border-radius: 12px;
       color: var(--gold);
-      width: 42px;
-      height: 42px;
       font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
     }
-    .input-box button:active {
+    .terminal-btn:active {
       background: var(--gold);
       color: #000;
     }
 
-    /* FEED LOG */
-    .feed-container {
-      flex: 1;
+    /* RESPONSE LOG FEED */
+    .log-feed {
       background: var(--glass-card);
       border: 1px solid var(--glass-border);
-      border-radius: 14px;
+      border-radius: 16px;
       padding: 12px;
-      max-height: 220px;
+      max-height: 160px;
       overflow-y: auto;
       font-size: 11px;
-      line-height: 1.6;
-    }
-    .feed-item {
-      margin-bottom: 8px;
-      border-bottom: 1px solid rgba(255,255,255,0.04);
-      padding-bottom: 6px;
-    }
-    .feed-user { color: var(--silver); }
-    .feed-jenny { color: #fff; border-left: 2px solid var(--gold); padding-left: 8px; }
-
-    /* SERVER CONFIG MODAL */
-    .config-card {
-      background: var(--glass-card);
-      border: 1px solid var(--glass-border);
-      border-radius: 14px;
-      padding: 12px;
+      line-height: 1.5;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
+      flex-direction: column;
+      gap: 6px;
     }
-    .config-card input {
-      flex: 1;
-      background: rgba(0,0,0,0.6);
-      border: 1px solid var(--glass-border);
-      border-radius: 8px;
+    .log-item {
       padding: 6px 10px;
-      color: #fff;
-      font-family: var(--mono);
-      font-size: 10px;
-    }
-    .config-card button {
-      background: rgba(255,255,255,0.08);
-      border: 1px solid var(--glass-border);
       border-radius: 8px;
+      word-break: break-word;
+    }
+    .log-item.user {
+      align-self: flex-end;
+      background: rgba(255,255,255,0.08);
       color: #fff;
-      padding: 6px 12px;
-      font-family: var(--mono);
-      font-size: 10px;
-      cursor: pointer;
+    }
+    .log-item.jenny {
+      align-self: flex-start;
+      background: rgba(0,0,0,0.5);
+      border-left: 3px solid var(--gold);
+      color: var(--txt2);
     }
   </style>
 </head>
 <body>
 
   <!-- HEADER -->
-  <header class="mobile-header">
-    <div class="brand">
-      <img src="logo.png" alt="Jenny">
+  <header class="app-header">
+    <div class="brand-group">
+      <img src="/logo.png" class="app-logo" alt="JENNY">
       <div>
-        <div class="brand-title">J.E.N.N.Y.</div>
-        <div class="brand-subtitle">REMOTE CONTROL MOBILE</div>
+        <div class="app-title">J.E.N.N.Y.</div>
+        <div class="app-status">REMOTE OS 6.0</div>
       </div>
     </div>
-    <div class="status-badge online" id="status-badge">
-      <span class="dot"></span> <span id="status-text">CONNECTED</span>
-    </div>
+    <div class="net-badge" id="net-status">ONLINE</div>
   </header>
 
-  <div class="container">
-    
-    <!-- SERVER URL CONFIG -->
-    <div class="config-card">
-      <span style="font-size:10px; color:var(--silver);">SERVER:</span>
-      <input type="text" id="server-url-input" placeholder="http://192.168.1.X:3000 or ngrok URL">
-      <button id="save-url-btn">SAVE</button>
-    </div>
+  <!-- BODY -->
+  <div class="app-body">
 
-    <!-- MIC ORB -->
-    <div class="mic-stage">
+    <!-- ORB STAGE -->
+    <div class="orb-stage">
       <div class="mic-orb" id="mic-orb">
         <i class="fa-solid fa-microphone"></i>
       </div>
-      <div class="mic-label" id="mic-label">TAP TO SPEAK REMOTE COMMAND</div>
+      <div class="orb-hint" id="orb-hint">TAP ORB FOR VOICE COMMAND</div>
     </div>
 
-    <!-- QUICK ACTIONS -->
-    <div>
-      <div class="section-title"><i class="fa-solid fa-bolt"></i> Quick Remote Workflows</div>
-      <div class="chips-grid">
-        <button class="chip-btn" data-cmd="Hi I am on my way home">
-          <i class="fa-solid fa-car"></i> On Way Home
-        </button>
-        <button class="chip-btn" data-cmd="wake mac display">
-          <i class="fa-solid fa-sun"></i> Wake Display
-        </button>
-        <button class="chip-btn" data-cmd="lock screen">
-          <i class="fa-solid fa-lock"></i> Lock Mac
-        </button>
-        <button class="chip-btn" data-cmd="open youtube">
-          <i class="fa-solid fa-play"></i> Open YouTube
-        </button>
-        <button class="chip-btn" data-cmd="open spotify">
-          <i class="fa-solid fa-music"></i> Open Spotify
-        </button>
-        <button class="chip-btn" data-cmd="volume 80">
-          <i class="fa-solid fa-volume-high"></i> Volume 80%
-        </button>
-        <button class="chip-btn" data-cmd="health check">
-          <i class="fa-solid fa-heart-pulse"></i> Health Check
-        </button>
-        <button class="chip-btn" data-cmd="take screenshot">
-          <i class="fa-solid fa-camera"></i> Screenshot
-        </button>
+    <!-- TELEMETRY -->
+    <div class="telemetry-row">
+      <div class="telemeter">
+        <div class="meter-lbl">CPU</div>
+        <div class="meter-val" id="m-cpu">--%</div>
+      </div>
+      <div class="telemeter">
+        <div class="meter-lbl">RAM</div>
+        <div class="meter-val" id="m-ram">--%</div>
+      </div>
+      <div class="telemeter">
+        <div class="meter-lbl">BATTERY</div>
+        <div class="meter-val" id="m-bat">--%</div>
       </div>
     </div>
 
-    <!-- TELEMETRY GAUGES -->
-    <div>
-      <div class="section-title"><i class="fa-solid fa-chart-simple"></i> Live Mac Status</div>
-      <div class="gauge-grid">
-        <div class="gauge-card">
-          <div class="gauge-lbl">CPU</div>
-          <div class="gauge-val" id="g-cpu">--%</div>
-        </div>
-        <div class="gauge-card">
-          <div class="gauge-lbl">RAM</div>
-          <div class="gauge-val" id="g-ram">--%</div>
-        </div>
-        <div class="gauge-card">
-          <div class="gauge-lbl">BATTERY</div>
-          <div class="gauge-val" id="g-bat">--%</div>
-        </div>
+    <!-- QUICK CONTROLS -->
+    <div class="section-title"><i class="fa-solid fa-bolt"></i> Remote Control Dock</div>
+    <div class="control-grid">
+      <div class="ctrl-card" data-cmd="Hi I am on my way home">
+        <i class="fa-solid fa-car"></i> On Way Home
+      </div>
+      <div class="ctrl-card" data-cmd="wake mac display">
+        <i class="fa-solid fa-sun"></i> Wake Mac
+      </div>
+      <div class="ctrl-card" data-cmd="lock screen">
+        <i class="fa-solid fa-lock"></i> Lock Screen
+      </div>
+      <div class="ctrl-card" data-cmd="purge ram">
+        <i class="fa-solid fa-broom"></i> Purge RAM
+      </div>
+      <div class="ctrl-card" data-cmd="read my emails">
+        <i class="fa-solid fa-envelope"></i> Read Mail
+      </div>
+      <div class="ctrl-card" data-cmd="open youtube">
+        <i class="fa-solid fa-play"></i> YouTube
+      </div>
+      <div class="ctrl-card" data-cmd="volume 80">
+        <i class="fa-solid fa-volume-high"></i> Volume 80%
+      </div>
+      <div class="ctrl-card" data-cmd="system info">
+        <i class="fa-solid fa-microchip"></i> System Info
+      </div>
+      <div class="ctrl-card" data-cmd="take screenshot">
+        <i class="fa-solid fa-camera"></i> Screenshot
       </div>
     </div>
 
-    <!-- CHAT INPUT -->
-    <div class="input-box">
-      <input type="text" id="mobile-input" placeholder="Type remote command for Mac...">
-      <button id="mobile-send-btn"><i class="fa-solid fa-paper-plane"></i></button>
+    <!-- COMMAND TERMINAL -->
+    <div class="terminal-box">
+      <input type="text" id="term-input" class="terminal-input" placeholder="Type remote command...">
+      <button id="term-send" class="terminal-btn"><i class="fa-solid fa-paper-plane"></i></button>
     </div>
 
-    <!-- FEED LOG -->
-    <div class="feed-container" id="feed-container">
-      <div class="feed-item feed-jenny">
-        <strong>JENNY:</strong> Remote link established. Ready for mobile commands, BOSS.
+    <!-- RESPONSE FEED -->
+    <div class="log-feed" id="log-feed">
+      <div class="log-item jenny">
+        <strong>JENNY:</strong> Mobile Remote Link active. Directing Mac OS.
       </div>
     </div>
 
   </div>
 
   <script>
-    let serverUrl = localStorage.getItem('jenny_server_url') || window.location.origin;
-    document.getElementById('server-url-input').value = serverUrl;
-
-    document.getElementById('save-url-btn').addEventListener('click', () => {
-      serverUrl = document.getElementById('server-url-input').value.trim() || window.location.origin;
-      localStorage.setItem('jenny_server_url', serverUrl);
-      addFeedItem('JENNY', `Server URL updated to: ${serverUrl}`);
-    });
-
-    const feedContainer = document.getElementById('feed-container');
-    const mobileInput = document.getElementById('mobile-input');
-    const mobileSendBtn = document.getElementById('mobile-send-btn');
+    const serverUrl = window.location.origin;
+    const logFeed = document.getElementById('log-feed');
+    const termInput = document.getElementById('term-input');
+    const termSend = document.getElementById('term-send');
     const micOrb = document.getElementById('mic-orb');
-    const micLabel = document.getElementById('mic-label');
+    const orbHint = document.getElementById('orb-hint');
 
-    function addFeedItem(sender, text) {
-      const div = document.createElement('div');
-      div.className = `feed-item ${sender === 'USER' ? 'feed-user' : 'feed-jenny'}`;
-      div.innerHTML = `<strong>${sender}:</strong> ${text}`;
-      feedContainer.appendChild(div);
-      feedContainer.scrollTop = feedContainer.scrollHeight;
+    function appendLog(sender, text) {
+      const d = document.createElement('div');
+      d.className = `log-item ${sender === 'USER' ? 'user' : 'jenny'}`;
+      d.innerHTML = `<strong>${sender}:</strong> ${text.replace(/\n/g, '<br>')}`;
+      logFeed.appendChild(d);
+      logFeed.scrollTop = logFeed.scrollHeight;
     }
 
-    async function sendRemoteCommand(cmdText) {
-      if (!cmdText.trim()) return;
-      addFeedItem('USER', cmdText);
-      mobileInput.value = '';
-      
+    async function executeRemote(cmd) {
+      if (!cmd.trim()) return;
+      appendLog('USER', cmd);
+      termInput.value = '';
+
       try {
         const res = await fetch(`${serverUrl}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: cmdText })
+          body: JSON.stringify({ message: cmd })
         });
         const d = await res.json();
         if (d.success && d.reply) {
-          addFeedItem('JENNY', d.reply.text);
+          appendLog('JENNY', d.reply.text);
           if (d.reply.command && d.reply.command.action !== 'vault-save') {
             await fetch(`${serverUrl}/api/control`, {
               method: 'POST',
@@ -443,82 +401,55 @@
               body: JSON.stringify(d.reply.command)
             });
           }
-        } else {
-          addFeedItem('JENNY', 'Command execution failed.');
         }
       } catch (e) {
-        addFeedItem('JENNY', `Connection error: ${e.message}`);
+        appendLog('JENNY', 'Connection error to Mac.');
       }
     }
 
-    mobileSendBtn.addEventListener('click', () => sendRemoteCommand(mobileInput.value));
-    mobileInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendRemoteCommand(mobileInput.value); });
+    termSend.addEventListener('click', () => executeRemote(termInput.value));
+    termInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') executeRemote(termInput.value); });
 
-    document.querySelectorAll('.chip-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const cmd = btn.dataset.cmd;
-        if (cmd) sendRemoteCommand(cmd);
+    document.querySelectorAll('.ctrl-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const cmd = card.dataset.cmd;
+        if (cmd) executeRemote(cmd);
       });
     });
 
     // SPEECH RECOGNITION
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognition = null;
-    let isListening = false;
-
     if (SR) {
-      recognition = new SR();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = 'en-US';
+      const r = new SR();
+      r.continuous = false;
+      r.interimResults = false;
+      let listening = false;
 
-      recognition.onstart = () => {
-        isListening = true;
-        micOrb.classList.add('listening');
-        micLabel.textContent = 'LISTENING FOR REMOTE COMMAND...';
-      };
-      recognition.onresult = (e) => {
-        const text = e.results[0][0].transcript;
-        sendRemoteCommand(text);
-      };
-      recognition.onend = () => {
-        isListening = false;
-        micOrb.classList.remove('listening');
-        micLabel.textContent = 'TAP TO SPEAK REMOTE COMMAND';
-      };
-      recognition.onerror = () => {
-        isListening = false;
-        micOrb.classList.remove('listening');
-        micLabel.textContent = 'TAP TO SPEAK REMOTE COMMAND';
-      };
+      r.onstart = () => { listening = true; micOrb.classList.add('listening'); orbHint.textContent = 'LISTENING...'; };
+      r.onresult = (e) => { executeRemote(e.results[0][0].transcript); };
+      r.onend = () => { listening = false; micOrb.classList.remove('listening'); orbHint.textContent = 'TAP ORB FOR VOICE COMMAND'; };
+      r.onerror = () => { listening = false; micOrb.classList.remove('listening'); orbHint.textContent = 'TAP ORB FOR VOICE COMMAND'; };
 
       micOrb.addEventListener('click', () => {
-        if (isListening) recognition.stop();
-        else recognition.start();
+        if (listening) r.stop();
+        else r.start();
       });
-    } else {
-      micLabel.textContent = 'SPEECH MIC NOT SUPPORTED ON THIS BROWSER';
     }
 
-    // SYSTEM GAUGES MONITOR
-    async function updateTelemetry() {
+    // TELEMETRY REFRESH
+    async function refreshTelemetry() {
       try {
         const res = await fetch(`${serverUrl}/api/system-status`);
         const d = await res.json();
         if (d.success) {
-          document.getElementById('g-cpu').textContent = (d.cpu?.usage || 0) + '%';
-          document.getElementById('g-ram').textContent = (d.ram?.usage || 0) + '%';
-          document.getElementById('g-bat').textContent = Math.round(d.battery?.level || 100) + '%';
-          document.getElementById('status-badge').classList.add('online');
-          document.getElementById('status-text').textContent = 'CONNECTED';
+          document.getElementById('m-cpu').textContent = (d.cpu?.usage || 0) + '%';
+          document.getElementById('m-ram').textContent = (d.ram?.usage || 0) + '%';
+          document.getElementById('m-bat').textContent = Math.round(d.battery?.level || 100) + '%';
         }
-      } catch {
-        document.getElementById('status-badge').classList.remove('online');
-        document.getElementById('status-text').textContent = 'DISCONNECTED';
-      }
+      } catch {}
     }
-    updateTelemetry();
-    setInterval(updateTelemetry, 5000);
+    refreshTelemetry();
+    setInterval(refreshTelemetry, 3000);
   </script>
 </body>
 </html>

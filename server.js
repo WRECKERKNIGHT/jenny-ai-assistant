@@ -20,6 +20,19 @@ app.use(express.json());
 // Serve static frontend files from 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
+// %20 Auto-Fix Middleware & Clean App Routes
+app.use((req, res, next) => {
+  const url = decodeURIComponent(req.url).toLowerCase();
+  if (url.includes('mobile')) {
+    return res.sendFile(path.join(__dirname, 'public', 'mobile.html'));
+  }
+  next();
+});
+
+app.get('/mobile', (req, res) => res.sendFile(path.join(__dirname, 'public', 'mobile.html')));
+app.get('/app', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/hud', (req, res) => res.sendFile(path.join(__dirname, 'public', 'mini.html')));
+
 // ================================================
 // REMOTE ACCESS AUTHENTICATION
 // ================================================
