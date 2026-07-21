@@ -1690,52 +1690,68 @@ async function sendMessage(text) {
 // ================================================
 // VOICE — TTS
 // ================================================
+window._speechUtteranceStore = [];
+window._speechHeartbeat = null;
+
 function speak(text) {
   if (!text || !('speechSynthesis' in window)) return;
+  
   window.speechSynthesis.cancel();
-  const clean = text.replace(/[*_#`~]/g, '').replace(/https?:\/\/\S+/g, '').trim();
+  if (window._speechHeartbeat) clearInterval(window._speechHeartbeat);
+  window._speechUtteranceStore = [];
+
+  const clean = text
+    .replace(/[*_#`~]/g, '')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
   if (!clean) return;
 
-  const u = new SpeechSynthesisUtterance(clean);
+  const sentences = clean.match(/[^.!?]+[.!?]+/g) || [clean];
+  const spokenText = sentences[0].slice(0, 140).trim();
+
+  const u = new SpeechSynthesisUtterance(spokenText);
+  window._speechUtteranceStore.push(u);
+
   u.rate = 1.0;
   u.pitch = 1.0;
-  
-  const voices = window.speechSynthesis.getVoices();
-  const female = voices.find(v => /samantha|karen|moira|tessa|zira|google.*female/i.test(v.name)) || voices[0];
-  if (female) u.voice = female;
-
-  setOrbState('speaking');
-  u.onend = () => setOrbState('idle');
-  u.onerror = () => setOrbState('idle');
-  window.speechSynthesis.speak(u);
-}
-
-function speakWeb(text, voiceName) {
-  if (!('speechSynthesis' in window)) { setOrbState('idle'); return; }
-  const cleanText = text.replace(/[*_#`~]/g, '').replace(/https?:\/\/\S+/g, 'link').trim();
-  setOrbState('speaking');
-  window.speechSynthesis.cancel();
-
-  const u = new SpeechSynthesisUtterance(cleanText);
-  u.rate = 1.0;
-  u.pitch = 1.05;
   u.volume = 1.0;
 
   const voices = window.speechSynthesis.getVoices();
-  let selectedVoice = null;
-  if (voiceName) {
-    selectedVoice = voices.find(v => v.name.toLowerCase().includes(voiceName.toLowerCase()));
-  }
-  if (!selectedVoice) {
-    selectedVoice = voices.find(v => /samantha|karen|moira|tessa|google.*female|zira|victoria|fiona/i.test(v.name))
-                 || voices.find(v => /female/i.test(v.name))
-                 || voices[0];
-  }
-  if (selectedVoice) u.voice = selectedVoice;
+  const female = voices.find(v => /samantha|karen|moira|tessa|zira|google.*female/i.test(v.name))
+              || voices.find(v => v.lang.startsWith('en'))
+              || voices[0];
+  if (female) u.voice = female;
 
-  u.onend = () => setOrbState('idle');
-  u.onerror = () => setOrbState('idle');
+  if (typeof setOrbState === 'function') setOrbState('speaking');
+
+  window._speechHeartbeat = setInterval(() => {
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.pause();
+      window.speechSynthesis.resume();
+    } else {
+      clearInterval(window._speechHeartbeat);
+    }
+  }, 1400);
+
+  u.onend = () => {
+    if (window._speechHeartbeat) clearInterval(window._speechHeartbeat);
+    window._speechUtteranceStore = [];
+    if (typeof setOrbState === 'function') setOrbState('idle');
+  };
+
+  u.onerror = () => {
+    if (window._speechHeartbeat) clearInterval(window._speechHeartbeat);
+    window._speechUtteranceStore = [];
+    if (typeof setOrbState === 'function') setOrbState('idle');
+  };
+
   window.speechSynthesis.speak(u);
+}
+
+function speakWeb(text) {
+  speak(text);
 }
 
 // ================================================

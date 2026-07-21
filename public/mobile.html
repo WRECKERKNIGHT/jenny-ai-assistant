@@ -380,20 +380,57 @@
       logFeed.scrollTop = logFeed.scrollHeight;
     }
 
+    window._speechUtteranceStore = [];
+    window._speechHeartbeat = null;
+
     function speakMobile(text) {
       if (!('speechSynthesis' in window) || !text) return;
+      
       window.speechSynthesis.cancel();
-      const clean = text.replace(/[*_#`~]/g, '').replace(/https?:\/\/\S+/g, '').replace(/\n+/g, '. ').trim();
+      if (window._speechHeartbeat) clearInterval(window._speechHeartbeat);
+      window._speechUtteranceStore = [];
+
+      const clean = text
+        .replace(/[*_#`~]/g, '')
+        .replace(/https?:\/\/\S+/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
       if (!clean) return;
+
       const sentences = clean.match(/[^.!?]+[.!?]+/g) || [clean];
-      const spokenText = sentences.slice(0, 2).join(' ').slice(0, 160).trim();
+      const spokenText = sentences[0].slice(0, 140).trim();
 
       const u = new SpeechSynthesisUtterance(spokenText);
+      window._speechUtteranceStore.push(u);
+
       u.rate = 1.05;
       u.pitch = 1.0;
+      u.volume = 1.0;
+
       const voices = window.speechSynthesis.getVoices();
       const female = voices.find(v => /samantha|karen|moira|tessa|zira|google.*female/i.test(v.name)) || voices[0];
       if (female) u.voice = female;
+
+      window._speechHeartbeat = setInterval(() => {
+        if (window.speechSynthesis.speaking) {
+          window.speechSynthesis.pause();
+          window.speechSynthesis.resume();
+        } else {
+          clearInterval(window._speechHeartbeat);
+        }
+      }, 1400);
+
+      u.onend = () => {
+        if (window._speechHeartbeat) clearInterval(window._speechHeartbeat);
+        window._speechUtteranceStore = [];
+      };
+
+      u.onerror = () => {
+        if (window._speechHeartbeat) clearInterval(window._speechHeartbeat);
+        window._speechUtteranceStore = [];
+      };
+
       window.speechSynthesis.speak(u);
     }
 
