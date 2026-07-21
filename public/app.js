@@ -1691,48 +1691,23 @@ async function sendMessage(text) {
 // VOICE — TTS
 // ================================================
 function speak(text) {
-  if (!text) return;
-  const cleanText = text.replace(/[*_#`~]/g, '').replace(/https?:\/\/\S+/g, 'link').trim();
-  if (!cleanText) return;
+  if (!text || !('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const clean = text.replace(/[*_#`~]/g, '').replace(/https?:\/\/\S+/g, '').trim();
+  if (!clean) return;
 
-  const mem = loadOfflineMemory();
-  const voiceId = mem.voiceId || 'web-samantha';
-  if (voiceId.startsWith('web-')) {
-    speakWeb(cleanText, voiceId.replace('web-', ''));
-    return;
-  }
+  const u = new SpeechSynthesisUtterance(clean);
+  u.rate = 1.0;
+  u.pitch = 1.0;
+  
+  const voices = window.speechSynthesis.getVoices();
+  const female = voices.find(v => /samantha|karen|moira|tessa|zira|google.*female/i.test(v.name)) || voices[0];
+  if (female) u.voice = female;
 
   setOrbState('speaking');
-  
-  // Instant fallback controller with 1.2s timeout
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    controller.abort();
-    speakWeb(cleanText);
-  }, 1200);
-
-  fetch('/api/tts', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: cleanText, voiceId }),
-    signal: controller.signal
-  })
-    .then(async (res) => {
-      clearTimeout(timeoutId);
-      const data = await res.json().catch(() => null);
-      if (data && data.fallback) { speakWeb(cleanText); }
-      else {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audio.playbackRate = mem.speechRate || 1.0;
-        audio.onended = () => setOrbState('idle');
-        audio.play().catch(() => speakWeb(cleanText));
-      }
-    }).catch(() => {
-      clearTimeout(timeoutId);
-      speakWeb(cleanText);
-    });
+  u.onend = () => setOrbState('idle');
+  u.onerror = () => setOrbState('idle');
+  window.speechSynthesis.speak(u);
 }
 
 function speakWeb(text, voiceName) {
