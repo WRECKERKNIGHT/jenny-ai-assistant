@@ -2679,11 +2679,15 @@ app.post('/api/tts', async (req, res) => {
   }
 
   if (!elevenKey) {
-    return res.json({
-      success: false,
-      fallback: true,
-      message: 'ELEVENLABS_API_KEY missing. Falling back to Web Speech API.'
-    });
+    const encodedText = encodeURIComponent(text.slice(0, 300));
+    const cloudUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=tw-ob`;
+    return https.get(cloudUrl, (cloudRes) => {
+      if (cloudRes.statusCode === 200) {
+        res.setHeader('Content-Type', 'audio/mpeg');
+        return cloudRes.pipe(res);
+      }
+      res.json({ success: false, fallback: true });
+    }).on('error', () => res.json({ success: false, fallback: true }));
   }
 
   const postData = JSON.stringify({
