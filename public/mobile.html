@@ -380,6 +380,19 @@
       logFeed.scrollTop = logFeed.scrollHeight;
     }
 
+    function speakMobile(text) {
+      if (!('speechSynthesis' in window) || !text) return;
+      window.speechSynthesis.cancel();
+      const clean = text.replace(/[*_#`~]/g, '').replace(/https?:\/\/\S+/g, 'link').trim();
+      const u = new SpeechSynthesisUtterance(clean);
+      u.rate = 1.0;
+      u.pitch = 1.05;
+      const voices = window.speechSynthesis.getVoices();
+      const female = voices.find(v => /samantha|karen|moira|tessa|google.*female|zira/i.test(v.name)) || voices[0];
+      if (female) u.voice = female;
+      window.speechSynthesis.speak(u);
+    }
+
     async function executeRemote(cmd) {
       if (!cmd.trim()) return;
       appendLog('USER', cmd);
@@ -394,6 +407,7 @@
         const d = await res.json();
         if (d.success && d.reply) {
           appendLog('JENNY', d.reply.text);
+          speakMobile(d.reply.speech || d.reply.text);
           if (d.reply.command && d.reply.command.action !== 'vault-save') {
             await fetch(`${serverUrl}/api/control`, {
               method: 'POST',
@@ -417,22 +431,69 @@
       });
     });
 
-    // SPEECH RECOGNITION
+    // REAL-TIME DICTATION & VOICE MIC CONTROL
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    let listening = false;
+    let dictationTimer = null;
+
     if (SR) {
-      const r = new SR();
-      r.continuous = false;
-      r.interimResults = false;
-      let listening = false;
+      recognition = new SR();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
 
-      r.onstart = () => { listening = true; micOrb.classList.add('listening'); orbHint.textContent = 'LISTENING...'; };
-      r.onresult = (e) => { executeRemote(e.results[0][0].transcript); };
-      r.onend = () => { listening = false; micOrb.classList.remove('listening'); orbHint.textContent = 'TAP ORB FOR VOICE COMMAND'; };
-      r.onerror = () => { listening = false; micOrb.classList.remove('listening'); orbHint.textContent = 'TAP ORB FOR VOICE COMMAND'; };
+      recognition.onstart = () => {
+        listening = true;
+        micOrb.classList.add('listening');
+        orbHint.textContent = 'DICTATING... SPEAK NOW';
+      };
 
-      micOrb.addEventListener('click', () => {
-        if (listening) r.stop();
-        else r.start();
+      recognition.onresult = (e) => {
+        let interim = '';
+        let final = '';
+        for (let i = e.resultIndex; i < e.results.length; ++i) {
+          if (e.results[i].isFinal) final += e.results[i][0].transcript;
+          else interim += e.results[i][0].transcript;
+        }
+        const text = final || interim;
+        termInput.value = text;
+        orbHint.textContent = text ? `"${text}"` : 'DICTATING... SPEAK NOW';
+
+        clearTimeout(dictationTimer);
+        if (final.trim()) {
+          dictationTimer = setTimeout(() => {
+            executeRemote(final.trim());
+            recognition.stop();
+          }, 800);
+        }
+      };
+
+      recognition.onend = () => {
+        listening = false;
+        micOrb.classList.remove('listening');
+        orbHint.textContent = 'TAP ORB FOR VOICE COMMAND';
+      };
+
+      recognition.onerror = (err) => {
+        listening = false;
+        micOrb.classList.remove('listening');
+        orbHint.textContent = 'TAP ORB FOR VOICE COMMAND';
+      };
+
+      micOrb.addEventListener('click', async () => {
+        if (listening) {
+          recognition.stop();
+        } else {
+          try {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+              await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
+            }
+            recognition.start();
+          } catch (e) {
+            orbHint.textContent = 'MIC ACCESS DENIED';
+          }
+        }
       });
     }
 

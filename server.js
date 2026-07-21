@@ -1433,6 +1433,35 @@ app.post('/api/chat', async (req, res) => {
     return;
   }
 
+  // --- On Way Home Routine ---
+  if (query.includes('way home') || query.includes('on my way') || query.includes('coming home')) {
+    startCaffeinate();
+    exec('caffeinate -u -t 3; osascript -e "set volume output volume 80"; open "https://www.youtube.com"', (err) => {
+      const t = 'Welcome back! Display active, volume set to 80%, and YouTube opened, BOSS.';
+      return res.json({ success: true, reply: { text: t, speech: 'Welcome back, BOSS. Display active and YouTube opened.', command: { action: 'on-way-home' } } });
+    });
+    return;
+  }
+
+  // --- Wake Mac Display ---
+  if (query.includes('wake mac') || query.includes('wake display') || query.includes('wake screen') || query.includes('wake up')) {
+    startCaffeinate();
+    exec('caffeinate -u -t 3', (err) => {
+      const t = 'Mac display activated, BOSS.';
+      return res.json({ success: true, reply: { text: t, speech: 'Mac display active, BOSS.', command: { action: 'wake-display' } } });
+    });
+    return;
+  }
+
+  // --- Purge RAM / Clear Memory ---
+  if (query.includes('purge ram') || query.includes('clear memory') || query.includes('flush ram') || query.includes('clean ram')) {
+    exec('purge 2>/dev/null || true', (err) => {
+      const t = 'System RAM cache purged, BOSS.';
+      return res.json({ success: true, reply: { text: t, speech: 'RAM cache purged, BOSS.', command: { action: 'purge-ram' } } });
+    });
+    return;
+  }
+
   // --- Lock screen ---
   if (query.match(/^(?:lock|lock screen|lock the|lock my|secure|screensaver)/i)) {
     exec('pmset displaysleepnow', (err) => {
