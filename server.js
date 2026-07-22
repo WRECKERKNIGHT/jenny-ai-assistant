@@ -1090,25 +1090,34 @@ app.post('/api/speak', (req, res) => {
   const clean = text
     .replace(/[*_#`~]/g, '')
     .replace(/https?:\/\/\S+/g, '')
-    .replace(/"/g, '\\"')
-    .replace(/\$/g, '\\$')
     .trim();
 
   if (os.platform() === 'darwin') {
     try {
       exec('killall say 2>/dev/null || true');
     } catch {}
-    // Enforce high-quality built-in female voice "Samantha"
-    currentSayProcess = exec(`say -v "Samantha" "${clean}"`, (err) => {
-      if (err) {
-        // Fallback to default speaker if Samantha is missing
-        currentSayProcess = exec(`say "${clean}"`, (fallbackErr) => {
+
+    const fs = require('fs');
+    const path = require('path');
+    const tempFile = path.join(os.tmpdir(), `jenny-speak-${Date.now()}.txt`);
+
+    try {
+      fs.writeFileSync(tempFile, clean, 'utf8');
+      currentSayProcess = exec(`say -v "Samantha" -f "${tempFile}"`, (err) => {
+        if (err) {
+          // Fallback to default say if Samantha fails
+          currentSayProcess = exec(`say -f "${tempFile}"`, (fallbackErr) => {
+            currentSayProcess = null;
+            try { fs.unlinkSync(tempFile); } catch {}
+          });
+        } else {
           currentSayProcess = null;
-        });
-      } else {
-        currentSayProcess = null;
-      }
-    });
+          try { fs.unlinkSync(tempFile); } catch {}
+        }
+      });
+    } catch (fsErr) {
+      console.error('[Speak API] file write error:', fsErr);
+    }
   }
   res.json({ success: true });
 });

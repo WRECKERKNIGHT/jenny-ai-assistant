@@ -390,12 +390,14 @@ function drawSparkline(canvasId, data, color) {
   
   const rect = canvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
-  const W = rect.width || 200;
-  const H = rect.height || 44;
+  const W = Math.round(rect.width) || 200;
+  const H = Math.round(rect.height) || 44;
+  const targetW = Math.round(W * dpr);
+  const targetH = Math.round(H * dpr);
   
-  if (canvas.width !== W * dpr || canvas.height !== H * dpr) {
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
+  if (canvas.width !== targetW || canvas.height !== targetH) {
+    canvas.width = targetW;
+    canvas.height = targetH;
   }
   
   ctx.resetTransform();
