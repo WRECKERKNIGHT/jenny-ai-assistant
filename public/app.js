@@ -373,7 +373,13 @@ const SPARK_MAX = 40;
 let lastNetBytes = 0;
 
 function pushSpark(key, val) {
-  sparkHistory[key].push(val);
+  if (sparkHistory[key].length === 0) {
+    for (let i = 0; i < 15; i++) {
+      sparkHistory[key].push(val);
+    }
+  } else {
+    sparkHistory[key].push(val);
+  }
   if (sparkHistory[key].length > SPARK_MAX) sparkHistory[key].shift();
 }
 
