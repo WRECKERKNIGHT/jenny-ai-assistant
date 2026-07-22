@@ -38,6 +38,11 @@ app.get('/hud', (req, res) => res.sendFile(path.join(__dirname, 'public', 'mini.
 // ================================================
 let activeDevices = {};
 
+// Network traffic telemetry memory
+let lastNetBytes = 0;
+let lastNetTime = Date.now();
+let currentNetSpeedKB = 0;
+
 function isDeviceAuthorized(req) {
   const { deviceId } = req.body;
   if (!deviceId) return true;
@@ -613,48 +618,53 @@ app.post('/api/control', (req, res) => {
 
     case 'media':
       let appleScript = '';
-      if (value === 'play' || value === 'pause') {
+      if (value === 'play' || value === 'pause' || value === 'playpause') {
         appleScript = `
           tell application "System Events"
-            if exists application process "Music" then
-              tell application "Music" to playpause
-            else if exists application process "Spotify" then
-              tell application "Spotify" to playpause
-            else
-              key code 49
-            end if
+            set isMusicRunning to (name of every process contains "Music")
+            set isSpotifyRunning to (name of every process contains "Spotify")
           end tell
+          if isMusicRunning then
+            tell application "Music" to playpause
+          else if isSpotifyRunning then
+            tell application "Spotify" to playpause
+          else
+            tell application "Music" to play
+          end if
         `;
       } else if (value === 'next') {
         appleScript = `
           tell application "System Events"
-            if exists application process "Music" then
-              tell application "Music" to next track
-            else if exists application process "Spotify" then
-              tell application "Spotify" to next track
-            end if
+            set isMusicRunning to (name of every process contains "Music")
+            set isSpotifyRunning to (name of every process contains "Spotify")
           end tell
+          if isMusicRunning then
+            tell application "Music" to next track
+          else if isSpotifyRunning then
+            tell application "Spotify" to next track
+          end if
         `;
-      } else if (value === 'previous') {
+      } else if (value === 'previous' || value === 'prev') {
         appleScript = `
           tell application "System Events"
-            if exists application process "Music" then
-              tell application "Music" to previous track
-            else if exists application process "Spotify" then
-              tell application "Spotify" to previous track
-            end if
+            set isMusicRunning to (name of every process contains "Music")
+            set isSpotifyRunning to (name of every process contains "Spotify")
           end tell
+          if isMusicRunning then
+            tell application "Music" to previous track
+          else if isSpotifyRunning then
+            tell application "Spotify" to previous track
+          end if
         `;
       }
-      
-      if (!appleScript) {
-        return res.status(400).json({ success: false, message: 'Invalid media control action.' });
+      if (appleScript) {
+        exec(`osascript -e '${appleScript}'`, (err) => {
+          if (err) return res.json({ success: false, error: err.message });
+          res.json({ success: true, message: `Media control ${value} executed.` });
+        });
+      } else {
+        res.json({ success: false, message: 'Invalid media action.' });
       }
-
-      exec(`osascript -e '${appleScript}'`, (err) => {
-        if (err) return res.json({ success: false, error: err.message });
-        res.json({ success: true, message: `Media control command "${value}" executed.` });
-      });
       break;
 
     case 'lock':
@@ -1070,6 +1080,41 @@ app.post('/api/execute-shell', (req, res) => {
   });
 });
 
+// Native macOS speech control endpoint
+let currentSayProcess = null;
+
+app.post('/api/speak', (req, res) => {
+  const { text } = req.body;
+  if (!text) return res.json({ success: false, message: 'Text is required' });
+
+  const clean = text
+    .replace(/[*_#`~]/g, '')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/"/g, '\\"')
+    .replace(/\$/g, '\\$')
+    .trim();
+
+  if (os.platform() === 'darwin') {
+    try {
+      exec('killall say 2>/dev/null || true');
+    } catch {}
+    currentSayProcess = exec(`say "${clean}"`, (err) => {
+      currentSayProcess = null;
+      if (err) console.error('[Speak API] native say error:', err);
+    });
+  }
+  res.json({ success: true });
+});
+
+app.post('/api/speak/stop', (req, res) => {
+  if (os.platform() === 'darwin') {
+    try {
+      exec('killall say 2>/dev/null || true');
+    } catch {}
+  }
+  res.json({ success: true });
+});
+
 // Endpoint to read recent emails from macOS Mail.app
 app.get('/api/emails', (req, res) => {
   const platform = os.platform();
@@ -1454,6 +1499,71 @@ app.post('/api/chat', async (req, res) => {
   // PHASE 1: INSTANT OFFLINE SYSTEM COMMANDS
   // These run BEFORE Gemini to avoid 7s+ delays
   // ============================================
+
+  // --- Music & Media Playback control ---
+  const mediaPlayPauseMatch = query.match(/^(?:play|pause|stop|resume)\s*(?:music|song|track|media|playback)?$/i)
+    || query.includes('play music') || query.includes('pause music') || query.includes('stop music') || query.includes('resume music')
+    || query.includes('play/pause') || query.includes('play pause') || query.includes('toggle music') || query.includes('toggle playback');
+  const mediaNextMatch = query.match(/^(?:next|skip)\s*(?:music|song|track)?$/i)
+    || query.includes('next song') || query.includes('next track') || query.includes('skip song');
+  const mediaPrevMatch = query.match(/^(?:previous|prev|back)\s*(?:music|song|track)?$/i)
+    || query.includes('previous song') || query.includes('previous track') || query.includes('prev song') || query.includes('go back track');
+
+  if (mediaPlayPauseMatch) {
+    const val = query.includes('pause') || query.includes('stop') ? 'pause' : 'play';
+    const appleScript = `
+      tell application "System Events"
+        set isMusicRunning to (name of every process contains "Music")
+        set isSpotifyRunning to (name of every process contains "Spotify")
+      end tell
+      if isMusicRunning then
+        tell application "Music" to playpause
+      else if isSpotifyRunning then
+        tell application "Spotify" to playpause
+      else
+        tell application "Music" to play
+      end if
+    `;
+    exec(`osascript -e '${appleScript}'`, (err) => {
+      const t = err ? 'Failed to control media, BOSS.' : 'Media playback toggled, BOSS.';
+      return res.json({ success: true, reply: { text: t, speech: t, command: { action: 'media', value: 'playpause' } } });
+    });
+    return;
+  } else if (mediaNextMatch) {
+    const appleScript = `
+      tell application "System Events"
+        set isMusicRunning to (name of every process contains "Music")
+        set isSpotifyRunning to (name of every process contains "Spotify")
+      end tell
+      if isMusicRunning then
+        tell application "Music" to next track
+      else if isSpotifyRunning then
+        tell application "Spotify" to next track
+      end if
+    `;
+    exec(`osascript -e '${appleScript}'`, (err) => {
+      const t = err ? 'Failed to skip track, BOSS.' : 'Skipping to next track, BOSS.';
+      return res.json({ success: true, reply: { text: t, speech: t, command: { action: 'media', value: 'next' } } });
+    });
+    return;
+  } else if (mediaPrevMatch) {
+    const appleScript = `
+      tell application "System Events"
+        set isMusicRunning to (name of every process contains "Music")
+        set isSpotifyRunning to (name of every process contains "Spotify")
+      end tell
+      if isMusicRunning then
+        tell application "Music" to previous track
+      else if isSpotifyRunning then
+        tell application "Spotify" to previous track
+      end if
+    `;
+    exec(`osascript -e '${appleScript}'`, (err) => {
+      const t = err ? 'Failed to go to previous track, BOSS.' : 'Playing previous track, BOSS.';
+      return res.json({ success: true, reply: { text: t, speech: t, command: { action: 'media', value: 'previous' } } });
+    });
+    return;
+  }
 
   // --- Brightness (checked before volume to avoid false matches) ---
   const brightMatch = query.match(/(?:set |turn |adjust )?(?:brightness|screen brightness|display brightness)\s*(?:to\s+)?(up|down|\d+)/i)
@@ -2793,29 +2903,70 @@ app.get('/api/system-status', (req, res) => {
         }
       }
 
-      res.json({
-        success: true,
-        cpu: {
-          usage: cpuUsagePct,
-          cores: cpus.length,
-          model: cpus[0] ? cpus[0].model : 'Host CPU'
-        },
-        ram: {
-          usage: memUsagePct,
-          usedMB: Math.round(usedMem / (1024 * 1024)),
-          totalMB: Math.round(totalMem / (1024 * 1024))
-        },
-        battery: {
-          level: batteryLevel,
-          charging: isCharging
-        },
-        disk: {
-          usage: diskUsagePct,
-          free: diskFree
-        },
-        uptime: Math.round(os.uptime()),
-        hostname: os.hostname(),
-        platform: os.platform()
+      exec('netstat -ib', { timeout: 1500 }, (errNet, stdoutNet) => {
+        let totalBytes = 0;
+        if (!errNet && stdoutNet) {
+          const lines = stdoutNet.trim().split('\n');
+          for (let i = 1; i < lines.length; i++) {
+            const parts = lines[i].trim().split(/\s+/);
+            if (parts.length >= 10 && parts[0].startsWith('en')) {
+              const ibytes = parseInt(parts[6], 10) || 0;
+              const obytes = parseInt(parts[9], 10) || 0;
+              totalBytes += (ibytes + obytes);
+            }
+          }
+        }
+
+        const now = Date.now();
+        const timeDiffSec = (now - lastNetTime) / 1000;
+        if (lastNetBytes > 0 && timeDiffSec > 0.5) {
+          const byteDiff = totalBytes - lastNetBytes;
+          if (byteDiff >= 0) {
+            currentNetSpeedKB = Math.round((byteDiff / timeDiffSec) / 1024);
+          }
+        }
+        lastNetBytes = totalBytes;
+        lastNetTime = now;
+
+        let netSpeedStr = '0 KB/s';
+        let netUsagePct = 0;
+        if (currentNetSpeedKB > 0) {
+          if (currentNetSpeedKB >= 1024) {
+            netSpeedStr = (currentNetSpeedKB / 1024).toFixed(1) + ' MB/s';
+          } else {
+            netSpeedStr = currentNetSpeedKB + ' KB/s';
+          }
+          netUsagePct = Math.min(100, Math.round((currentNetSpeedKB / 10240) * 100));
+        }
+
+        res.json({
+          success: true,
+          cpu: {
+            usage: cpuUsagePct,
+            cores: cpus.length,
+            model: cpus[0] ? cpus[0].model : 'Host CPU'
+          },
+          ram: {
+            usage: memUsagePct,
+            usedMB: Math.round(usedMem / (1024 * 1024)),
+            totalMB: Math.round(totalMem / (1024 * 1024))
+          },
+          battery: {
+            level: batteryLevel,
+            charging: isCharging
+          },
+          disk: {
+            usage: diskUsagePct,
+            free: diskFree
+          },
+          net: {
+            usage: netUsagePct,
+            speed: netSpeedStr
+          },
+          uptime: Math.round(os.uptime()),
+          hostname: os.hostname(),
+          platform: os.platform()
+        });
       });
     });
   });

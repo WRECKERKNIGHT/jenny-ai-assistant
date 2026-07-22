@@ -291,6 +291,12 @@ html,body { height:100%; background:var(--bg); color:var(--txt); font-family:var
 .sys-info-chip:hover { border-color:rgba(0,212,230,0.15); color:var(--txt); background:rgba(0,212,230,0.08); }
 .sys-info-chip i { font-size:7px; color:var(--cyan); }
 
+.sys-media-row { display:flex; gap:8px; justify-content:center; margin-top:8px; }
+.sys-media-btn { background:rgba(0,212,230,0.04); border:1px solid rgba(0,212,230,0.15); border-radius:8px; width:34px; height:30px; display:flex; align-items:center; justify-content:center; gap:2px; font-size:10px; color:var(--cyan); cursor:pointer; transition:all 0.2s ease; outline:none; }
+.sys-media-btn:hover { background:rgba(0,212,230,0.12); border-color:var(--cyan); color:#ffffff; box-shadow:0 0 10px rgba(0,212,230,0.25); transform:translateY(-1px); }
+.sys-media-btn:active { transform:translateY(0); }
+.sys-media-btn i { pointer-events:none; }
+
 /* ORB SECTION */
 .orb-section { flex:1; display:flex; flex-direction:column; align-items:center; position:relative; overflow:hidden; min-height:0; }
 .holo-orb-stage { position:relative; width:100%; flex:1; display:flex; align-items:center; justify-content:center; min-height:0; z-index:2; }

@@ -319,6 +319,19 @@
     .auth-overlay.denied .auth-title {
       color: #ff0055;
     }
+    /* Mobile Media controller style */
+    .media-row {
+      display: flex; gap: 12px; justify-content: center; margin: 10px 0 20px;
+    }
+    .media-btn {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(0,212,230,0.15);
+      border-radius: 12px; width: 60px; height: 50px; display: flex; align-items: center;
+      justify-content: center; color: var(--cyan); font-size: 16px; cursor: pointer;
+      transition: all 0.2s ease; outline: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+    .media-btn:active {
+      transform: scale(0.95); background: rgba(0,212,230,0.1); border-color: var(--cyan);
+    }
   </style>
 </head>
 <body>
@@ -407,6 +420,14 @@
       <div class="ctrl-card" data-cmd="take screenshot">
         <i class="fa-solid fa-camera"></i> Screenshot
       </div>
+    </div>
+
+    <!-- MEDIA PLAYBACK -->
+    <div class="section-title" style="margin-top: 20px;"><i class="fa-solid fa-music"></i> Media Controller</div>
+    <div class="media-row">
+      <button class="media-btn" id="mobile-media-prev" title="Previous"><i class="fa-solid fa-backward"></i></button>
+      <button class="media-btn" id="mobile-media-play" title="Play/Pause"><i class="fa-solid fa-play"></i><i class="fa-solid fa-pause"></i></button>
+      <button class="media-btn" id="mobile-media-next" title="Next"><i class="fa-solid fa-forward"></i></button>
     </div>
 
     <!-- COMMAND TERMINAL -->
@@ -611,6 +632,35 @@
         const cmd = card.dataset.cmd;
         if (cmd) executeRemote(cmd);
       });
+    });
+
+    // Bind Mobile Media Controller Buttons
+    document.getElementById('mobile-media-prev')?.addEventListener('click', async () => {
+      try {
+        await fetch(`${serverUrl}/api/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'media', value: 'previous', deviceId: getDeviceId() })
+        });
+      } catch (e) {}
+    });
+    document.getElementById('mobile-media-play')?.addEventListener('click', async () => {
+      try {
+        await fetch(`${serverUrl}/api/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'media', value: 'playpause', deviceId: getDeviceId() })
+        });
+      } catch (e) {}
+    });
+    document.getElementById('mobile-media-next')?.addEventListener('click', async () => {
+      try {
+        await fetch(`${serverUrl}/api/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'media', value: 'next', deviceId: getDeviceId() })
+        });
+      } catch (e) {}
     });
 
     // REAL-TIME DICTATION & VOICE MIC CONTROL

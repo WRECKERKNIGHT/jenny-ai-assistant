@@ -434,25 +434,37 @@ async function fetchSysStats() {
     const cpu = d.cpu?.usage || 0;
     const ram = d.ram?.usage || 0;
     const disk = d.disk?.usage || 0;
+    const netUsage = d.net?.usage || 0;
+    const netSpeed = d.net?.speed || '0 KB/s';
+
     pushSpark('cpu', cpu);
     pushSpark('ram', ram);
     pushSpark('disk', disk);
+    pushSpark('net', netUsage);
+
     document.getElementById('sys-cpu-val').textContent = cpu + '%';
     document.getElementById('sys-ram-val').textContent = ram + '%';
     document.getElementById('sys-disk-val').textContent = disk + '%';
+    document.getElementById('sys-net-val').textContent = netSpeed;
+
     const cpuModel = d.cpu?.model || '';
     const shortModel = cpuModel.replace(/\(R\)|Core\(TM\)|CPU/g, '').replace(/\s+/g, ' ').trim();
     document.getElementById('sys-cpu-model').textContent = shortModel;
     document.getElementById('sys-ram-info').textContent = `${d.ram?.usedMB || 0} / ${d.ram?.totalMB || 0} MB`;
     document.getElementById('sys-disk-info').textContent = `${d.disk?.free || '--'} free`;
+    document.getElementById('sys-net-info').textContent = `Speed: ${netSpeed}`;
+
     const uptimeH = d.uptime ? Math.floor(d.uptime / 3600) : 0;
     const uptimeM = d.uptime ? Math.floor((d.uptime % 3600) / 60) : 0;
     document.getElementById('sys-uptime').textContent = `${uptimeH}h ${uptimeM}m`;
     document.getElementById('sys-battery').textContent = d.battery?.level != null ? `${Math.round(d.battery.level)}%` : '--';
     document.getElementById('sys-wifi').textContent = d.hostname ? d.hostname.split('.')[0] : '--';
+
     drawSparkline('spark-cpu', sparkHistory.cpu, 'rgb(255,255,255)');
     drawSparkline('spark-ram', sparkHistory.ram, 'rgb(255,255,255)');
     drawSparkline('spark-disk', sparkHistory.disk, 'rgb(255,255,255)');
+    drawSparkline('spark-net', sparkHistory.net, 'rgb(255,255,255)');
+
     updateWelcomeVitals(cpu, ram, d.battery?.level, d.uptime);
   } catch {}
 }
@@ -1692,16 +1704,9 @@ async function sendMessage(text) {
 // ================================================
 // VOICE — TTS
 // ================================================
-window._speechUtteranceStore = [];
-window._speechHeartbeat = null;
-
 function speak(text) {
-  if (!text || !('speechSynthesis' in window)) return;
+  if (!text) return;
   
-  window.speechSynthesis.cancel();
-  if (window._speechHeartbeat) clearInterval(window._speechHeartbeat);
-  window._speechUtteranceStore = [];
-
   const clean = text
     .replace(/[*_#`~]/g, '')
     .replace(/https?:\/\/\S+/g, '')
@@ -1711,45 +1716,20 @@ function speak(text) {
   if (!clean) return;
 
   const sentences = clean.match(/[^.!?]+[.!?]+/g) || [clean];
-  const spokenText = sentences[0].slice(0, 140).trim();
+  const spokenText = sentences.slice(0, 2).join(' ').slice(0, 200).trim();
 
-  const u = new SpeechSynthesisUtterance(spokenText);
-  window._speechUtteranceStore.push(u);
+  fetch('/api/speak', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: spokenText })
+  }).catch(e => console.error('[Speak] Server speak failed', e));
 
-  u.rate = 1.0;
-  u.pitch = 1.0;
-  u.volume = 1.0;
-
-  const voices = window.speechSynthesis.getVoices();
-  const female = voices.find(v => /samantha|karen|moira|tessa|zira|google.*female/i.test(v.name))
-              || voices.find(v => v.lang.startsWith('en'))
-              || voices[0];
-  if (female) u.voice = female;
-
-  if (typeof setOrbState === 'function') setOrbState('speaking');
-
-  window._speechHeartbeat = setInterval(() => {
-    if (window.speechSynthesis.speaking) {
-      window.speechSynthesis.pause();
-      window.speechSynthesis.resume();
-    } else {
-      clearInterval(window._speechHeartbeat);
-    }
-  }, 1400);
-
-  u.onend = () => {
-    if (window._speechHeartbeat) clearInterval(window._speechHeartbeat);
-    window._speechUtteranceStore = [];
-    if (typeof setOrbState === 'function') setOrbState('idle');
-  };
-
-  u.onerror = () => {
-    if (window._speechHeartbeat) clearInterval(window._speechHeartbeat);
-    window._speechUtteranceStore = [];
-    if (typeof setOrbState === 'function') setOrbState('idle');
-  };
-
-  window.speechSynthesis.speak(u);
+  if (typeof setOrbState === 'function') {
+    setOrbState('speaking');
+    setTimeout(() => {
+      setOrbState('idle');
+    }, Math.max(2500, spokenText.split(' ').length * 480));
+  }
 }
 
 function speakWeb(text) {
@@ -1868,6 +1848,7 @@ async function startListening() {
   orbClick.classList.add('active');
   setOrbState('listening');
   sfx.confirm();
+  fetch('/api/speak/stop', { method: 'POST' }).catch(() => {});
   try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); startSpeechWaves(micStream); } catch {}
   try { recognition.start(); } catch {}
 }
@@ -1882,6 +1863,32 @@ function stopListening() {
 }
 
 orbClick.addEventListener('click', () => { isListening ? stopListening() : startListening(); });
+
+// Bind Media HUD Buttons
+document.getElementById('media-btn-prev')?.addEventListener('click', () => {
+  sfx.click();
+  fetch('/api/control', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'media', value: 'previous' })
+  }).catch(() => {});
+});
+document.getElementById('media-btn-play')?.addEventListener('click', () => {
+  sfx.click();
+  fetch('/api/control', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'media', value: 'playpause' })
+  }).catch(() => {});
+});
+document.getElementById('media-btn-next')?.addEventListener('click', () => {
+  sfx.click();
+  fetch('/api/control', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'media', value: 'next' })
+  }).catch(() => {});
+});
 
 if ('speechSynthesis' in window) { window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices(); }
 
