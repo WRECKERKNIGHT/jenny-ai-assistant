@@ -1098,9 +1098,16 @@ app.post('/api/speak', (req, res) => {
     try {
       exec('killall say 2>/dev/null || true');
     } catch {}
-    currentSayProcess = exec(`say "${clean}"`, (err) => {
-      currentSayProcess = null;
-      if (err) console.error('[Speak API] native say error:', err);
+    // Enforce high-quality built-in female voice "Samantha"
+    currentSayProcess = exec(`say -v "Samantha" "${clean}"`, (err) => {
+      if (err) {
+        // Fallback to default speaker if Samantha is missing
+        currentSayProcess = exec(`say "${clean}"`, (fallbackErr) => {
+          currentSayProcess = null;
+        });
+      } else {
+        currentSayProcess = null;
+      }
     });
   }
   res.json({ success: true });

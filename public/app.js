@@ -381,10 +381,24 @@ function drawSparkline(canvasId, data, color) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
+  
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const W = rect.width || 200;
+  const H = rect.height || 44;
+  
+  if (canvas.width !== W * dpr || canvas.height !== H * dpr) {
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+  }
+  
+  ctx.resetTransform();
+  ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, W, H);
+  
   if (data.length < 2) return;
   const step = W / (SPARK_MAX - 1);
+  
   ctx.beginPath();
   ctx.moveTo(0, H);
   data.forEach((v, i) => {
@@ -397,13 +411,15 @@ function drawSparkline(canvasId, data, color) {
       ctx.bezierCurveTo(px + step * 0.4, py, x - step * 0.4, y, x, y);
     }
   });
-  ctx.lineTo(W, H);
+  ctx.lineTo((data.length - 1) * step, H);
   ctx.closePath();
+  
   const fillGrad = ctx.createLinearGradient(0, 0, 0, H);
-  fillGrad.addColorStop(0, color.replace(')', ',0.15)').replace('rgb', 'rgba'));
+  fillGrad.addColorStop(0, color.replace(')', ',0.18)').replace('rgb', 'rgba'));
   fillGrad.addColorStop(1, color.replace(')', ',0.0)').replace('rgb', 'rgba'));
   ctx.fillStyle = fillGrad;
   ctx.fill();
+  
   ctx.beginPath();
   data.forEach((v, i) => {
     const x = i * step;
@@ -416,12 +432,13 @@ function drawSparkline(canvasId, data, color) {
     }
   });
   ctx.strokeStyle = color;
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 1.8;
   ctx.stroke();
+  
   const lastX = (data.length - 1) * step;
   const lastY = H - (data[data.length - 1] / 100) * (H - 4);
   ctx.beginPath();
-  ctx.arc(lastX, lastY, 2.5, 0, Math.PI * 2);
+  ctx.arc(lastX, lastY, 3, 0, Math.PI * 2);
   ctx.fillStyle = color;
   ctx.fill();
 }
@@ -460,10 +477,10 @@ async function fetchSysStats() {
     document.getElementById('sys-battery').textContent = d.battery?.level != null ? `${Math.round(d.battery.level)}%` : '--';
     document.getElementById('sys-wifi').textContent = d.hostname ? d.hostname.split('.')[0] : '--';
 
-    drawSparkline('spark-cpu', sparkHistory.cpu, 'rgb(255,255,255)');
-    drawSparkline('spark-ram', sparkHistory.ram, 'rgb(255,255,255)');
-    drawSparkline('spark-disk', sparkHistory.disk, 'rgb(255,255,255)');
-    drawSparkline('spark-net', sparkHistory.net, 'rgb(255,255,255)');
+    drawSparkline('spark-cpu', sparkHistory.cpu, 'rgb(229,193,88)');
+    drawSparkline('spark-ram', sparkHistory.ram, 'rgb(229,193,88)');
+    drawSparkline('spark-disk', sparkHistory.disk, 'rgb(229,193,88)');
+    drawSparkline('spark-net', sparkHistory.net, 'rgb(0,212,230)');
 
     updateWelcomeVitals(cpu, ram, d.battery?.level, d.uptime);
   } catch {}
@@ -1716,7 +1733,7 @@ function speak(text) {
   if (!clean) return;
 
   const sentences = clean.match(/[^.!?]+[.!?]+/g) || [clean];
-  const spokenText = sentences.slice(0, 2).join(' ').slice(0, 200).trim();
+  const spokenText = sentences.slice(0, 4).join(' ').slice(0, 500).trim();
 
   fetch('/api/speak', {
     method: 'POST',

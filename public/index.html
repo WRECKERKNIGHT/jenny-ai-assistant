@@ -97,6 +97,11 @@
       </div>
 
       <div class="sys-monitor" id="sys-monitor">
+        <div class="sys-media-row" style="margin-top: 0; margin-bottom: 8px;">
+          <button class="sys-media-btn" id="media-btn-prev" title="Previous"><i class="fa-solid fa-backward"></i></button>
+          <button class="sys-media-btn" id="media-btn-play" title="Play/Pause"><i class="fa-solid fa-play"></i><i class="fa-solid fa-pause"></i></button>
+          <button class="sys-media-btn" id="media-btn-next" title="Next"><i class="fa-solid fa-forward"></i></button>
+        </div>
         <div class="sys-graph-row">
           <div class="sys-graph-card">
             <div class="sys-graph-header">
@@ -136,11 +141,6 @@
         <div class="sys-info-row">
           <div class="sys-info-chip"><i class="fa-solid fa-clock"></i> <span id="sys-uptime">--</span></div>
           <div class="sys-info-chip"><i class="fa-solid fa-battery-full"></i> <span id="sys-battery">--</span></div>
-        </div>
-        <div class="sys-media-row">
-          <button class="sys-media-btn" id="media-btn-prev" title="Previous"><i class="fa-solid fa-backward"></i></button>
-          <button class="sys-media-btn" id="media-btn-play" title="Play/Pause"><i class="fa-solid fa-play"></i><i class="fa-solid fa-pause"></i></button>
-          <button class="sys-media-btn" id="media-btn-next" title="Next"><i class="fa-solid fa-forward"></i></button>
         </div>
       </div>
 
@@ -252,7 +252,18 @@
           <div class="msgs" id="msgs"></div>
         </div>
         <div class="welcome-screen" id="welcome-screen">
-          <div class="welcome-orb"></div>
+          <div class="welcome-orb">
+            <div class="sun"></div>
+            <div class="orbit orbit-1">
+              <div class="planet planet-1"></div>
+            </div>
+            <div class="orbit orbit-2">
+              <div class="planet planet-2"></div>
+            </div>
+            <div class="orbit orbit-3">
+              <div class="planet planet-3"></div>
+            </div>
+          </div>
           <div class="welcome-title">J.E.N.N.Y.</div>
           <div class="welcome-sub">What can I help you with, BOSS?</div>
 
