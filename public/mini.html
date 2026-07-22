@@ -3,28 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JENNY Mini HUD</title>
+  <title>JENNY Holographic Mini HUD</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
     :root {
-      --bg: #000000;
-      --glass-bg: rgba(0, 0, 0, 0.45);
-      --glass-card: rgba(255, 255, 255, 0.03);
-      --glass-border: rgba(229, 193, 88, 0.3);
+      --bg: rgba(10, 15, 26, 0.4);
+      --panel-bg: rgba(8, 12, 21, 0.85);
+      --cyan: #00d4e6;
+      --cyan-glow: rgba(0, 212, 230, 0.35);
       --gold: #e5c158;
       --gold-glow: rgba(229, 193, 88, 0.25);
-      --silver: #c0c0c0;
+      --pink: #ff2d87;
+      --pink-glow: rgba(255, 45, 135, 0.3);
+      --glass-border: rgba(0, 212, 230, 0.2);
+      --glass-highlight: rgba(255, 255, 255, 0.05);
       --txt: #ffffff;
-      --txt2: #d1d5db;
-      --txt3: #9ca3af;
+      --txt2: #c4d1db;
+      --txt3: #8a9ba8;
       --mono: 'SF Mono', -apple-system, BlinkMacSystemFont, 'Menlo', monospace;
-      --radius: 12px;
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    
     body {
-      background: rgba(0,0,0,0.6);
-      backdrop-filter: blur(40px) saturate(2.0);
-      -webkit-backdrop-filter: blur(40px) saturate(2.0);
+      background: transparent;
       color: var(--txt);
       font-family: var(--mono);
       width: 460px;
@@ -34,56 +36,92 @@
       flex-direction: column;
       user-select: none;
       -webkit-user-select: none;
-      border: 1px solid var(--glass-border);
-      border-radius: 20px;
-      box-shadow: 0 24px 80px rgba(0,0,0,0.8), 0 0 30px rgba(229, 193, 88, 0.15);
+      position: relative;
+    }
+
+    /* OUTER HOLOGRAPHIC FRAME */
+    .hud-outer-frame {
+      position: absolute;
+      inset: 6px;
+      background: var(--bg);
+      border: 1.5px solid var(--glass-border);
+      border-radius: 24px;
+      box-shadow: 
+        0 20px 50px rgba(0,0,0,0.6),
+        0 0 30px rgba(0, 212, 230, 0.15),
+        inset 0 0 20px rgba(0, 212, 230, 0.08);
+      backdrop-filter: blur(25px);
+      -webkit-backdrop-filter: blur(25px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 2;
     }
 
     /* HEADER */
-    .hdr {
+    .hud-hdr {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 18px;
-      background: rgba(0,0,0,0.4);
+      padding: 14px 20px;
+      background: rgba(0, 0, 0, 0.3);
       border-bottom: 1px solid var(--glass-border);
+      position: relative;
     }
-    .hdr-l {
+    .hud-hdr::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 10%; right: 10%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    }
+    .hdr-logo-area {
       display: flex;
       align-items: center;
       gap: 10px;
     }
-    .hdr-logo {
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      border: 1px solid var(--glass-border);
+    .hdr-logo-ring {
+      width: 22px;
+      height: 22px;
+      border: 1.5px solid var(--cyan);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 8px var(--cyan-glow);
+      animation: pulse-ring 2s infinite;
+    }
+    .hdr-logo-ring i {
+      font-size: 10px;
+      color: var(--cyan);
     }
     .hdr-title {
       font-size: 13px;
-      font-weight: 800;
-      letter-spacing: 3px;
+      font-weight: 900;
+      letter-spacing: 4px;
       color: #fff;
+      text-shadow: 0 0 10px var(--cyan-glow);
     }
     .hdr-badge {
-      font-size: 9px;
-      padding: 3px 8px;
-      border-radius: 12px;
-      background: var(--gold-glow);
-      border: 1px solid var(--glass-border);
-      color: var(--gold);
+      font-size: 8px;
+      padding: 2px 7px;
+      border-radius: 20px;
+      background: rgba(0, 212, 230, 0.08);
+      border: 1px solid rgba(0, 212, 230, 0.3);
+      color: var(--cyan);
       letter-spacing: 1px;
+      font-weight: 700;
     }
-    .hdr-r {
+
+    .hdr-controls {
       display: flex;
-      align-items: center;
       gap: 8px;
     }
-    .icon-btn {
-      background: rgba(255,255,255,0.06);
-      border: 1px solid var(--glass-border);
+    .hdr-btn {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(0, 212, 230, 0.25);
       border-radius: 8px;
-      color: var(--txt2);
+      color: var(--cyan);
       width: 28px;
       height: 28px;
       font-size: 11px;
@@ -91,338 +129,592 @@
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.2s ease;
     }
-    .icon-btn:hover {
-      background: var(--gold);
-      color: #000;
-    }
-
-    /* ORB & INPUT CONTAINER */
-    .hero-stage {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 16px 18px;
-      background: var(--glass-card);
-      border-bottom: 1px solid var(--glass-border);
-    }
-    .orb-wrap {
-      position: relative;
-      width: 76px;
-      height: 76px;
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-    }
-    #orb-canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-    .mic-icon {
-      position: absolute;
-      font-size: 18px;
-      color: var(--gold);
-      pointer-events: none;
-      text-shadow: 0 0 10px var(--gold);
+    .hdr-btn:hover {
+      background: rgba(0, 212, 230, 0.15);
+      border-color: var(--cyan);
+      box-shadow: 0 0 10px var(--cyan-glow);
+      color: #ffffff;
+      transform: translateY(-1px);
     }
 
-    .hero-input-wrap {
+    /* CENTRAL ORB STAGE */
+    .central-orb-stage {
       flex: 1;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      min-height: 0;
+      padding: 20px;
     }
-    .input-row {
+
+    /* RADIAL TELEMETRY SECTION */
+    .radial-dashboard {
       display: flex;
-      gap: 8px;
-    }
-    .hud-input {
-      flex: 1;
+      justify-content: space-evenly;
+      width: 100%;
       padding: 10px 14px;
-      background: rgba(0,0,0,0.5);
-      border: 1px solid var(--glass-border);
-      border-radius: 10px;
-      color: #fff;
-      font-family: var(--mono);
-      font-size: 11px;
-      outline: none;
-      transition: all 0.2s;
+      margin-bottom: 5px;
     }
-    .hud-input:focus {
-      border-color: var(--gold);
-      box-shadow: 0 0 15px var(--gold-glow);
+    .radial-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
     }
-    .hud-send {
-      width: 36px;
-      background: var(--gold-glow);
-      border: 1px solid var(--glass-border);
-      border-radius: 10px;
-      color: var(--gold);
-      cursor: pointer;
-      font-size: 13px;
-      transition: all 0.2s;
+    .radial-svg-wrap {
+      position: relative;
+      width: 60px;
+      height: 60px;
+    }
+    .radial-svg-wrap svg {
+      transform: rotate(-90deg);
+      width: 100%;
+      height: 100%;
+    }
+    .circle-bg {
+      fill: none;
+      stroke: rgba(255,255,255,0.03);
+      stroke-width: 3.5;
+    }
+    .circle-val {
+      fill: none;
+      stroke: var(--cyan);
+      stroke-width: 3.5;
+      stroke-linecap: round;
+      transition: stroke-dasharray 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .circle-val.ram { stroke: var(--gold); }
+    .circle-val.disk { stroke: var(--pink); }
+    .circle-val.net { stroke: #00ff66; }
+
+    .radial-inner-val {
+      position: absolute;
+      inset: 0;
       display: flex;
       align-items: center;
       justify-content: center;
-    }
-    .hud-send:hover {
-      background: var(--gold);
-      color: #000;
-    }
-    .mic-hint {
-      font-size: 9px;
-      color: var(--silver);
-      letter-spacing: 1px;
-    }
-
-    /* TELEMETRY GAUGES */
-    .telemetry-bar {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-      padding: 12px 18px;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
-    .t-card {
-      background: var(--glass-card);
-      border: 1px solid var(--glass-border);
-      border-radius: 10px;
-      padding: 8px 6px;
-      text-align: center;
-    }
-    .t-val {
-      font-size: 13px;
+      font-size: 10px;
       font-weight: 700;
       color: #fff;
-      margin-top: 2px;
+      font-family: var(--mono);
     }
-    .t-lbl {
+    .radial-lbl {
       font-size: 8px;
-      color: var(--silver);
+      color: var(--txt3);
+      margin-top: 6px;
       letter-spacing: 1px;
-    }
-
-    /* POWER CHIPS DOCK */
-    .chips-section {
-      padding: 12px 18px;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
-    .chips-lbl {
-      font-size: 9px;
-      color: var(--gold);
-      letter-spacing: 1.5px;
       text-transform: uppercase;
-      margin-bottom: 8px;
       font-weight: 700;
     }
-    .chips-grid {
+
+    /* GLOWING RADAR ORB */
+    .radar-orb-wrap {
+      position: relative;
+      width: 170px;
+      height: 170px;
+      margin: 15px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .radar-sweep {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border: 1.5px solid rgba(0, 212, 230, 0.1);
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,212,230,0.03) 40%, transparent 70%);
+      animation: radar-spin 6s linear infinite;
+    }
+    .radar-sweep::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 50%; width: 50%; height: 50%;
+      background: conic-gradient(from 180deg, transparent 70%, rgba(0, 212, 230, 0.15));
+      border-radius: 100% 0 0 0;
+      transform-origin: bottom left;
+    }
+    #orb-canvas {
+      width: 130px;
+      height: 130px;
+      position: absolute;
+      z-index: 3;
+    }
+    .center-mic-icon {
+      position: absolute;
+      font-size: 24px;
+      color: var(--cyan);
+      z-index: 4;
+      text-shadow: 0 0 10px var(--cyan);
+      pointer-events: none;
+      transition: all 0.3s ease;
+    }
+    .radar-orb-wrap:hover .center-mic-icon {
+      color: #fff;
+      transform: scale(1.1);
+      text-shadow: 0 0 15px var(--cyan);
+    }
+
+    /* FLOATING RESPONSE STREAM */
+    .hud-stream-panel {
+      width: 90%;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(0, 212, 230, 0.15);
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 11px;
+      line-height: 1.6;
+      max-height: 110px;
+      overflow-y: auto;
+      text-align: center;
+      margin-bottom: 10px;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+    }
+    .hud-stream-panel::-webkit-scrollbar { width: 4px; }
+    .hud-stream-panel::-webkit-scrollbar-thumb { background: rgba(0, 212, 230, 0.2); border-radius: 2px; }
+
+    /* FLOATING INPUT BAR */
+    .hud-input-dock {
+      width: 90%;
+      display: flex;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      padding: 6px 8px;
+      transition: all 0.3s ease;
+      margin-bottom: 15px;
+    }
+    .hud-input-dock:focus-within {
+      border-color: var(--cyan);
+      box-shadow: 0 0 15px rgba(0, 212, 230, 0.25);
+      background: rgba(0, 0, 0, 0.65);
+    }
+    .hud-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 6px 8px;
+    }
+    .hud-input::placeholder { color: var(--txt3); }
+    .hud-send-btn {
+      background: rgba(0, 212, 230, 0.1);
+      border: 1px solid rgba(0, 212, 230, 0.3);
+      border-radius: 10px;
+      color: var(--cyan);
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .hud-send-btn:hover {
+      background: var(--cyan);
+      color: #000;
+      box-shadow: 0 0 10px var(--cyan-glow);
+    }
+
+    /* SYSTEM DRAWER OVERLAYS */
+    .hud-drawer {
+      position: absolute;
+      inset-x: 0; bottom: 0;
+      height: 480px;
+      background: var(--panel-bg);
+      border-top: 2px solid var(--glass-border);
+      border-radius: 24px 24px 0 0;
+      transform: translateY(105%);
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 5;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 -15px 40px rgba(0,0,0,0.8), 0 -5px 15px rgba(0,212,230,0.1);
+    }
+    .hud-drawer.active {
+      transform: translateY(0);
+    }
+    .drawer-hdr {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .drawer-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--cyan);
+      letter-spacing: 2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .drawer-body {
+      flex: 1;
+      padding: 18px 20px;
+      overflow-y: auto;
+    }
+
+    /* QUICK TAB ACCESS DOCK */
+    .hud-tab-dock {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 6px;
+      padding: 10px 18px;
+      background: rgba(0,0,0,0.25);
+      border-top: 1px solid rgba(255,255,255,0.05);
     }
-    .power-btn {
-      background: var(--glass-card);
-      border: 1px solid var(--glass-border);
+    .tab-btn {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(0, 212, 230, 0.15);
       border-radius: 8px;
+      color: var(--txt3);
       padding: 8px 4px;
-      color: var(--txt2);
       font-family: var(--mono);
       font-size: 9px;
+      cursor: pointer;
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 4px;
+      transition: all 0.2s ease;
+    }
+    .tab-btn.active {
+      background: rgba(0, 212, 230, 0.1);
+      border-color: var(--cyan);
+      color: var(--cyan);
+      box-shadow: 0 0 8px rgba(0, 212, 230, 0.15);
+    }
+    .tab-btn:hover {
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    /* GRID CONTROLS */
+    .ctrl-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    .ctrl-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(0, 212, 230, 0.15);
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      color: var(--txt2);
+      font-size: 10px;
+      transition: all 0.2s ease;
+    }
+    .ctrl-card:hover {
+      background: rgba(0,212,230,0.08);
+      border-color: var(--cyan);
+      color: #fff;
+      box-shadow: 0 0 10px rgba(0,212,230,0.15);
+      transform: translateY(-1px);
+    }
+    .ctrl-card i {
+      color: var(--cyan);
+      font-size: 13px;
+    }
+
+    /* CLIPBOARD DOCKED CONSOLE */
+    .clip-console {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .clip-textarea {
+      width: 100%;
+      height: 120px;
+      background: rgba(0,0,0,0.4);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      padding: 10px;
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 11px;
+      outline: none;
+      resize: none;
+    }
+    .clip-action-row {
+      display: flex;
+      gap: 8px;
+    }
+    .clip-btn {
+      flex: 1;
+      background: rgba(0,212,230,0.08);
+      border: 1px solid rgba(0,212,230,0.3);
+      border-radius: 8px;
+      color: var(--cyan);
+      padding: 10px;
+      font-family: var(--mono);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .clip-btn:hover {
+      background: var(--cyan);
+      color: #000;
+      box-shadow: 0 0 10px var(--cyan-glow);
+    }
+
+    /* PROCESSES LIST STYLE */
+    .proc-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .proc-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 8px;
+      font-size: 10px;
+    }
+    .proc-name { font-weight: 700; color: #fff; }
+    .proc-meta { color: var(--txt3); }
+    .proc-kill-btn {
+      background: rgba(255,45,135,0.1);
+      border: 1px solid rgba(255,45,135,0.3);
+      border-radius: 6px;
+      color: var(--pink);
+      padding: 2px 8px;
+      cursor: pointer;
+      font-size: 9px;
+    }
+    .proc-kill-btn:hover {
+      background: var(--pink);
+      color: #fff;
+    }
+
+    /* DIRECTORY NAVIGATOR LIST */
+    .file-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.02);
+      border-radius: 8px;
+      font-size: 10px;
       cursor: pointer;
       transition: all 0.2s;
     }
-    .power-btn:hover {
-      background: var(--gold-glow);
-      border-color: var(--gold);
-      color: #fff;
-      transform: translateY(-1px);
-    }
-    .power-btn i {
-      color: var(--gold);
-      font-size: 11px;
-    }
-
-    /* CHAT STREAM FEED */
-    .feed-stage {
-      flex: 1;
-      padding: 12px 18px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      min-height: 0;
-    }
-    .feed-msg {
-      max-width: 90%;
-      padding: 8px 12px;
-      border-radius: 10px;
-      font-size: 11px;
-      line-height: 1.5;
-      word-break: break-word;
-    }
-    .feed-msg.user {
-      align-self: flex-end;
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.15);
+    .file-item:hover {
+      background: rgba(229,193,88,0.08);
       color: #fff;
     }
-    .feed-msg.ai {
-      align-self: flex-start;
-      background: rgba(0,0,0,0.5);
-      border: 1px solid var(--glass-border);
-      color: var(--txt2);
-      border-left: 3px solid var(--gold);
-    }
+    .file-item.dir i { color: var(--gold); }
+    .file-item.file i { color: var(--cyan); }
 
-    /* FOOTER */
-    .ftr {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 18px;
-      background: rgba(0,0,0,0.4);
-      border-top: 1px solid var(--glass-border);
-      font-size: 9px;
-      color: var(--silver);
+    /* ANIMATIONS */
+    @keyframes radar-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
     }
-    .ftr-btn {
-      background: rgba(255,255,255,0.06);
-      border: 1px solid var(--glass-border);
-      border-radius: 6px;
-      color: var(--gold);
-      padding: 4px 10px;
-      font-family: var(--mono);
-      font-size: 9px;
-      cursor: pointer;
-    }
-    .ftr-btn:hover {
-      background: var(--gold);
-      color: #000;
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(0, 212, 230, 0.4); }
+      70% { box-shadow: 0 0 0 10px rgba(0, 212, 230, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(0, 212, 230, 0); }
     }
   </style>
 </head>
 <body>
 
-  <!-- HEADER -->
-  <header class="hdr">
-    <div class="hdr-l">
-      <img src="logo.png" class="hdr-logo" alt="Jenny">
-      <span class="hdr-title">J.E.N.N.Y.</span>
-      <span class="hdr-badge">MINI HUD 2.0</span>
-    </div>
-    <div class="hdr-r">
-      <button class="icon-btn" id="open-training-btn" title="AI Training Hub"><i class="fa-solid fa-brain"></i></button>
-      <button class="icon-btn" id="open-main-btn" title="Open Full Interface"><i class="fa-solid fa-expand"></i></button>
-    </div>
-  </header>
-
-  <!-- ORB & INPUT -->
-  <div class="hero-stage">
-    <div class="orb-wrap" id="orb-trigger" title="Tap to Dictate Voice Command">
-      <canvas id="orb-canvas" width="76" height="76"></canvas>
-      <i class="fa-solid fa-microphone mic-icon"></i>
-    </div>
-    <div class="hero-input-wrap">
-      <div class="input-row">
-        <input type="text" id="mini-input" class="hud-input" placeholder="Ask JENNY or dictation command...">
-        <button id="mini-send-btn" class="hud-send"><i class="fa-solid fa-paper-plane"></i></button>
+  <!-- GLOWING HUD FRAME -->
+  <div class="hud-outer-frame">
+    
+    <!-- HEADER -->
+    <header class="hud-hdr">
+      <div class="hdr-logo-area">
+        <div class="hdr-logo-ring"><i class="fa-solid fa-atom"></i></div>
+        <span class="hdr-title">J.E.N.N.Y.</span>
+        <span class="hdr-badge">HUD 3.0</span>
       </div>
-      <div class="mic-hint" id="mic-status-hint">TAP ORB OR TYPE COMMAND</div>
-    </div>
-  </div>
+      <div class="hdr-controls">
+        <button class="hdr-btn" id="training-btn" title="AI Memory & Training"><i class="fa-solid fa-brain"></i></button>
+        <button class="hdr-btn" id="fullscreen-btn" title="Expand Interface"><i class="fa-solid fa-expand"></i></button>
+      </div>
+    </header>
 
-  <!-- TELEMETRY -->
-  <div class="telemetry-bar">
-    <div class="t-card">
-      <div class="t-lbl">CPU</div>
-      <div class="t-val" id="hud-cpu">--%</div>
-    </div>
-    <div class="t-card">
-      <div class="t-lbl">RAM</div>
-      <div class="t-val" id="hud-ram">--%</div>
-    </div>
-    <div class="t-card">
-      <div class="t-lbl">BATTERY</div>
-      <div class="t-val" id="hud-bat">--%</div>
-    </div>
-    <div class="t-card">
-      <div class="t-lbl">UPTIME</div>
-      <div class="t-val" id="hud-up">--h</div>
-    </div>
-  </div>
+    <!-- CENTRAL ORB INTERFACE STAGE -->
+    <main class="central-orb-stage">
+      
+      <!-- RADIAL TELEMETRY METERS -->
+      <div class="radial-dashboard">
+        <div class="radial-card">
+          <div class="radial-svg-wrap">
+            <svg viewBox="0 0 36 36">
+              <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              <path class="circle-val" id="ring-cpu" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            </svg>
+            <div class="radial-inner-val" id="text-cpu">--%</div>
+          </div>
+          <span class="radial-lbl">CPU</span>
+        </div>
+        <div class="radial-card">
+          <div class="radial-svg-wrap">
+            <svg viewBox="0 0 36 36">
+              <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              <path class="circle-val ram" id="ring-ram" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            </svg>
+            <div class="radial-inner-val" id="text-ram">--%</div>
+          </div>
+          <span class="radial-lbl">RAM</span>
+        </div>
+        <div class="radial-card">
+          <div class="radial-svg-wrap">
+            <svg viewBox="0 0 36 36">
+              <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              <path class="circle-val disk" id="ring-disk" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            </svg>
+            <div class="radial-inner-val" id="text-disk">--%</div>
+          </div>
+          <span class="radial-lbl">DISK</span>
+        </div>
+        <div class="radial-card">
+          <div class="radial-svg-wrap">
+            <svg viewBox="0 0 36 36">
+              <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              <path class="circle-val net" id="ring-net" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            </svg>
+            <div class="radial-inner-val" id="text-net">--%</div>
+          </div>
+          <span class="radial-lbl">NET</span>
+        </div>
+      </div>
 
-  <!-- POWER DOCK -->
-  <div class="chips-section">
-    <div class="chips-lbl"><i class="fa-solid fa-bolt"></i> Quick Controls</div>
-    <div class="chips-grid">
-      <button class="power-btn" data-cmd="Hi I am on my way home">
-        <i class="fa-solid fa-car"></i> On Way Home
-      </button>
-      <button class="power-btn" data-cmd="wake mac display">
-        <i class="fa-solid fa-sun"></i> Wake Display
-      </button>
-      <button class="power-btn" data-cmd="lock screen">
-        <i class="fa-solid fa-lock"></i> Lock Screen
-      </button>
-      <button class="power-btn" data-cmd="purge ram">
-        <i class="fa-solid fa-broom"></i> Purge RAM
-      </button>
-      <button class="power-btn" data-cmd="battery status">
-        <i class="fa-solid fa-battery-three-quarters"></i> Battery
-      </button>
-      <button class="power-btn" data-cmd="open youtube">
-        <i class="fa-solid fa-play"></i> YouTube
-      </button>
-      <button class="power-btn" data-cmd="volume 80">
-        <i class="fa-solid fa-volume-high"></i> Volume 80%
-      </button>
-      <button class="power-btn" data-cmd="read my emails">
-        <i class="fa-solid fa-envelope"></i> Read Mail
-      </button>
-    </div>
-  </div>
+      <!-- RADAR VOICE ORB -->
+      <div class="radar-orb-wrap" id="orb-trigger">
+        <div class="radar-sweep"></div>
+        <canvas id="orb-canvas" width="130" height="130"></canvas>
+        <i class="fa-solid fa-microphone center-mic-icon"></i>
+      </div>
 
-  <!-- CHAT FEED -->
-  <div class="feed-stage" id="hud-feed">
-    <div class="feed-msg ai">
-      <strong>JENNY:</strong> Neural Link active. How can I assist you, BOSS?
-    </div>
-  </div>
+      <!-- STREAM OUTPUT BLOCK -->
+      <div class="hud-stream-panel" id="hud-feed">
+        SYSTEM DECK STABLE. Neural Link active. How can I assist you, BOSS?
+      </div>
 
-  <!-- FOOTER -->
-  <footer class="ftr">
-    <span>SYSTEM: <strong style="color:var(--gold)">ONLINE</strong></span>
-    <button class="ftr-btn" id="open-desktop-btn">OPEN DESKTOP INTERFACE</button>
-  </footer>
+      <!-- INPUT BAR -->
+      <div class="hud-input-dock">
+        <input type="text" id="hud-input-box" class="hud-input" placeholder="Type command or query...">
+        <button class="hud-send-btn" id="hud-send-btn"><i class="fa-solid fa-paper-plane"></i></button>
+      </div>
+
+    </main>
+
+    <!-- DYNAMIC ROLL-OUT PANEL DRAWER -->
+    <div class="hud-drawer" id="drawer-deck">
+      <div class="drawer-hdr">
+        <span class="drawer-title" id="drawer-header-lbl"><i class="fa-solid fa-bolt"></i> Action Deck</span>
+        <button class="hdr-btn" id="drawer-close-btn" style="border-color: rgba(255,45,135,0.4); color: var(--pink);"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="drawer-body" id="drawer-body-content">
+        <!-- Dyn content injected here -->
+      </div>
+    </div>
+
+    <!-- QUICK UTILITY TABS DOCK -->
+    <nav class="hud-tab-dock">
+      <button class="tab-btn active" id="tab-btn-actions" data-panel="actions">
+        <i class="fa-solid fa-bolt"></i> Actions
+      </button>
+      <button class="tab-btn" id="tab-btn-clipboard" data-panel="clipboard">
+        <i class="fa-solid fa-clipboard"></i> Clip
+      </button>
+      <button class="tab-btn" id="tab-btn-processes" data-panel="processes">
+        <i class="fa-solid fa-server"></i> Tasks
+      </button>
+      <button class="tab-btn" id="tab-btn-files" data-panel="files">
+        <i class="fa-solid fa-folder-open"></i> Projects
+      </button>
+    </nav>
+
+  </div>
 
   <script>
     const feed = document.getElementById('hud-feed');
-    const input = document.getElementById('mini-input');
-    const sendBtn = document.getElementById('mini-send-btn');
+    const input = document.getElementById('hud-input-box');
+    const sendBtn = document.getElementById('hud-send-btn');
     const orbTrigger = document.getElementById('orb-trigger');
-    const micHint = document.getElementById('mic-status-hint');
+    const drawer = document.getElementById('drawer-deck');
+    const drawerTitle = document.getElementById('drawer-header-lbl');
+    const drawerBody = document.getElementById('drawer-body-content');
+    const drawerClose = document.getElementById('drawer-close-btn');
 
-    function appendMsg(sender, text) {
-      const div = document.createElement('div');
-      div.className = `feed-msg ${sender === 'USER' ? 'user' : 'ai'}`;
-      div.innerHTML = `<strong>${sender}:</strong> ${text.replace(/\n/g, '<br>')}`;
-      feed.appendChild(div);
-      feed.scrollTop = feed.scrollHeight;
+    let currentActiveTab = '';
+
+    // Play subtle audio sound effect
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playBeep(freq, type, duration) {
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        osc.type = type || 'sine';
+        gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    function revealText(text) {
+      feed.textContent = '';
+      let index = 0;
+      playBeep(880, 'sine', 0.1);
+      
+      // Clean typography markdown
+      const clean = text
+        .replace(/[*_#`~]/g, '')
+        .replace(/https?:\/\/\S+/g, '')
+        .trim();
+
+      const timer = setInterval(() => {
+        if (index < clean.length) {
+          feed.textContent += clean.charAt(index);
+          index++;
+          if (index % 4 === 0) playBeep(600, 'square', 0.02);
+        } else {
+          clearInterval(timer);
+        }
+      }, 12);
     }
 
     async function sendCmd(msg) {
       if (!msg.trim()) return;
-      appendMsg('USER', msg);
       input.value = '';
-      
+      revealText(`Querying: "${msg}"...`);
+      playBeep(440, 'triangle', 0.1);
+
       try {
         const res = await fetch('/api/chat', {
           method: 'POST',
@@ -431,7 +723,7 @@
         });
         const d = await res.json();
         if (d.success && d.reply) {
-          appendMsg('JENNY', d.reply.text);
+          revealText(d.reply.text);
           if (d.reply.command && d.reply.command.action !== 'vault-save') {
             await fetch('/api/control', {
               method: 'POST',
@@ -441,21 +733,212 @@
           }
         }
       } catch (e) {
-        appendMsg('JENNY', 'Command execution error.');
+        revealText('Error communicating with J.E.N.N.Y. Core.');
       }
     }
 
     sendBtn.addEventListener('click', () => sendCmd(input.value));
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendCmd(input.value); });
 
-    document.querySelectorAll('.power-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const cmd = btn.dataset.cmd;
-        if (cmd) sendCmd(cmd);
-      });
+    // Drawer Close
+    drawerClose.addEventListener('click', () => {
+      drawer.classList.remove('active');
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      currentActiveTab = '';
+      playBeep(300, 'sawtooth', 0.15);
     });
 
-    document.getElementById('open-main-btn').addEventListener('click', () => {
+    // RENDER DRAWER CONTENTS
+    function toggleDrawer(panelName) {
+      playBeep(520, 'sine', 0.1);
+      if (currentActiveTab === panelName) {
+        drawer.classList.remove('active');
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        currentActiveTab = '';
+        return;
+      }
+      currentActiveTab = panelName;
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.panel === panelName);
+      });
+      drawer.classList.add('active');
+
+      if (panelName === 'actions') {
+        drawerTitle.innerHTML = `<i class="fa-solid fa-bolt"></i> Action Deck`;
+        drawerBody.innerHTML = `
+          <div class="ctrl-grid">
+            <div class="ctrl-card" data-cmd="Hi I am on my way home"><i class="fa-solid fa-car"></i><span>On Way Home</span></div>
+            <div class="ctrl-card" data-cmd="wake mac display"><i class="fa-solid fa-sun"></i><span>Wake Display</span></div>
+            <div class="ctrl-card" data-cmd="lock screen"><i class="fa-solid fa-lock"></i><span>Lock Screen</span></div>
+            <div class="ctrl-card" data-cmd="purge ram"><i class="fa-solid fa-broom"></i><span>Purge RAM</span></div>
+            <div class="ctrl-card" data-cmd="volume 80"><i class="fa-solid fa-volume-high"></i><span>Volume 80%</span></div>
+            <div class="ctrl-card" data-cmd="read my emails"><i class="fa-solid fa-envelope"></i><span>Read Mail</span></div>
+            <div class="ctrl-card" data-cmd="open youtube"><i class="fa-solid fa-play"></i><span>YouTube</span></div>
+            <div class="ctrl-card" data-cmd="system info"><i class="fa-solid fa-microchip"></i><span>System Info</span></div>
+          </div>
+        `;
+      } else if (panelName === 'clipboard') {
+        drawerTitle.innerHTML = `<i class="fa-solid fa-clipboard"></i> Clipboard Console`;
+        drawerBody.innerHTML = `
+          <div class="clip-console">
+            <textarea class="clip-textarea" id="clip-text" placeholder="Clipboard loading..."></textarea>
+            <div class="clip-action-row">
+              <button class="clip-btn" id="clip-btn-read"><i class="fa-solid fa-download"></i> Sync Read</button>
+              <button class="clip-btn" id="clip-btn-write"><i class="fa-solid fa-upload"></i> Sync Write</button>
+            </div>
+          </div>
+        `;
+        readClip();
+      } else if (panelName === 'processes') {
+        drawerTitle.innerHTML = `<i class="fa-solid fa-server"></i> Active Task Manager`;
+        drawerBody.innerHTML = `<div class="proc-list" id="proc-list-container">Loading processes...</div>`;
+        refreshProcesses();
+      } else if (panelName === 'files') {
+        drawerTitle.innerHTML = `<i class="fa-solid fa-folder-open"></i> Project Workspace`;
+        drawerBody.innerHTML = `<div class="file-list" id="file-list-container">Loading directory...</div>`;
+        refreshFiles('');
+      }
+    }
+
+    // Dynamic event delegation inside drawerBody
+    drawerBody.addEventListener('click', (e) => {
+      // 1. Quick Control Actions
+      const card = e.target.closest('.ctrl-card');
+      if (card) {
+        const cmd = card.dataset.cmd;
+        if (cmd) sendCmd(cmd);
+        return;
+      }
+
+      // 2. Clipboard Buttons
+      const btnRead = e.target.closest('#clip-btn-read');
+      if (btnRead) { readClip(); return; }
+      const btnWrite = e.target.closest('#clip-btn-write');
+      if (btnWrite) { writeClip(); return; }
+
+      // 3. Process Kill Button
+      const killBtn = e.target.closest('.proc-kill-btn');
+      if (killBtn) {
+        const pid = killBtn.dataset.pid;
+        if (pid) killProc(pid);
+        return;
+      }
+
+      // 4. File Navigator Click
+      const fileItem = e.target.closest('.file-item');
+      if (fileItem) {
+        const path = fileItem.dataset.path;
+        const isDir = fileItem.dataset.isDir === 'true';
+        if (path) handleFileClick(path, isDir);
+        return;
+      }
+    });
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => toggleDrawer(btn.dataset.panel));
+    });
+
+    // Helper functions for tabs
+    async function readClip() {
+      try {
+        const res = await fetch('/api/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'clipboard-read' })
+        });
+        const d = await res.json();
+        if (d.success) document.getElementById('clip-text').value = d.clipboard || '';
+      } catch (e) {}
+    }
+
+    async function writeClip() {
+      const val = document.getElementById('clip-text').value;
+      try {
+        await fetch('/api/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'clipboard-write', value: val })
+        });
+        playBeep(980, 'sine', 0.1);
+      } catch (e) {}
+    }
+
+    async function refreshProcesses() {
+      const el = document.getElementById('proc-list-container');
+      if (!el) return;
+      try {
+        const res = await fetch('/api/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'processes' })
+        });
+        const d = await res.json();
+        if (d.success && d.processes) {
+          el.innerHTML = d.processes.slice(0, 15).map(p => `
+            <div class="proc-item">
+              <div>
+                <span class="proc-name">${p.name}</span>
+                <span class="proc-meta">PID: ${p.pid} | CPU: ${p.cpu}%</span>
+              </div>
+              <button class="proc-kill-btn" onclick="killProc(${p.pid})">Kill</button>
+            </div>
+          `).join('');
+        }
+      } catch (e) {
+        el.innerHTML = 'Failed to fetch processes.';
+      }
+    }
+
+    async function killProc(pid) {
+      try {
+        await fetch('/api/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'kill-process', value: pid })
+        });
+        playBeep(220, 'square', 0.2);
+        refreshProcesses();
+      } catch (e) {}
+    }
+
+    async function refreshFiles(path) {
+      const el = document.getElementById('file-list-container');
+      if (!el) return;
+      try {
+        const res = await fetch('/api/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'list-directory', value: path })
+        });
+        const d = await res.json();
+        if (d.success && d.files) {
+          el.innerHTML = d.files.map(f => `
+            <div class="file-item ${f.isDirectory ? 'dir' : 'file'}" onclick="handleFileClick('${f.path}', ${f.isDirectory})">
+              <i class="fa-solid ${f.isDirectory ? 'fa-folder' : 'fa-file-lines'}"></i>
+              <span>${f.name}</span>
+            </div>
+          `).join('');
+        }
+      } catch (e) {
+        el.innerHTML = 'Workspace empty or inaccessible.';
+      }
+    }
+
+    function handleFileClick(path, isDir) {
+      if (isDir) {
+        refreshFiles(path);
+      } else {
+        // Open file command
+        sendCmd(`open project file ${path}`);
+      }
+    }
+
+    // TOP RIGHT HEADER HANDLERS
+    document.getElementById('training-btn').addEventListener('click', () => {
+      sendCmd('my training');
+    });
+
+    document.getElementById('fullscreen-btn').addEventListener('click', () => {
       if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.openFullApp) {
         window.webkit.messageHandlers.openFullApp.postMessage('open');
       } else {
@@ -463,19 +946,35 @@
       }
     });
 
-    document.getElementById('open-desktop-btn').addEventListener('click', () => {
-      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.openDesktopApp) {
-        window.webkit.messageHandlers.openDesktopApp.postMessage('open');
-      } else {
-        window.open('http://localhost:3005', '_blank');
-      }
-    });
+    // TELEMETRY LIVE UPDATES
+    async function updateTelemetry() {
+      try {
+        const res = await fetch('/api/system-status');
+        const d = await res.json();
+        if (d.success) {
+          const cpu = d.cpu?.usage || 0;
+          const ram = d.ram?.usage || 0;
+          const disk = d.disk?.usage || 0;
+          const net = d.net?.usage || 0;
 
-    document.getElementById('open-training-btn').addEventListener('click', () => {
-      sendCmd('my training');
-    });
+          // Update text indicators
+          document.getElementById('text-cpu').textContent = cpu + '%';
+          document.getElementById('text-ram').textContent = ram + '%';
+          document.getElementById('text-disk').textContent = disk + '%';
+          document.getElementById('text-net').textContent = d.net?.speed || '0K/s';
 
-    // CANVAS ORB ANIMATION
+          // Update SVG stroke dashboard rings (circumference approx 100)
+          document.getElementById('ring-cpu').setAttribute('stroke-dasharray', `${cpu}, 100`);
+          document.getElementById('ring-ram').setAttribute('stroke-dasharray', `${ram}, 100`);
+          document.getElementById('ring-disk').setAttribute('stroke-dasharray', `${disk}, 100`);
+          document.getElementById('ring-net').setAttribute('stroke-dasharray', `${net}, 100`);
+        }
+      } catch {}
+    }
+    updateTelemetry();
+    setInterval(updateTelemetry, 3000);
+
+    // CANVAS SPEECH ANIMATED ORB
     const canvas = document.getElementById('orb-canvas');
     const ctx = canvas.getContext('2d');
     let frame = 0;
@@ -486,22 +985,34 @@
       const W = canvas.width, H = canvas.height;
       const cx = W / 2, cy = H / 2;
       ctx.clearRect(0, 0, W, H);
-      const t = frame * 0.03;
+      const t = frame * 0.035;
 
+      // Glow backdrop
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = isListening ? 'rgba(255, 45, 135, 0.4)' : 'rgba(0, 212, 230, 0.4)';
+
+      // Outer rings
       for (let i = 0; i < 3; i++) {
-        const r = 24 + i * 8;
+        const r = 35 + i * 10;
         ctx.beginPath();
-        ctx.arc(cx, cy, r + Math.sin(t + i) * 3, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(229,193,88,${0.15 + i * 0.1})`;
-        ctx.lineWidth = 1;
+        ctx.arc(cx, cy, r + Math.sin(t + i) * 4, 0, Math.PI * 2);
+        ctx.strokeStyle = isListening 
+          ? `rgba(255, 45, 135, ${0.15 + i * 0.1})` 
+          : `rgba(0, 212, 230, ${0.15 + i * 0.1})`;
+        ctx.lineWidth = 1.5;
         ctx.stroke();
       }
 
+      // Solid central core pulsing
       ctx.beginPath();
-      ctx.arc(cx, cy, 18 + Math.sin(t * 1.5) * 2, 0, Math.PI * 2);
-      ctx.fillStyle = isListening ? 'rgba(229,193,88,0.7)' : 'rgba(229,193,88,0.3)';
+      ctx.arc(cx, cy, 26 + Math.sin(t * 1.8) * 3, 0, Math.PI * 2);
+      ctx.fillStyle = isListening ? 'rgba(255, 45, 135, 0.7)' : 'rgba(0, 212, 230, 0.25)';
       ctx.fill();
+      ctx.strokeStyle = isListening ? '#ff2d87' : '#00d4e6';
+      ctx.lineWidth = 2;
+      ctx.stroke();
 
+      ctx.shadowBlur = 0; // reset
       requestAnimationFrame(drawOrb);
     }
     drawOrb();
@@ -512,32 +1023,26 @@
       const r = new SR();
       r.continuous = false;
       r.interimResults = false;
-      r.onstart = () => { isListening = true; micHint.textContent = 'LISTENING FOR VOICE COMMAND...'; };
+      r.onstart = () => { 
+        isListening = true; 
+        document.querySelector('.center-mic-icon').style.color = '#ff2d87';
+        playBeep(660, 'sine', 0.08);
+      };
       r.onresult = (e) => { sendCmd(e.results[0][0].transcript); };
-      r.onend = () => { isListening = false; micHint.textContent = 'TAP ORB OR TYPE COMMAND'; };
-      r.onerror = () => { isListening = false; micHint.textContent = 'TAP ORB OR TYPE COMMAND'; };
+      r.onend = () => { 
+        isListening = false; 
+        document.querySelector('.center-mic-icon').style.color = 'var(--cyan)';
+      };
+      r.onerror = () => { 
+        isListening = false; 
+        document.querySelector('.center-mic-icon').style.color = 'var(--cyan)';
+      };
 
       orbTrigger.addEventListener('click', () => {
         if (isListening) r.stop();
         else r.start();
       });
     }
-
-    // TELEMETRY REFRESH
-    async function updateTelemetry() {
-      try {
-        const res = await fetch('/api/system-status');
-        const d = await res.json();
-        if (d.success) {
-          document.getElementById('hud-cpu').textContent = (d.cpu?.usage || 0) + '%';
-          document.getElementById('hud-ram').textContent = (d.ram?.usage || 0) + '%';
-          document.getElementById('hud-bat').textContent = Math.round(d.battery?.level || 100) + '%';
-          document.getElementById('hud-up').textContent = Math.floor((d.uptime || 0) / 3600) + 'h';
-        }
-      } catch {}
-    }
-    updateTelemetry();
-    setInterval(updateTelemetry, 4000);
   </script>
 </body>
 </html>
