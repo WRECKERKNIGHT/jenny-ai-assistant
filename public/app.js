@@ -388,20 +388,9 @@ function drawSparkline(canvasId, data, color) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   
-  const rect = canvas.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  const W = Math.round(rect.width) || 200;
-  const H = Math.round(rect.height) || 44;
-  const targetW = Math.round(W * dpr);
-  const targetH = Math.round(H * dpr);
+  const W = 400;
+  const H = 100;
   
-  if (canvas.width !== targetW || canvas.height !== targetH) {
-    canvas.width = targetW;
-    canvas.height = targetH;
-  }
-  
-  ctx.resetTransform();
-  ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, W, H);
   
   if (data.length < 2) return;
@@ -411,11 +400,11 @@ function drawSparkline(canvasId, data, color) {
   ctx.moveTo(0, H);
   data.forEach((v, i) => {
     const x = i * step;
-    const y = H - (v / 100) * (H - 4);
+    const y = H - (v / 100) * (H - 8);
     if (i === 0) ctx.lineTo(x, y);
     else {
       const px = (i - 1) * step;
-      const py = H - (data[i-1] / 100) * (H - 4);
+      const py = H - (data[i-1] / 100) * (H - 8);
       ctx.bezierCurveTo(px + step * 0.4, py, x - step * 0.4, y, x, y);
     }
   });
@@ -431,22 +420,22 @@ function drawSparkline(canvasId, data, color) {
   ctx.beginPath();
   data.forEach((v, i) => {
     const x = i * step;
-    const y = H - (v / 100) * (H - 4);
+    const y = H - (v / 100) * (H - 8);
     if (i === 0) ctx.moveTo(x, y);
     else {
       const px = (i - 1) * step;
-      const py = H - (data[i-1] / 100) * (H - 4);
+      const py = H - (data[i-1] / 100) * (H - 8);
       ctx.bezierCurveTo(px + step * 0.4, py, x - step * 0.4, y, x, y);
     }
   });
   ctx.strokeStyle = color;
-  ctx.lineWidth = 1.8;
+  ctx.lineWidth = 3.5;
   ctx.stroke();
   
   const lastX = (data.length - 1) * step;
-  const lastY = H - (data[data.length - 1] / 100) * (H - 4);
+  const lastY = H - (data[data.length - 1] / 100) * (H - 8);
   ctx.beginPath();
-  ctx.arc(lastX, lastY, 3, 0, Math.PI * 2);
+  ctx.arc(lastX, lastY, 5.5, 0, Math.PI * 2);
   ctx.fillStyle = color;
   ctx.fill();
 }
