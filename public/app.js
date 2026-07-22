@@ -297,6 +297,7 @@ async function runBoot() {
   setInterval(updateTimerDisplay, 1000);
   checkPermissions();
   startConnectionMonitor();
+  initPhoneLinkManager();
 
   document.querySelectorAll('.welcome-card').forEach(card => {
     card.addEventListener('click', () => {
@@ -2088,6 +2089,138 @@ sendMessage = async function(text) {
   }
   _origSendMessage(text);
 };
+
+// ================================================
+// PHONE REMOTE ACCESS LINK MANAGER
+// ================================================
+let currentPendingDevice = null;
+let phoneLinkPollInterval = null;
+
+function copyTextFromElement(elementId) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  navigator.clipboard.writeText(el.innerText || el.textContent).then(() => {
+    toast('Copied link to clipboard, BOSS.', 'ok');
+  });
+}
+
+async function initPhoneLinkManager() {
+  const qrImg = document.getElementById('phone-qr-img');
+  const urlPub = document.getElementById('phone-url-pub');
+  const urlLoc = document.getElementById('phone-url-loc');
+
+  try {
+    const rStatus = await fetch('/api/remote-status');
+    const dStatus = await rStatus.json();
+    const pubUrl = dStatus.tunnelUrl ? `${dStatus.tunnelUrl}/mobile` : 'Retrieving...';
+    urlPub.textContent = pubUrl;
+    
+    const rIp = await fetch('/api/local-ip');
+    const dIp = await rIp.json();
+    const locUrl = dIp.mobileUrl || 'Retrieving...';
+    urlLoc.textContent = locUrl;
+
+    const targetUrl = dStatus.tunnelUrl ? pubUrl : locUrl;
+    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=d08400&bgcolor=ffffff&data=${encodeURIComponent(targetUrl)}`;
+  } catch (e) {
+    console.error('[PhoneLink] Failed to load remote URLs', e);
+  }
+
+  phoneLinkPollInterval = setInterval(pollDevices, 1500);
+  pollDevices();
+
+  document.getElementById('pending-approve-btn').addEventListener('click', () => {
+    if (currentPendingDevice) respondToDevice(currentPendingDevice.deviceId, 'approved');
+  });
+
+  document.getElementById('pending-deny-btn').addEventListener('click', () => {
+    if (currentPendingDevice) respondToDevice(currentPendingDevice.deviceId, 'denied');
+  });
+
+  document.getElementById('linked-revoke-btn').addEventListener('click', () => {
+    const linkedId = document.getElementById('linked-revoke-btn').dataset.deviceId;
+    if (linkedId) respondToDevice(linkedId, 'revoked');
+  });
+}
+
+async function pollDevices() {
+  try {
+    const res = await fetch('/api/devices');
+    const data = await res.json();
+    if (!data.success || !data.devices) return;
+
+    const devices = data.devices;
+    
+    const pending = devices.find(d => d.status === 'pending');
+    const approved = devices.find(d => d.status === 'approved');
+
+    const activeCount = document.getElementById('phone-active-count');
+    if (activeCount) {
+      const approvedCount = devices.filter(d => d.status === 'approved').length;
+      activeCount.textContent = `${approvedCount} linked`;
+    }
+
+    const qrStage = document.getElementById('phone-qr-stage');
+    const pendingStage = document.getElementById('phone-pending-stage');
+    const linkedStage = document.getElementById('phone-linked-stage');
+
+    if (pending) {
+      currentPendingDevice = pending;
+      qrStage.classList.add('hidden');
+      linkedStage.classList.add('hidden');
+      pendingStage.classList.remove('hidden');
+
+      document.getElementById('pending-device-os').textContent = pending.os;
+      document.getElementById('pending-device-browser').textContent = pending.browser;
+      document.getElementById('pending-device-ip').textContent = pending.ip;
+    } else if (approved) {
+      currentPendingDevice = null;
+      qrStage.classList.add('hidden');
+      pendingStage.classList.add('hidden');
+      linkedStage.classList.remove('hidden');
+
+      document.getElementById('linked-device-name').textContent = approved.os;
+      document.getElementById('linked-device-meta').textContent = `${approved.browser} · ${approved.ip}`;
+      document.getElementById('linked-revoke-btn').dataset.deviceId = approved.deviceId;
+
+      const systemPing = document.getElementById('ambient-ping-text')?.textContent || '12ms';
+      document.getElementById('phone-stat-ping').textContent = systemPing;
+    } else {
+      currentPendingDevice = null;
+      pendingStage.classList.add('hidden');
+      linkedStage.classList.add('hidden');
+      qrStage.classList.remove('hidden');
+    }
+  } catch (e) {
+    console.error('[PhoneLink] Polling error', e);
+  }
+}
+
+async function respondToDevice(deviceId, status) {
+  try {
+    const res = await fetch('/api/device/approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId, status })
+    });
+    const data = await res.json();
+    if (data.success) {
+      if (status === 'approved') {
+        toast('Phone linked successfully, BOSS.', 'ok');
+        speak('Remote access granted. Phone is now connected.');
+      } else if (status === 'denied') {
+        toast('Connection denied.', 'err');
+        speak('Remote access denied.');
+      } else {
+        toast('Access revoked.', 'ok');
+        speak('Phone disconnected.');
+      }
+      pollDevices();
+    }
+  } catch (e) {
+    toast('Response failed.', 'err');
+  }
+}
 
 // ================================================
 // INIT

@@ -274,9 +274,69 @@
       border-left: 3px solid var(--gold);
       color: var(--txt2);
     }
+
+    /* PENDING AUTHORIZATION OVERLAYS */
+    .auth-overlay {
+      position: fixed; inset: 0; z-index: 9999;
+      background: radial-gradient(circle at 50% 30%, rgba(229,193,88,0.15), transparent 60%), #000;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 30px; text-align: center; gap: 24px;
+      transition: all 0.5s ease;
+    }
+    .auth-overlay.hidden {
+      opacity: 0; pointer-events: none; transform: scale(1.05);
+    }
+    .auth-icon {
+      font-size: 60px; color: var(--gold);
+      filter: drop-shadow(0 0 15px rgba(229,193,88,0.4));
+      animation: auth-float 3s ease-in-out infinite;
+    }
+    @keyframes auth-float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    .auth-title {
+      font-family: monospace; font-size: 16px; font-weight: 800;
+      letter-spacing: 3px; color: var(--gold);
+    }
+    .auth-desc {
+      font-size: 13px; color: var(--txt2); line-height: 1.6; max-width: 280px;
+    }
+    .auth-spinner {
+      width: 40px; height: 40px; border: 3px solid rgba(229,193,88,0.1);
+      border-top-color: var(--gold); border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Denied overlay specifically */
+    .auth-overlay.denied {
+      background: radial-gradient(circle at 50% 30%, rgba(255,0,85,0.15), transparent 60%), #000;
+    }
+    .auth-overlay.denied .auth-icon {
+      color: #ff0055; filter: drop-shadow(0 0 15px rgba(255,0,85,0.4));
+    }
+    .auth-overlay.denied .auth-title {
+      color: #ff0055;
+    }
   </style>
 </head>
 <body>
+
+  <!-- PENDING AUTHORIZATION SCREEN -->
+  <div class="auth-overlay" id="auth-pending-screen">
+    <div class="auth-icon"><i class="fa-solid fa-key"></i></div>
+    <div class="auth-title">AUTHORIZATION REQUIRED</div>
+    <div class="auth-desc">Please click <strong>Allow Access</strong> on your MacBook desktop console to link this mobile device.</div>
+    <div class="auth-spinner"></div>
+  </div>
+
+  <!-- ACCESS DENIED SCREEN -->
+  <div class="auth-overlay denied hidden" id="auth-denied-screen">
+    <div class="auth-icon"><i class="fa-solid fa-ban"></i></div>
+    <div class="auth-title">ACCESS DENIED</div>
+    <div class="auth-desc">Your MacBook administrator has denied access for this device. Contact owner for re-authorization.</div>
+  </div>
 
   <!-- HEADER -->
   <header class="app-header">
@@ -434,6 +494,87 @@
       window.speechSynthesis.speak(u);
     }
 
+    // ================================================
+    // DEVICE AUTHENTICATION STATE & REGISTRATION
+    // ================================================
+    function getDeviceId() {
+      let id = localStorage.getItem('jenny_device_id');
+      if (!id) {
+        id = 'dev_' + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('jenny_device_id', id);
+      }
+      return id;
+    }
+
+    function getDeviceOS() {
+      const ua = navigator.userAgent;
+      if (/android/i.test(ua)) return 'Android';
+      if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) return 'iOS';
+      if (/macintosh/i.test(ua)) return 'macOS';
+      if (/windows/i.test(ua)) return 'Windows';
+      return 'Mobile Device';
+    }
+
+    function getDeviceBrowser() {
+      const ua = navigator.userAgent;
+      if (/chrome/i.test(ua)) return 'Chrome';
+      if (/safari/i.test(ua) && !/chrome/i.test(ua)) return 'Safari';
+      if (/firefox/i.test(ua)) return 'Firefox';
+      return 'Web Browser';
+    }
+
+    async function checkDeviceAuth() {
+      const deviceId = getDeviceId();
+      const os = getDeviceOS();
+      const browser = getDeviceBrowser();
+
+      try {
+        const res = await fetch(`${serverUrl}/api/device/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId, os, browser })
+        });
+        const data = await res.json();
+        if (data.success && data.device) {
+          updateAuthUI(data.device.status);
+        }
+      } catch (e) {
+        console.error('[DeviceAuth] Registration failed', e);
+      }
+    }
+
+    function updateAuthUI(status) {
+      const pendingScreen = document.getElementById('auth-pending-screen');
+      const deniedScreen = document.getElementById('auth-denied-screen');
+
+      if (status === 'approved') {
+        pendingScreen.classList.add('hidden');
+        deniedScreen.classList.add('hidden');
+      } else if (status === 'denied') {
+        pendingScreen.classList.add('hidden');
+        deniedScreen.classList.remove('hidden');
+      } else {
+        pendingScreen.classList.remove('hidden');
+        deniedScreen.classList.add('hidden');
+      }
+    }
+
+    async function pollAuthStatus() {
+      const deviceId = getDeviceId();
+      try {
+        const res = await fetch(`${serverUrl}/api/device/status/${deviceId}`);
+        const data = await res.json();
+        if (data.success) {
+          updateAuthUI(data.status);
+        }
+      } catch (e) {
+        console.error('[DeviceAuth] Polling status failed', e);
+      }
+    }
+
+    checkDeviceAuth();
+    setInterval(pollAuthStatus, 1500);
+
     async function executeRemote(cmd) {
       if (!cmd.trim()) return;
       appendLog('USER', cmd);
@@ -443,7 +584,7 @@
         const res = await fetch(`${serverUrl}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: cmd })
+          body: JSON.stringify({ message: cmd, deviceId: getDeviceId() })
         });
         const d = await res.json();
         if (d.success && d.reply) {
@@ -453,7 +594,7 @@
             await fetch(`${serverUrl}/api/control`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(d.reply.command)
+              body: JSON.stringify({ ...d.reply.command, deviceId: getDeviceId() })
             });
           }
         }

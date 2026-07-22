@@ -34,6 +34,76 @@ app.get('/app', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index
 app.get('/hud', (req, res) => res.sendFile(path.join(__dirname, 'public', 'mini.html')));
 
 // ================================================
+// MOBILE DEVICE ACCESS MANAGER STATE & ENDPOINTS
+// ================================================
+let activeDevices = {};
+
+function isDeviceAuthorized(req) {
+  const { deviceId } = req.body;
+  if (!deviceId) return true;
+  const dev = activeDevices[deviceId];
+  return dev && dev.status === 'approved';
+}
+
+// Register phone or retrieve current status
+app.post('/api/device/register', (req, res) => {
+  const { deviceId, os, browser } = req.body;
+  if (!deviceId) return res.status(400).json({ success: false, message: 'deviceId is required' });
+
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+  if (!activeDevices[deviceId]) {
+    activeDevices[deviceId] = {
+      deviceId,
+      os: os || 'Unknown OS',
+      browser: browser || 'Unknown Browser',
+      ip,
+      status: 'pending',
+      lastActive: new Date()
+    };
+  } else {
+    activeDevices[deviceId].lastActive = new Date();
+    if (activeDevices[deviceId].status === 'revoked') {
+      activeDevices[deviceId].status = 'pending';
+    }
+  }
+
+  res.json({ success: true, device: activeDevices[deviceId] });
+});
+
+// Check status of a device (short-poll)
+app.get('/api/device/status/:deviceId', (req, res) => {
+  const { deviceId } = req.params;
+  const device = activeDevices[deviceId];
+  if (!device) {
+    return res.json({ success: true, status: 'unknown' });
+  }
+  device.lastActive = new Date();
+  res.json({ success: true, status: device.status });
+});
+
+// List all devices for Desktop Panel
+app.get('/api/devices', (req, res) => {
+  res.json({ success: true, devices: Object.values(activeDevices) });
+});
+
+// Approve, Deny or Revoke a device
+app.post('/api/device/approve', (req, res) => {
+  const { deviceId, status } = req.body;
+  if (!deviceId || !status) {
+    return res.status(400).json({ success: false, message: 'deviceId and status are required' });
+  }
+
+  if (activeDevices[deviceId]) {
+    activeDevices[deviceId].status = status;
+    activeDevices[deviceId].lastActive = new Date();
+    res.json({ success: true, message: `Device ${deviceId} status updated to ${status}` });
+  } else {
+    res.status(404).json({ success: false, message: 'Device not found' });
+  }
+});
+
+// ================================================
 // REMOTE ACCESS AUTHENTICATION
 // ================================================
 const REMOTE_ACCESS_TOKEN = process.env.REMOTE_ACCESS_TOKEN || '';
@@ -505,7 +575,10 @@ app.get('/api/open-url', (req, res) => {
 
 // Endpoint to manage system controls
 app.post('/api/control', (req, res) => {
-  const { action, value } = req.body;
+  const { action, value, deviceId } = req.body;
+  if (deviceId && !isDeviceAuthorized(req)) {
+    return res.status(403).json({ success: false, message: 'Device not authorized' });
+  }
   const platform = os.platform();
 
   if (platform !== 'darwin') {
@@ -1361,8 +1434,19 @@ function cpuAverage() {
 
 // Chat endpoint — offline commands FIRST, then Gemini fallback
 app.post('/api/chat', async (req, res) => {
-  const { message } = req.body;
+  const { message, deviceId } = req.body;
   if (!message) return res.status(400).json({ success: false, message: 'Message is required' });
+
+  if (deviceId && !isDeviceAuthorized(req)) {
+    return res.json({
+      success: false,
+      error: 'unauthorized',
+      reply: {
+        text: "DEVICE NOT AUTHORIZED: Please click 'Allow' on your MacBook screen for this device to control J.E.N.N.Y.",
+        speech: "Device not authorized."
+      }
+    });
+  }
 
   const query = message.toLowerCase().trim();
 

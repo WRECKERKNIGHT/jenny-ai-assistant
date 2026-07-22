@@ -339,6 +339,109 @@
       </div>
     </main>
 
+    <!-- RIGHTMOST PANEL — Phone Access Link -->
+    <aside class="phone-link-panel" id="phone-link-panel">
+      <div class="holo-bg">
+        <div class="holo-grid"></div>
+        <div class="holo-glow"></div>
+        <div class="holo-scanline"></div>
+      </div>
+
+      <div class="phone-panel-header">
+        <span class="phone-badge"><i class="fa-solid fa-mobile-screen-button"></i> MOBILE ACCESS</span>
+        <span class="phone-count-pill" id="phone-active-count">0 linked</span>
+      </div>
+
+      <div class="phone-panel-content">
+        <!-- QR CODE STAGE (Waiting/Unlinked State) -->
+        <div class="phone-qr-stage" id="phone-qr-stage">
+          <div class="qr-container-box">
+            <img id="phone-qr-img" src="" alt="QR Code Link">
+            <div class="qr-scanner-overlay"></div>
+          </div>
+          <div class="phone-link-label">Scan to connect phone</div>
+          
+          <div class="phone-urls-box">
+            <div class="url-copy-row">
+              <span class="url-label">Public URL:</span>
+              <span class="url-text" id="phone-url-pub">Retrieving...</span>
+              <button class="copy-url-btn" onclick="copyTextFromElement('phone-url-pub')"><i class="fa-regular fa-copy"></i></button>
+            </div>
+            <div class="url-copy-row">
+              <span class="url-label">Local Wi-Fi:</span>
+              <span class="url-text" id="phone-url-loc">Retrieving...</span>
+              <button class="copy-url-btn" onclick="copyTextFromElement('phone-url-loc')"><i class="fa-regular fa-copy"></i></button>
+            </div>
+          </div>
+          <div class="phone-status-pulse">
+            <div class="pulse-ring"></div>
+            <span>WAITING FOR INCOMING LINK...</span>
+          </div>
+        </div>
+
+        <!-- AUTHORIZATION / CONFIRMATION PROMPT (Pending State) -->
+        <div class="phone-pending-stage hidden" id="phone-pending-stage">
+          <div class="device-icon-shield">
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+          <div class="device-alert-title">ACCESS REQUEST</div>
+          
+          <div class="device-spec-card">
+            <div class="spec-row">
+              <span class="spec-lbl">Device OS:</span>
+              <span class="spec-val" id="pending-device-os">Unknown</span>
+            </div>
+            <div class="spec-row">
+              <span class="spec-lbl">Browser:</span>
+              <span class="spec-val" id="pending-device-browser">Unknown</span>
+            </div>
+            <div class="spec-row">
+              <span class="spec-lbl">IP Address:</span>
+              <span class="spec-val" id="pending-device-ip">127.0.0.1</span>
+            </div>
+          </div>
+
+          <div class="device-action-row">
+            <button class="device-btn approve-btn" id="pending-approve-btn">
+              <i class="fa-solid fa-check"></i> ALLOW ACCESS
+            </button>
+            <button class="device-btn deny-btn" id="pending-deny-btn">
+              <i class="fa-solid fa-xmark"></i> DENY
+            </button>
+          </div>
+        </div>
+
+        <!-- LINKED DEVICES LIST (Approved State) -->
+        <div class="phone-linked-stage hidden" id="phone-linked-stage">
+          <div class="linked-title">CONNECTED PHONE</div>
+          <div class="linked-device-card">
+            <div class="device-icon-box">
+              <i class="fa-solid fa-mobile-screen"></i>
+              <span class="live-indicator"></span>
+            </div>
+            <div class="device-desc">
+              <div class="device-name" id="linked-device-name">iPhone</div>
+              <div class="device-meta" id="linked-device-meta">Safari · 192.168.1.5</div>
+            </div>
+            <button class="revoke-btn" id="linked-revoke-btn" title="Disconnect Device">
+              <i class="fa-solid fa-link-slash"></i>
+            </button>
+          </div>
+
+          <div class="linked-stats-grid">
+            <div class="stat-box">
+              <div class="stat-lbl">Latency</div>
+              <div class="stat-val" id="phone-stat-ping">--ms</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-lbl">Role</div>
+              <div class="stat-val" id="phone-stat-role">Controller</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
     <!-- PANELS (floating glassmorphic, draggable) -->
     <div class="panels" id="panels"></div>
   </div>
