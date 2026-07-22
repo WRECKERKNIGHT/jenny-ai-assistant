@@ -1,7 +1,7 @@
 import Cocoa
 import WebKit
 
-let SERVER_URL = "http://localhost:3000"
+let SERVER_URL = "http://localhost:3005"
 let MINI_URL = "\(SERVER_URL)/mini.html"
 let HEALTH_CHECK_INTERVAL: TimeInterval = 3.0
 let HEALTH_CHECK_TIMEOUT: TimeInterval = 2.0

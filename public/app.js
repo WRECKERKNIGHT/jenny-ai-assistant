@@ -232,6 +232,7 @@ async function runBoot() {
 
   // Phase 1: Title typewriter with glitch
   const title = 'J.E.N.N.Y.';
+  titleEl.textContent = '';
   titleEl.classList.add('glitching');
   for (let i = 0; i < title.length; i++) {
     titleEl.textContent += title[i];

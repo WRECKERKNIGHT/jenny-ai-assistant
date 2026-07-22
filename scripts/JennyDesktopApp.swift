@@ -1,7 +1,7 @@
 import Cocoa
 import WebKit
 
-let SERVER_URL = "http://localhost:3000"
+let SERVER_URL = "http://localhost:3005"
 let HEALTH_CHECK_TIMEOUT: TimeInterval = 2.0
 
 func desktopLoadingHTML(status: String = "Connecting to JENNY server...") -> String {
@@ -170,7 +170,7 @@ class DesktopAppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate,
     func loadMainUI() {
         guard let url = URL(string: SERVER_URL) else { return }
         let current = webView.url?.absoluteString ?? ""
-        if !current.contains("localhost:3000") || current.contains("mini.html") || !serverOnline {
+        if !current.contains("localhost:3005") || current.contains("mini.html") || !serverOnline {
             webView.load(URLRequest(url: url))
         }
     }

@@ -8,7 +8,7 @@ const https = require('https');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3005;
 
 const VAULT_FILE = path.join(__dirname, 'vault.json');
 const OFFLINE_MEMORY_FILE = path.join(__dirname, 'offline_memory.json');

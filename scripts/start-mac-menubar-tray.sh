@@ -3,7 +3,7 @@
 
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BIN_DIR="$APP_DIR/bin"
-SERVER_PORT=3000
+SERVER_PORT=3005
 
 echo "=========================================================="
 echo "  JENNY AI - Starting Native macOS Apps"
