@@ -434,10 +434,11 @@ html,body { height:100%; background:var(--bg); color:var(--txt); font-family:var
 .orbit {
   position: absolute;
   border-radius: 50%;
-  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 215, 0, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: inset 0 0 10px rgba(255, 215, 0, 0.02);
 }
 .orbit-1 { width: 70px; height: 70px; animation: spin-orbit 6s linear infinite; }
 .orbit-2 { width: 110px; height: 110px; animation: spin-orbit 12s linear infinite; }
@@ -446,28 +447,29 @@ html,body { height:100%; background:var(--bg); color:var(--txt); font-family:var
 .planet {
   position: absolute;
   border-radius: 50%;
-  box-shadow: 0 0 10px currentColor;
+  box-shadow: 0 0 12px currentColor, 0 0 20px currentColor;
 }
 .planet-1 {
   top: -4px;
   width: 8px;
   height: 8px;
-  background: var(--cyan);
-  color: var(--cyan-glow);
+  background: #ffffff;
+  color: rgba(255, 255, 255, 0.8);
 }
 .planet-2 {
   top: -6px;
   width: 12px;
   height: 12px;
-  background: var(--pink);
-  color: var(--pink-glow);
+  background: var(--cyan);
+  color: rgba(255, 215, 0, 0.7);
 }
 .planet-3 {
   top: -8px;
   width: 16px;
   height: 16px;
-  background: var(--gold);
-  color: var(--gold-glow);
+  background: #ffffff;
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--cyan);
 }
 
 @keyframes spin-orbit {

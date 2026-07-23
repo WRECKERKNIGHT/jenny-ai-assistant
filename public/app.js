@@ -559,9 +559,9 @@ function startOrb() {
         if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
       }
       ctx.closePath();
-      const alpha = isIdle ? 0.03 + ring * 0.01 : 0.06 + ring * 0.03;
-      ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
-      ctx.lineWidth = isIdle ? 0.5 : 1;
+      const alpha = isIdle ? 0.04 + ring * 0.02 : 0.08 + ring * 0.04;
+      ctx.strokeStyle = `rgba(255,215,0,${alpha})`;
+      ctx.lineWidth = isIdle ? 0.6 : 1.2;
       ctx.stroke();
     }
     for (let a = 0; a < 3; a++) {
@@ -570,16 +570,16 @@ function startOrb() {
       const offset = t * (0.6 + a * 0.3) * (a % 2 === 0 ? 1 : -1);
       ctx.beginPath();
       ctx.arc(cx, cy, innerR, offset, offset + arcSpan);
-      ctx.strokeStyle = `rgba(255,255,255,${isIdle ? 0.08 : 0.15})`;
+      ctx.strokeStyle = `rgba(255,215,0,${isIdle ? 0.12 : 0.3})`;
       ctx.lineWidth = 1;
       ctx.stroke();
     }
     const coreR = isIdle ? 32 : (isListening ? 38 : (isSpeaking ? 42 : 35));
     const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
-    if (isListening) { grad.addColorStop(0, 'rgba(255,255,255,0.7)'); grad.addColorStop(0.5, 'rgba(255,255,255,0.2)'); grad.addColorStop(1, 'rgba(255,255,255,0)'); }
-    else if (isThinking) { grad.addColorStop(0, 'rgba(200,200,220,0.6)'); grad.addColorStop(0.5, 'rgba(200,200,220,0.15)'); grad.addColorStop(1, 'rgba(200,200,220,0)'); }
-    else if (isSpeaking) { grad.addColorStop(0, 'rgba(255,255,255,0.8)'); grad.addColorStop(0.4, 'rgba(255,255,255,0.3)'); grad.addColorStop(1, 'rgba(255,255,255,0)'); ctx.beginPath(); ctx.arc(cx, cy, coreR + Math.sin(t * 3.5) * 5 + 10, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fill(); }
-    else { grad.addColorStop(0, 'rgba(255,255,255,0.5)'); grad.addColorStop(0.5, 'rgba(255,255,255,0.15)'); grad.addColorStop(1, 'rgba(255,255,255,0)'); }
+    if (isListening) { grad.addColorStop(0, 'rgba(255,255,255,0.85)'); grad.addColorStop(0.5, 'rgba(255,215,0,0.3)'); grad.addColorStop(1, 'rgba(255,215,0,0)'); }
+    else if (isThinking) { grad.addColorStop(0, 'rgba(255,215,0,0.5)'); grad.addColorStop(0.5, 'rgba(255,215,0,0.15)'); grad.addColorStop(1, 'rgba(255,215,0,0)'); }
+    else if (isSpeaking) { grad.addColorStop(0, 'rgba(255,215,0,0.85)'); grad.addColorStop(0.4, 'rgba(255,215,0,0.3)'); grad.addColorStop(1, 'rgba(255,215,0,0)'); ctx.beginPath(); ctx.arc(cx, cy, coreR + Math.sin(t * 3.5) * 5 + 10, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,215,0,0.04)'; ctx.fill(); }
+    else { grad.addColorStop(0, 'rgba(255,215,0,0.35)'); grad.addColorStop(0.5, 'rgba(255,215,0,0.12)'); grad.addColorStop(1, 'rgba(255,215,0,0)'); }
     ctx.beginPath();
     ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
     ctx.fillStyle = grad;
@@ -591,7 +591,7 @@ function startOrb() {
         const dist = 80 + Math.sin(t * 1.5 + i) * 20;
         ctx.beginPath();
         ctx.arc(cx + Math.cos(angle) * dist, cy + Math.sin(angle) * dist, 1 + Math.sin(t * 2 + i) * 0.5, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,255,255,${isSpeaking ? 0.4 : 0.2})`;
+        ctx.fillStyle = `rgba(255,215,0,${isSpeaking ? 0.65 : 0.3})`;
         ctx.fill();
       }
     }

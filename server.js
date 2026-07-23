@@ -2933,20 +2933,29 @@ function generateOfflineBrainReply(query) {
 
 // Endpoint for real-time live macOS System Status & Hardware Telemetry
 let lastCpuTicks = null;
-app.get('/api/system-status', (req, res) => {
+let cachedSystemStatus = {
+  success: true,
+  cpu: { usage: 15, cores: os.cpus().length, model: os.cpus()[0] ? os.cpus()[0].model : 'Host CPU' },
+  ram: { usage: 40, usedMB: 8192, totalMB: 16384 },
+  battery: { level: 100, charging: true },
+  disk: { usage: 35, free: '120GB' },
+  net: { usage: 0, speed: '0 KB/s' },
+  uptime: Math.round(os.uptime()),
+  hostname: os.hostname(),
+  platform: os.platform()
+};
+
+function updateSystemStatusTelemetry() {
   const cpus = os.cpus();
   const totalMem = os.totalmem();
   const freeMem = os.freemem();
   const usedMem = totalMem - freeMem;
   
-  // Real memory pressure percentage calculation
   let memUsagePct = Math.max(12, Math.round((usedMem / totalMem) * 100));
   if (os.platform() === 'darwin') {
-    // macOS file cache typically occupies 30-40% of memory. Adjust to show actual active memory pressure.
     memUsagePct = Math.max(15, Math.min(95, Math.round(memUsagePct * 0.7)));
   }
 
-  // Calculate actual CPU usage using tick difference
   let user = 0, sys = 0, idle = 0, total = 0;
   cpus.forEach(cpu => {
     user += cpu.times.user;
@@ -2970,12 +2979,11 @@ app.get('/api/system-status', (req, res) => {
   }
   cpuUsagePct = Math.min(100, Math.max(5, cpuUsagePct));
 
-  let batteryLevel = 100;
-  let isCharging = true;
-  let diskUsagePct = 35;
-  let diskFree = '120GB';
+  let batteryLevel = cachedSystemStatus.battery.level;
+  let isCharging = cachedSystemStatus.battery.charging;
+  let diskUsagePct = cachedSystemStatus.disk.usage;
+  let diskFree = cachedSystemStatus.disk.free;
 
-  // Fast background query
   exec('pmset -g batt', { timeout: 1500 }, (err, stdout) => {
     if (!err && stdout) {
       const match = stdout.match(/(\d+)%/);
@@ -3031,37 +3039,28 @@ app.get('/api/system-status', (req, res) => {
           netUsagePct = Math.min(100, Math.round((currentNetSpeedKB / 10240) * 100));
         }
 
-        res.json({
+        cachedSystemStatus = {
           success: true,
-          cpu: {
-            usage: cpuUsagePct,
-            cores: cpus.length,
-            model: cpus[0] ? cpus[0].model : 'Host CPU'
-          },
-          ram: {
-            usage: memUsagePct,
-            usedMB: Math.round(usedMem / (1024 * 1024)),
-            totalMB: Math.round(totalMem / (1024 * 1024))
-          },
-          battery: {
-            level: batteryLevel,
-            charging: isCharging
-          },
-          disk: {
-            usage: diskUsagePct,
-            free: diskFree
-          },
-          net: {
-            usage: netUsagePct,
-            speed: netSpeedStr
-          },
+          cpu: { usage: cpuUsagePct, cores: cpus.length, model: cpus[0] ? cpus[0].model : 'Host CPU' },
+          ram: { usage: memUsagePct, usedMB: Math.round(usedMem / (1024 * 1024)), totalMB: Math.round(totalMem / (1024 * 1024)) },
+          battery: { level: batteryLevel, charging: isCharging },
+          disk: { usage: diskUsagePct, free: diskFree },
+          net: { usage: netUsagePct, speed: netSpeedStr },
           uptime: Math.round(os.uptime()),
           hostname: os.hostname(),
           platform: os.platform()
-        });
+        };
       });
     });
   });
+}
+
+// Start background updates every 1.5s
+updateSystemStatusTelemetry();
+setInterval(updateSystemStatusTelemetry, 1500);
+
+app.get('/api/system-status', (req, res) => {
+  res.json(cachedSystemStatus);
 });
 
 // Endpoint for ElevenLabs Text-to-Speech (Voice ID: 21m00Tcm4TlvDq8ikWAM - "Rachel")
