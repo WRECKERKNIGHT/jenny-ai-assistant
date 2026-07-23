@@ -1061,3 +1061,91 @@ body.light-mode .phone-link-panel {
   font-family: var(--mono); font-size: 11px; color: #fff; font-weight: 700;
 }
 
+/* Linked Phone Controller Section */
+.linked-ctrl-section {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(229, 193, 88, 0.15);
+}
+.ctrl-title {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--gold);
+  margin-bottom: 12px;
+  text-align: left;
+}
+.ctrl-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.ctrl-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(229, 193, 88, 0.2);
+  border-radius: 10px;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--txt);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+}
+.ctrl-btn:hover {
+  background: rgba(229, 193, 88, 0.08);
+  border-color: var(--gold);
+  box-shadow: 0 0 12px rgba(229, 193, 88, 0.15);
+  transform: translateY(-1px);
+}
+.ctrl-btn i {
+  font-size: 14px;
+  color: var(--gold);
+}
+.ctrl-btn span {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.ctrl-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(229, 193, 88, 0.1);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+.ctrl-lbl {
+  font-family: var(--mono);
+  font-size: 8px;
+  color: var(--txt2);
+  letter-spacing: 1px;
+}
+.ctrl-slider {
+  -webkit-appearance: none;
+  width: 90px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+}
+.ctrl-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--gold);
+  cursor: pointer;
+  box-shadow: 0 0 8px var(--gold);
+  transition: transform 0.1s;
+}
+.ctrl-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.3);
+}
+

@@ -587,10 +587,107 @@
         const data = await res.json();
         if (data.success) {
           updateAuthUI(data.status);
+          if (data.status === 'approved') {
+            await pollDeviceCommands();
+          }
         }
       } catch (e) {
         console.error('[DeviceAuth] Polling status failed', e);
       }
+    }
+
+    async function pollDeviceCommands() {
+      const deviceId = getDeviceId();
+      try {
+        const res = await fetch(`${serverUrl}/api/device/command/poll/${deviceId}`);
+        const data = await res.json();
+        if (data.success && data.commands && data.commands.length > 0) {
+          data.commands.forEach(cmd => {
+            executePhoneCommand(cmd.action, cmd.value);
+          });
+        }
+      } catch (e) {
+        console.error('[DeviceAuth] Polling commands failed', e);
+      }
+    }
+
+    function executePhoneCommand(action, value) {
+      appendLog('HOST_CMD', `Received remote action: ${action.toUpperCase()}`);
+      
+      if (action === 'buzz') {
+        try {
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const oscillator = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          oscillator.type = 'sawtooth';
+          oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+          oscillator.frequency.exponentialRampToValueAtTime(1760, audioCtx.currentTime + 0.4);
+          gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+          oscillator.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          oscillator.start();
+          oscillator.stop(audioCtx.currentTime + 0.5);
+        } catch (err) {
+          console.error('Audio buzz failed', err);
+        }
+      }
+      
+      if (action === 'vibrate') {
+        if (navigator.vibrate) {
+          navigator.vibrate([200, 100, 200, 100, 300]);
+        } else {
+          showMobileToast('Vibration not supported on this browser.');
+        }
+      }
+      
+      if (action === 'toggle-flash') {
+        const strobe = document.createElement('div');
+        strobe.style.position = 'fixed';
+        strobe.style.inset = '0';
+        strobe.style.background = '#ffffff';
+        strobe.style.zIndex = '999998';
+        document.body.appendChild(strobe);
+        let flashes = 0;
+        const interval = setInterval(() => {
+          strobe.style.visibility = strobe.style.visibility === 'hidden' ? 'visible' : 'hidden';
+          flashes++;
+          if (flashes > 12) {
+            clearInterval(interval);
+            strobe.remove();
+          }
+        }, 80);
+      }
+      
+      if (action === 'toast') {
+        showMobileToast(value || 'System ping, BOSS!');
+      }
+
+      if (action === 'volume') {
+        showMobileToast(`Volume updated remotely to ${value}%`);
+      }
+    }
+
+    function showMobileToast(msg) {
+      const toastDiv = document.createElement('div');
+      toastDiv.style.position = 'fixed';
+      toastDiv.style.bottom = '80px';
+      toastDiv.style.left = '50%';
+      toastDiv.style.transform = 'translateX(-50%)';
+      toastDiv.style.background = 'rgba(208, 132, 0, 0.95)';
+      toastDiv.style.border = '1px solid #d08400';
+      toastDiv.style.color = '#ffffff';
+      toastDiv.style.padding = '12px 24px';
+      toastDiv.style.borderRadius = '30px';
+      toastDiv.style.fontSize = '12px';
+      toastDiv.style.fontFamily = 'monospace';
+      toastDiv.style.zIndex = '999999';
+      toastDiv.style.boxShadow = '0 0 20px rgba(208, 132, 0, 0.4)';
+      toastDiv.textContent = msg;
+      document.body.appendChild(toastDiv);
+      setTimeout(() => {
+        toastDiv.remove();
+      }, 3000);
     }
 
     checkDeviceAuth();

@@ -480,7 +480,9 @@ async function fetchSysStats() {
     drawSparkline('spark-net', sparkHistory.net, 'rgb(0,212,230)');
 
     updateWelcomeVitals(cpu, ram, d.battery?.level, d.uptime);
-  } catch {}
+  } catch (err) {
+    console.error('[Telemetry] fetchSysStats error:', err);
+  }
 }
 
 function startSysMonitor() { fetchSysStats(); setInterval(fetchSysStats, 3000); }
@@ -1904,6 +1906,29 @@ document.getElementById('media-btn-next')?.addEventListener('click', () => {
   }).catch(() => {});
 });
 
+async function triggerSystemControl(action, value = '') {
+  sfx.click();
+  try {
+    const res = await fetch('/api/control', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, value })
+    });
+    const d = await res.json();
+    if (d.success) {
+      toast(d.message || `Executed control '${action}'`, 'ok');
+      if (action === 'theme-toggle') {
+        document.body.classList.toggle('light-mode');
+      }
+    } else {
+      toast(d.error || 'Control action failed.', 'err');
+    }
+  } catch (err) {
+    console.error('System control trigger failed:', err);
+    toast('Server connection failed.', 'err');
+  }
+}
+
 if ('speechSynthesis' in window) { window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices(); }
 
 // ================================================
@@ -2115,6 +2140,7 @@ sendMessage = async function(text) {
 // PHONE REMOTE ACCESS LINK MANAGER
 // ================================================
 let currentPendingDevice = null;
+let currentLinkedDeviceId = null;
 let phoneLinkPollInterval = null;
 
 function copyTextFromElement(elementId) {
@@ -2196,6 +2222,7 @@ async function pollDevices() {
       document.getElementById('pending-device-ip').textContent = pending.ip;
     } else if (approved) {
       currentPendingDevice = null;
+      currentLinkedDeviceId = approved.deviceId;
       qrStage.classList.add('hidden');
       pendingStage.classList.add('hidden');
       linkedStage.classList.remove('hidden');
@@ -2208,6 +2235,7 @@ async function pollDevices() {
       document.getElementById('phone-stat-ping').textContent = systemPing;
     } else {
       currentPendingDevice = null;
+      currentLinkedDeviceId = null;
       pendingStage.classList.add('hidden');
       linkedStage.classList.add('hidden');
       qrStage.classList.remove('hidden');
@@ -2247,3 +2275,36 @@ async function respondToDevice(deviceId, status) {
 // INIT
 // ================================================
 document.addEventListener('DOMContentLoaded', runBoot);
+
+async function triggerPhoneAction(action, value = '') {
+  if (!currentLinkedDeviceId) {
+    toast('No phone currently linked, BOSS.', 'err');
+    return;
+  }
+  
+  // For toast, ask user for custom input message
+  let finalVal = value;
+  if (action === 'toast' && !value) {
+    finalVal = prompt('Enter toast message for phone:', 'Hello from desktop, BOSS!');
+    if (finalVal === null) return; // user cancelled
+  }
+
+  try {
+    const res = await fetch('/api/device/command/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: currentLinkedDeviceId, action, value: finalVal })
+    });
+    const d = await res.json();
+    if (d.success) {
+      toast(`Remote '${action}' sent to phone.`, 'ok');
+    }
+  } catch (err) {
+    console.error('Trigger phone action failed:', err);
+    toast('Failed to send remote command.', 'err');
+  }
+}
+
+function setPhoneVolume(val) {
+  triggerPhoneAction('volume', val);
+}

@@ -97,10 +97,15 @@
       </div>
 
       <div class="sys-monitor" id="sys-monitor">
-        <div class="sys-media-row" style="margin-top: 0; margin-bottom: 8px;">
+        <div class="sys-media-row" style="margin-top: 0; margin-bottom: 2px;">
           <button class="sys-media-btn" id="media-btn-prev" title="Previous"><i class="fa-solid fa-backward"></i></button>
           <button class="sys-media-btn" id="media-btn-play" title="Play/Pause"><i class="fa-solid fa-play"></i><i class="fa-solid fa-pause"></i></button>
           <button class="sys-media-btn" id="media-btn-next" title="Next"><i class="fa-solid fa-forward"></i></button>
+        </div>
+        <div class="sys-media-row" style="margin-top: 0; margin-bottom: 8px;">
+          <button class="sys-media-btn" onclick="triggerSystemControl('spotify-toggle')" title="Spotify Play/Pause" style="border-color: rgba(29, 185, 84, 0.25); color: #1DB954;"><i class="fa-brands fa-spotify"></i></button>
+          <button class="sys-media-btn" onclick="triggerSystemControl('theme-toggle')" title="Toggle Dark/Light Mode" style="border-color: rgba(229, 193, 88, 0.25); color: var(--gold);"><i class="fa-solid fa-circle-half-stroke"></i></button>
+          <button class="sys-media-btn" onclick="triggerSystemControl('dnd-toggle')" title="Toggle Do Not Disturb" style="border-color: rgba(139, 92, 246, 0.25); color: #8b5cf6;"><i class="fa-solid fa-moon"></i></button>
         </div>
         <div class="sys-graph-row">
           <div class="sys-graph-card">
@@ -141,6 +146,7 @@
         <div class="sys-info-row">
           <div class="sys-info-chip"><i class="fa-solid fa-clock"></i> <span id="sys-uptime">--</span></div>
           <div class="sys-info-chip"><i class="fa-solid fa-battery-full"></i> <span id="sys-battery">--</span></div>
+          <div class="sys-info-chip"><i class="fa-solid fa-wifi"></i> <span id="sys-wifi">--</span></div>
         </div>
       </div>
 
@@ -451,6 +457,33 @@
             <div class="stat-box">
               <div class="stat-lbl">Role</div>
               <div class="stat-val" id="phone-stat-role">Controller</div>
+            </div>
+          </div>
+
+          <div class="linked-ctrl-section">
+            <div class="ctrl-title">REMOTE COMMANDS</div>
+            <div class="ctrl-grid">
+              <button class="ctrl-btn" onclick="triggerPhoneAction('buzz')" title="Play alert sound on phone">
+                <i class="fa-solid fa-volume-high"></i>
+                <span>Buzz Phone</span>
+              </button>
+              <button class="ctrl-btn" onclick="triggerPhoneAction('toast')" title="Send banner toast message to phone">
+                <i class="fa-solid fa-message"></i>
+                <span>Send Toast</span>
+              </button>
+              <button class="ctrl-btn" onclick="triggerPhoneAction('vibrate')" title="Vibrate phone device">
+                <i class="fa-solid fa-mobile-retro"></i>
+                <span>Vibrate</span>
+              </button>
+              <button class="ctrl-btn" onclick="triggerPhoneAction('toggle-flash')" title="Toggle screen flash strobe light">
+                <i class="fa-solid fa-lightbulb"></i>
+                <span>Flashlight</span>
+              </button>
+            </div>
+            
+            <div class="ctrl-row">
+              <span class="ctrl-lbl">Device Volume</span>
+              <input type="range" min="0" max="100" value="70" class="ctrl-slider" oninput="setPhoneVolume(this.value)">
             </div>
           </div>
         </div>
