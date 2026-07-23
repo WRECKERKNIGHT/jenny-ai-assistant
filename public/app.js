@@ -474,10 +474,10 @@ async function fetchSysStats() {
     document.getElementById('sys-battery').textContent = d.battery?.level != null ? `${Math.round(d.battery.level)}%` : '--';
     document.getElementById('sys-wifi').textContent = d.hostname ? d.hostname.split('.')[0] : '--';
 
-    drawSparkline('spark-cpu', sparkHistory.cpu, 'rgb(229,193,88)');
-    drawSparkline('spark-ram', sparkHistory.ram, 'rgb(229,193,88)');
-    drawSparkline('spark-disk', sparkHistory.disk, 'rgb(229,193,88)');
-    drawSparkline('spark-net', sparkHistory.net, 'rgb(0,212,230)');
+    drawSparkline('spark-cpu', sparkHistory.cpu, 'rgb(255,215,0)');
+    drawSparkline('spark-ram', sparkHistory.ram, 'rgb(255,215,0)');
+    drawSparkline('spark-disk', sparkHistory.disk, 'rgb(255,215,0)');
+    drawSparkline('spark-net', sparkHistory.net, 'rgb(255,215,0)');
 
     updateWelcomeVitals(cpu, ram, d.battery?.level, d.uptime);
   } catch (err) {

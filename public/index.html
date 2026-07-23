@@ -97,15 +97,10 @@
       </div>
 
       <div class="sys-monitor" id="sys-monitor">
-        <div class="sys-media-row" style="margin-top: 0; margin-bottom: 2px;">
+        <div class="sys-media-row" style="margin-top: 0; margin-bottom: 8px;">
           <button class="sys-media-btn" id="media-btn-prev" title="Previous"><i class="fa-solid fa-backward"></i></button>
           <button class="sys-media-btn" id="media-btn-play" title="Play/Pause"><i class="fa-solid fa-play"></i><i class="fa-solid fa-pause"></i></button>
           <button class="sys-media-btn" id="media-btn-next" title="Next"><i class="fa-solid fa-forward"></i></button>
-        </div>
-        <div class="sys-media-row" style="margin-top: 0; margin-bottom: 8px;">
-          <button class="sys-media-btn" onclick="triggerSystemControl('spotify-toggle')" title="Spotify Play/Pause" style="border-color: rgba(29, 185, 84, 0.25); color: #1DB954;"><i class="fa-brands fa-spotify"></i></button>
-          <button class="sys-media-btn" onclick="triggerSystemControl('theme-toggle')" title="Toggle Dark/Light Mode" style="border-color: rgba(229, 193, 88, 0.25); color: var(--gold);"><i class="fa-solid fa-circle-half-stroke"></i></button>
-          <button class="sys-media-btn" onclick="triggerSystemControl('dnd-toggle')" title="Toggle Do Not Disturb" style="border-color: rgba(139, 92, 246, 0.25); color: #8b5cf6;"><i class="fa-solid fa-moon"></i></button>
         </div>
         <div class="sys-graph-row">
           <div class="sys-graph-card">
@@ -275,7 +270,7 @@
 
           <div class="welcome-vitals">
             <div class="wv-item">
-              <div class="wv-ring" id="wv-cpu-ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="rgba(0,212,230,0.1)" stroke-width="2"/><circle cx="18" cy="18" r="16" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-dasharray="100.5" stroke-dashoffset="100.5" stroke-linecap="round" class="wv-fill" id="wv-cpu-fill" transform="rotate(-90 18 18)"/></svg><span class="wv-pct" id="wv-cpu-pct">--</span></div>
+              <div class="wv-ring" id="wv-cpu-ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,215,0,0.1)" stroke-width="2"/><circle cx="18" cy="18" r="16" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-dasharray="100.5" stroke-dashoffset="100.5" stroke-linecap="round" class="wv-fill" id="wv-cpu-fill" transform="rotate(-90 18 18)"/></svg><span class="wv-pct" id="wv-cpu-pct">--</span></div>
               <span class="wv-lbl">CPU</span>
             </div>
             <div class="wv-item">
