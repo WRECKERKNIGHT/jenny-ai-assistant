@@ -12,44 +12,46 @@ func loadingHTML(status: String = "Connecting to JENNY server...") -> String {
     <html>
     <head>
     <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
     <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body {
-        background: #08080e; color: #fff;
-        font-family: -apple-system, BlinkMacSystemFont, 'SF Mono', monospace;
+        background: #000000; color: #fff;
+        font-family: 'Orbitron', -apple-system, BlinkMacSystemFont, sans-serif;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         height: 100vh; overflow: hidden;
     }
     .loader {
         width: 60px; height: 60px; border-radius: 50%;
-        border: 2px solid rgba(0,242,254,0.15); border-top-color: #00f2fe;
+        border: 2px solid rgba(255,215,0,0.15); border-top-color: #ffd700;
         animation: spin 1s linear infinite; margin-bottom: 20px; position: relative;
     }
     .loader::after {
         content: ''; position: absolute; inset: 6px; border-radius: 50%;
-        border: 2px solid rgba(255,0,127,0.15); border-bottom-color: #ff007f;
+        border: 2px solid rgba(255,255,255,0.15); border-bottom-color: #ffffff;
         animation: spin 1.5s linear infinite reverse;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .title {
-        font-size: 14px; font-weight: 700; letter-spacing: 4px;
-        background: linear-gradient(90deg, #00f2fe, #ff007f);
+        font-size: 16px; font-weight: 900; letter-spacing: 5px;
+        background: linear-gradient(90deg, #ffd700, #ffffff);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px;
     }
-    .status { font-size: 10px; color: rgba(255,255,255,0.4); letter-spacing: 1px; }
+    .status { font-size: 9px; color: rgba(255,255,255,0.5); letter-spacing: 1px; text-transform: uppercase; }
     .retry-btn {
-        margin-top: 20px; padding: 8px 20px; background: rgba(0,242,254,0.1);
-        border: 1px solid rgba(0,242,254,0.3); border-radius: 8px; color: #00f2fe;
+        margin-top: 20px; padding: 8px 20px; background: rgba(255,215,0,0.1);
+        border: 1px solid rgba(255,215,0,0.3); border-radius: 8px; color: #ffd700;
         font-family: inherit; font-size: 10px; letter-spacing: 1px; cursor: pointer;
+        transition: all 0.2s ease;
     }
-    .retry-btn:hover { background: rgba(0,242,254,0.2); border-color: #00f2fe; }
+    .retry-btn:hover { background: rgba(255,215,0,0.2); border-color: #ffd700; }
     .dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:#ff3b30; margin-right:6px; animation: blink 1.5s ease-in-out infinite; }
     @keyframes blink { 0%,100%{opacity:0.3;} 50%{opacity:1;} }
     </style>
     </head>
     <body>
     <div class="loader"></div>
-    <div class="title">J.E.N.N.Y.</div>
+    <div class="title">JENNY</div>
     <div class="status"><span class="dot"></span>\(status)</div>
     <button class="retry-btn" onclick="window.webkit.messageHandlers.retry.postMessage('retry')">RETRY</button>
     </body>
