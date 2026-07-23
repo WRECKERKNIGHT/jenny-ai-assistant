@@ -1155,18 +1155,28 @@ app.post('/api/speak', (req, res) => {
 
     try {
       fs.writeFileSync(tempFile, clean, 'utf8');
-      currentSayProcess = exec(`say -v "Samantha" -f "${tempFile}"`, (err) => {
-        if (err) {
-          // Fallback to default say if Samantha fails
-          currentSayProcess = exec(`say -f "${tempFile}"`, (fallbackErr) => {
+      const voices = ["Victoria", "Samantha", "Karen", "Tessa", "Veena"];
+      let voiceIndex = 0;
+      
+      function attemptSpeak() {
+        if (voiceIndex < voices.length) {
+          const voice = voices[voiceIndex++];
+          currentSayProcess = exec(`say -v "${voice}" -f "${tempFile}"`, (err) => {
+            if (err) {
+              attemptSpeak();
+            } else {
+              currentSayProcess = null;
+              try { fs.unlinkSync(tempFile); } catch {}
+            }
+          });
+        } else {
+          currentSayProcess = exec(`say -f "${tempFile}"`, () => {
             currentSayProcess = null;
             try { fs.unlinkSync(tempFile); } catch {}
           });
-        } else {
-          currentSayProcess = null;
-          try { fs.unlinkSync(tempFile); } catch {}
         }
-      });
+      }
+      attemptSpeak();
     } catch (fsErr) {
       console.error('[Speak API] file write error:', fsErr);
     }

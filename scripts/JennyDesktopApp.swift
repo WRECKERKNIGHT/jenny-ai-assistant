@@ -74,6 +74,62 @@ class DesktopAppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate,
     var serverOnline = false
     var healthTimer: Timer?
 
+    func setupMenuBar() {
+        let mainMenu = NSMenu()
+        
+        let appMenu = NSMenu()
+        let appName = "JENNY Desktop"
+        appMenu.addItem(NSMenuItem(title: "About \(appName)", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: ""))
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(NSMenuItem(title: "Preferences...", action: nil, keyEquivalent: ","))
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(NSMenuItem(title: "Hide \(appName)", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
+        
+        let hideOthers = NSMenuItem(title: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
+        hideOthers.keyEquivalentModifierMask = [.command, .option]
+        appMenu.addItem(hideOthers)
+        appMenu.addItem(NSMenuItem(title: "Show All", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: ""))
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(NSMenuItem(title: "Quit \(appName)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        
+        let appMenuItem = NSMenuItem()
+        appMenuItem.submenu = appMenu
+        mainMenu.addItem(appMenuItem)
+        
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z"))
+        editMenu.addItem(NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "Z"))
+        editMenu.addItem(NSMenuItem.separator())
+        editMenu.addItem(NSMenuItem(title: "Cut", action: Selector(("cut:")), keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: "Copy", action: Selector(("copy:")), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: "Paste", action: Selector(("paste:")), keyEquivalent: "v"))
+        editMenu.addItem(NSMenuItem(title: "Select All", action: Selector(("selectAll:")), keyEquivalent: "a"))
+        
+        let editMenuItem = NSMenuItem()
+        editMenuItem.submenu = editMenu
+        mainMenu.addItem(editMenuItem)
+        
+        let viewMenu = NSMenu(title: "View")
+        viewMenu.addItem(NSMenuItem(title: "Reload", action: #selector(refreshPage), keyEquivalent: "r"))
+        viewMenu.addItem(NSMenuItem(title: "Toggle Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f"))
+        
+        let viewMenuItem = NSMenuItem()
+        viewMenuItem.submenu = viewMenu
+        mainMenu.addItem(viewMenuItem)
+        
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(NSMenuItem(title: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m"))
+        windowMenu.addItem(NSMenuItem(title: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: ""))
+        windowMenu.addItem(NSMenuItem.separator())
+        windowMenu.addItem(NSMenuItem(title: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: ""))
+        
+        let windowMenuItem = NSMenuItem()
+        windowMenuItem.submenu = windowMenu
+        mainMenu.addItem(windowMenuItem)
+        
+        NSApplication.shared.mainMenu = mainMenu
+    }
+
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 100, y: 100, width: 1280, height: 850)
         let width: CGFloat = min(1400, screenFrame.width * 0.85)
@@ -92,6 +148,7 @@ class DesktopAppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate,
         window.setFrameAutosaveName("JennyDesktopWindow")
 
         setupToolbar()
+        setupMenuBar()
 
         let config = WKWebViewConfiguration()
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
@@ -201,6 +258,30 @@ class DesktopAppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate,
 
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         switch itemIdentifier.rawValue {
+        case "logoItem":
+            let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+            item.label = "Logo"
+            
+            let container = NSView(frame: NSRect(x: 0, y: 0, width: 90, height: 22))
+            
+            let dot = NSView(frame: NSRect(x: 0, y: 6, width: 8, height: 8))
+            dot.wantsLayer = true
+            dot.layer?.backgroundColor = NSColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 1.0).cgColor
+            dot.layer?.cornerRadius = 4
+            
+            let label = NSTextField(labelWithString: "J.E.N.N.Y.")
+            label.frame = NSRect(x: 14, y: 0, width: 76, height: 20)
+            label.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .bold)
+            label.textColor = NSColor.white
+            label.isBezeled = false
+            label.drawsBackground = false
+            label.isEditable = false
+            label.isSelectable = false
+            
+            container.addSubview(dot)
+            container.addSubview(label)
+            item.view = container
+            return item
         case "refreshItem":
             let item = NSToolbarItem(itemIdentifier: itemIdentifier)
             item.label = "Refresh"
@@ -243,9 +324,11 @@ class DesktopAppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate,
 
     var allToolbarItems: [NSToolbarItem.Identifier] {
         return [
-            NSToolbarItem.Identifier("refreshItem"),
+            NSToolbarItem.Identifier("logoItem"),
+            NSToolbarItem.Identifier.flexibleSpace,
             NSToolbarItem.Identifier("backItem"),
             NSToolbarItem.Identifier("forwardItem"),
+            NSToolbarItem.Identifier("refreshItem"),
             NSToolbarItem.Identifier.space,
             NSToolbarItem.Identifier("statusItem"),
         ]
