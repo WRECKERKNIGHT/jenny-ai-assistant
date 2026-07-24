@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>J.E.N.N.Y. Core Diagnostics</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+  :root {
+    --gold: #ffd700;
+    --gold-glow: rgba(255, 215, 0, 0.4);
+    --gold-dim: rgba(255, 215, 0, 0.1);
+    --bg-dark: #050508;
+    --border-glass: rgba(255, 215, 0, 0.2);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background-color: var(--bg-dark);
+    color: #ffffff;
+    font-family: 'Rajdhani', -apple-system, BlinkMacSystemFont, sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+    user-select: none;
+  }
+
+  /* Full Screen Hud Grid Background */
+  .hud-background {
+    position: absolute;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(255, 215, 0, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 215, 0, 0.03) 1px, transparent 1px);
+    background-size: 30px 30px;
+    background-position: center;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .hud-scanline {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+    background-size: 100% 4px, 6px 100%;
+    z-index: 10;
+    pointer-events: none;
+    opacity: 0.4;
+  }
+
+  .hud-laser {
+    position: absolute;
+    top: -100px;
+    left: 0;
+    right: 0;
+    height: 10px;
+    background: linear-gradient(to bottom, transparent, var(--gold), transparent);
+    box-shadow: 0 0 20px var(--gold-glow);
+    animation: laser-sweep 8s linear infinite;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0.15;
+  }
+
+  @keyframes laser-sweep {
+    0% { top: -10px; }
+    100% { top: 110%; }
+  }
+
+  /* Mouse tracking glow */
+  .spotlight {
+    position: absolute;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 215, 0, 0.06) 0%, transparent 70%);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 1;
+    mix-blend-mode: screen;
+    transition: width 0.3s ease, height 0.3s ease;
+  }
+
+  /* Maximalist Grid Layout */
+  .hud-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-columns: 320px 1fr 320px;
+    padding: 24px;
+    gap: 20px;
+    z-index: 2;
+  }
+
+  /* Glassmorphic Side Panels */
+  .hud-panel {
+    background: rgba(8, 8, 12, 0.75);
+    border: 1px solid var(--border-glass);
+    border-radius: 16px;
+    backdrop-filter: blur(20px);
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(255, 215, 0, 0.02);
+  }
+
+  .hud-panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    box-shadow: 0 0 10px var(--gold);
+  }
+
+  /* Headers */
+  .panel-hdr {
+    font-family: 'Orbitron', monospace;
+    font-size: 13px;
+    font-weight: 900;
+    color: var(--gold);
+    letter-spacing: 2px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255, 215, 0, 0.15);
+    padding-bottom: 8px;
+  }
+
+  .panel-hdr i {
+    animation: blink-fast 1s infinite alternate;
+  }
+
+  @keyframes blink-fast {
+    0% { opacity: 0.3; }
+    100% { opacity: 1; }
+  }
+
+  /* Code Stream / Diagnostics Log */
+  .code-log {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.6);
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .log-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    white-space: nowrap;
+  }
+
+  .log-time { color: var(--gold); opacity: 0.7; }
+  .log-tag {
+    background: rgba(255, 215, 0, 0.1);
+    color: var(--gold);
+    padding: 1px 4px;
+    border-radius: 4px;
+    font-size: 9px;
+    border: 1px solid rgba(255,215,0,0.15);
+  }
+  .log-tag.fail {
+    background: rgba(255, 59, 48, 0.1);
+    color: #ff3b30;
+    border-color: rgba(255, 59, 48, 0.2);
+  }
+
+  /* Center Console */
+  .hud-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+  }
+
+  /* Planetary Orbit Visualizer */
+  .system-stage {
+    width: 320px;
+    height: 320px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: perspective(600px) rotateX(15deg);
+    margin-bottom: -20px;
+  }
+
+  .sun {
+    width: 44px;
+    height: 44px;
+    background: radial-gradient(circle at 30% 30%, #ffffff, var(--gold));
+    border-radius: 50%;
+    box-shadow: 0 0 40px var(--gold), 0 0 80px var(--gold-glow);
+    position: absolute;
+    z-index: 5;
+    animation: sun-pulse 3s ease-in-out infinite;
+  }
+
+  @keyframes sun-pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 40px var(--gold), 0 0 70px var(--gold-glow); }
+    50% { transform: scale(1.06); box-shadow: 0 0 50px var(--gold), 0 0 95px var(--gold); }
+  }
+
+  .orbit-track {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 215, 0, 0.08);
+    box-shadow: inset 0 0 15px rgba(255, 215, 0, 0.02);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ot-1 { width: 110px; height: 110px; animation: rotate-orbit 8s linear infinite; }
+  .ot-2 { width: 170px; height: 170px; animation: rotate-orbit 14s linear infinite; }
+  .ot-3 { width: 230px; height: 230px; animation: rotate-orbit 22s linear infinite; }
+  .ot-4 { width: 290px; height: 290px; animation: rotate-orbit 32s linear infinite; }
+
+  .planet-node {
+    position: absolute;
+    border-radius: 50%;
+    box-shadow: 0 0 15px currentColor;
+  }
+
+  .p-1 { top: -5px; width: 10px; height: 10px; background: #ffffff; color: #ffffff; }
+  .p-2 { top: -7px; width: 14px; height: 14px; background: var(--gold); color: var(--gold); }
+  .p-3 { top: -9px; width: 18px; height: 18px; background: #ffffff; color: rgba(255,215,0,0.5); border: 1.5px solid var(--gold); }
+  .p-4 { top: -6px; width: 12px; height: 12px; background: rgba(255,255,255,0.8); color: rgba(255,255,255,0.8); }
+
+  @keyframes rotate-orbit {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  /* Diagnostic / Action Glass Card */
+  .action-card {
+    background: rgba(8, 8, 12, 0.85);
+    border: 1px solid var(--border-glass);
+    border-radius: 20px;
+    padding: 30px;
+    width: 480px;
+    text-align: center;
+    backdrop-filter: blur(30px);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 20px rgba(255, 215, 0, 0.05);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .action-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.03), transparent);
+    pointer-events: none;
+  }
+
+  .warn-ico {
+    font-size: 36px;
+    color: var(--gold);
+    text-shadow: 0 0 20px var(--gold-glow);
+    margin-bottom: 16px;
+    animation: warn-pulse 1.5s infinite alternate;
+  }
+
+  @keyframes warn-pulse {
+    0% { transform: scale(1); filter: drop-shadow(0 0 5px var(--gold-glow)); }
+    100% { transform: scale(1.1); filter: drop-shadow(0 0 15px var(--gold)); }
+  }
+
+  .card-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 4px;
+    color: var(--gold);
+    margin-bottom: 8px;
+    text-shadow: 0 0 8px var(--gold-glow);
+  }
+
+  .card-desc {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.6);
+    letter-spacing: 1px;
+    line-height: 1.6;
+    margin-bottom: 24px;
+  }
+
+  /* Massive Golden Start Button */
+  .start-btn {
+    width: 100%;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.15) 0%, rgba(255, 215, 0, 0.03) 100%);
+    border: 1px solid var(--gold);
+    border-radius: 12px;
+    color: #ffffff;
+    font-family: 'Orbitron', monospace;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.05);
+    margin-bottom: 16px;
+  }
+
+  .start-btn:hover {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.25) 0%, rgba(255, 215, 0, 0.08) 100%);
+    box-shadow: 0 0 25px var(--gold-glow), inset 0 0 8px rgba(255, 215, 0, 0.2);
+    transform: translateY(-2px);
+    color: var(--gold);
+  }
+
+  .start-btn:active {
+    transform: translateY(1px);
+  }
+
+  .retry-hint {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    animation: flash-slow 2s infinite;
+    cursor: pointer;
+  }
+
+  @keyframes flash-slow {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.9; }
+  }
+
+  /* Circular Hardware Dials */
+  .dial-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+    align-items: center;
+    justify-items: center;
+    flex: 1;
+  }
+
+  .dial-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .circle-dial {
+    width: 90px;
+    height: 90px;
+    position: relative;
+  }
+
+  .circle-dial svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+  }
+
+  .circle-dial circle {
+    fill: none;
+    stroke-width: 4;
+  }
+
+  .circle-dial .dial-track {
+    stroke: rgba(255, 215, 0, 0.05);
+  }
+
+  .circle-dial .dial-fill {
+    stroke: var(--gold);
+    stroke-linecap: round;
+    stroke-dasharray: 251.2;
+    stroke-dashoffset: 251.2;
+    animation: dial-in 2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @keyframes dial-in {
+    to { stroke-dashoffset: 210; } /* static baseline loader value */
+  }
+
+  .dial-val {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    color: #ffffff;
+  }
+
+  .dial-lbl {
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* Top and Bottom Decorative Info Bars */
+  .hud-meta-top {
+    position: absolute;
+    top: 6px;
+    left: 24px;
+    right: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: rgba(255, 215, 0, 0.4);
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  .hud-meta-bot {
+    position: absolute;
+    bottom: 6px;
+    left: 24px;
+    right: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: rgba(255, 215, 0, 0.4);
+    pointer-events: none;
+    z-index: 3;
+  }
+</style>
+</head>
+<body onclick="handleScreenClick(event)">
+
+<div class="hud-background"></div>
+<div class="hud-scanline"></div>
+<div class="hud-laser"></div>
+<div class="spotlight" id="spotlight"></div>
+
+<div class="hud-meta-top">
+  <span>SYS_SECURE: ENCRYPTED // TLS_OFFLINE</span>
+  <span>J.E.N.N.Y. OPERATIONAL DIAGNOSTIC BRIDGE v2.5</span>
+  <span>HOST_LINK: DISCONNECTED</span>
+</div>
+
+<div class="hud-container">
+  <!-- LEFT PANEL: Real-time Terminal Log Simulation -->
+  <div class="hud-panel">
+    <div class="panel-hdr">
+      <span>MATRIX DIAGNOSTICS</span>
+      <i class="fa-solid fa-microchip"></i>
+    </div>
+    <div class="code-log" id="code-log">
+      <!-- Generated dynamically -->
+    </div>
+  </div>
+
+  <!-- CENTER VIEW: Planet Orbits + Glass Control Center -->
+  <div class="hud-center">
+    <div class="system-stage">
+      <div class="sun"></div>
+      <div class="orbit-track ot-1"><div class="planet-node p-1"></div></div>
+      <div class="orbit-track ot-2"><div class="planet-node p-2"></div></div>
+      <div class="orbit-track ot-3"><div class="planet-node p-3"></div></div>
+      <div class="orbit-track ot-4"><div class="planet-node p-4"></div></div>
+    </div>
+
+    <div class="action-card" onclick="event.stopPropagation()">
+      <div class="warn-ico">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <h2 class="card-title">SERVER OFFLINE</h2>
+      <p class="card-desc">The local assistant server is currently sleeping or starting up. Initialize the diagnostic systems to boot the neural link.</p>
+      
+      <button class="start-btn" id="start-btn" onclick="startServers(event)">
+        <i class="fa-solid fa-play"></i> START ALL SERVERS
+      </button>
+      
+      <div class="retry-hint" onclick="retryConnection(event)">
+        PRESS ANYWHERE TO RETRY CONNECTION
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL: Empty Offline Vitals -->
+  <div class="hud-panel">
+    <div class="panel-hdr">
+      <span>HARDWARE VITALS</span>
+      <i class="fa-solid fa-gauge-high"></i>
+    </div>
+    <div class="dial-grid">
+      <div class="dial-item">
+        <div class="circle-dial">
+          <svg viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="40" class="dial-track"/>
+            <circle cx="50" cy="50" r="40" class="dial-fill" style="stroke-dashoffset: 230;"/>
+          </svg>
+          <div class="dial-val">0%</div>
+        </div>
+        <span class="dial-lbl">CPU Load</span>
+      </div>
+      
+      <div class="dial-item">
+        <div class="circle-dial">
+          <svg viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="40" class="dial-track"/>
+            <circle cx="50" cy="50" r="40" class="dial-fill" style="stroke: #ff2d87; stroke-dashoffset: 210;"/>
+          </svg>
+          <div class="dial-val">OFFLINE</div>
+        </div>
+        <span class="dial-lbl">RAM Usage</span>
+      </div>
+      
+      <div class="dial-item">
+        <div class="circle-dial">
+          <svg viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="40" class="dial-track"/>
+            <circle cx="50" cy="50" r="40" class="dial-fill" style="stroke-dashoffset: 251.2;"/>
+          </svg>
+          <div class="dial-val">0 KB/s</div>
+        </div>
+        <span class="dial-lbl">Net Speed</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="hud-meta-bot">
+  <span id="runtime-clock">DIAG_UPTIME: 00:00:00</span>
+  <span>CPU_CORES: DETECTING...</span>
+  <span>BATTERY: UNLINKED</span>
+</div>
+
+<script>
+  // Mouse Spotlight Glow Follow
+  const spotlight = document.getElementById('spotlight');
+  document.addEventListener('mousemove', (e) => {
+    spotlight.style.left = e.clientX + 'px';
+    spotlight.style.top = e.clientY + 'px';
+  });
+
+  // Diagnostics Code Log Generator
+  const logContainer = document.getElementById('code-log');
+  const logCommands = [
+    { tag: "SYS", text: "Checking memory allocation limits..." },
+    { tag: "SYS", text: "Local address link established: http://localhost:3005" },
+    { tag: "FAIL", text: "GET /api/system-status timeout (offline)", type: "fail" },
+    { tag: "SYS", text: "Re-scanning active ports on loopback..." },
+    { tag: "SYS", text: "Checking AppleScript hardware permissions..." },
+    { tag: "FAIL", text: "TTS voice engine: Victoria ready, Samantha missing", type: "fail" },
+    { tag: "SYS", text: "Setting up background system stats telemetry..." },
+    { tag: "SYS", text: "Initial handshake failed: retrying link..." },
+    { tag: "SYS", text: "Loading static assets from local public directory..." },
+    { tag: "FAIL", text: "Device bridge handshake pending (no phone linked)", type: "fail" }
+  ];
+
+  let logIndex = 0;
+  function addLogLine() {
+    const time = new Date().toTimeString().split(' ')[0];
+    const cmd = logCommands[logIndex % logCommands.length];
+    logIndex++;
+
+    const div = document.createElement('div');
+    div.className = 'log-line';
+    div.innerHTML = `
+      <span class="log-time">[${time}]</span>
+      <span class="log-tag ${cmd.type === 'fail' ? 'fail' : ''}">${cmd.tag}</span>
+      <span>${cmd.text}</span>
+    `;
+
+    logContainer.appendChild(div);
+    if (logContainer.children.length > 18) {
+      logContainer.removeChild(logContainer.firstChild);
+    }
+  }
+
+  // Generate logs on load and loop
+  for (let i = 0; i < 12; i++) {
+    addLogLine();
+  }
+  setInterval(addLogLine, 2500);
+
+  // Diagnostic Uptime Counter
+  let start = Date.now();
+  setInterval(() => {
+    let diff = Math.floor((Date.now() - start) / 1000);
+    let hrs = String(Math.floor(diff / 3600)).padStart(2, '0');
+    let mins = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+    let secs = String(diff % 60).padStart(2, '0');
+    document.getElementById('runtime-clock').textContent = `DIAG_UPTIME: ${hrs}:${mins}:${secs}`;
+  }, 1000);
+
+  // Swift App Message Handlers
+  function startServers(event) {
+    if (event) event.stopPropagation();
+    const btn = document.getElementById('start-btn');
+    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> STARTING ENGINE...';
+    btn.disabled = true;
+    
+    // Call swift native start
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.startServers) {
+      window.webkit.messageHandlers.startServers.postMessage('start');
+    } else {
+      console.log("[Diagnostics] startServers called (no WebKit handler)");
+      // Mock retry
+      setTimeout(() => {
+        btn.innerHTML = '<i class="fa-solid fa-play"></i> START ALL SERVERS';
+        btn.disabled = false;
+      }, 3000);
+    }
+  }
+
+  function retryConnection(event) {
+    if (event) event.stopPropagation();
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.retry) {
+      window.webkit.messageHandlers.retry.postMessage('retry');
+    } else {
+      console.log("[Diagnostics] retry connection called (no WebKit handler)");
+    }
+  }
+
+  function handleScreenClick(event) {
+    // Treat clicks anywhere else as a trigger to retry connection
+    retryConnection(event);
+  }
+</script>
+</body>
+</html>

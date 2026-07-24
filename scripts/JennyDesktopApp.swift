@@ -155,12 +155,20 @@ class DesktopAppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate,
         config.userContentController.add(self, name: "retry")
         config.userContentController.add(self, name: "navBack")
         config.userContentController.add(self, name: "navForward")
+        config.userContentController.add(self, name: "startServers")
 
         webView = WKWebView(frame: window.contentView!.bounds, configuration: config)
         webView.navigationDelegate = self
         webView.setValue(false, forKey: "drawsBackground")
         webView.autoresizingMask = [.width, .height]
-        webView.loadHTMLString(desktopLoadingHTML(), baseURL: nil)
+        
+        let appPath = Bundle.main.bundlePath
+        var appDir = (appPath as NSString).deletingLastPathComponent
+        if appDir.hasSuffix("/bin") {
+            appDir = (appDir as NSString).deletingLastPathComponent
+        }
+        let offlineUrl = URL(fileURLWithPath: appDir).appendingPathComponent("public/offline.html")
+        webView.loadFileURL(offlineUrl, allowingReadAccessTo: offlineUrl.deletingLastPathComponent())
 
         window.contentView = webView
         window.makeKeyAndOrderFront(nil)
@@ -205,12 +213,12 @@ class DesktopAppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate,
 
     func updateServerStatus(_ online: Bool) {
         serverOnline = online
-        statusLabel?.stringValue = online ? "● Online" : "● Auto-Starting Server..."
+        statusLabel?.stringValue = online ? "● Online" : "● Offline"
         statusLabel?.textColor = online ? NSColor.systemGreen : NSColor.systemOrange
         if online {
             loadMainUI()
         } else {
-            autoStartServer()
+            loadOfflineUI()
         }
     }
 
@@ -223,7 +231,7 @@ class DesktopAppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate,
             appDir = (appDir as NSString).deletingLastPathComponent
         }
         task.arguments = ["-c", "cd \"\(appDir)\" && node server.js &"]
-        try? task.run()
+        _ = try? task.run()
     }
 
     func loadMainUI() {
@@ -231,6 +239,19 @@ class DesktopAppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate,
         let current = webView.url?.absoluteString ?? ""
         if !current.contains("localhost:3005") || current.contains("mini.html") || !serverOnline {
             webView.load(URLRequest(url: url))
+        }
+    }
+
+    func loadOfflineUI() {
+        let appPath = Bundle.main.bundlePath
+        var appDir = (appPath as NSString).deletingLastPathComponent
+        if appDir.hasSuffix("/bin") {
+            appDir = (appDir as NSString).deletingLastPathComponent
+        }
+        let offlineUrl = URL(fileURLWithPath: appDir).appendingPathComponent("public/offline.html")
+        let current = webView.url?.absoluteString ?? ""
+        if !current.contains("offline.html") {
+            webView.loadFileURL(offlineUrl, allowingReadAccessTo: offlineUrl.deletingLastPathComponent())
         }
     }
 
@@ -252,6 +273,11 @@ class DesktopAppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate,
         case "retry": refreshPage()
         case "navBack": goBack()
         case "navForward": goForward()
+        case "startServers":
+            statusLabel?.stringValue = "● Starting..."
+            statusLabel?.textColor = NSColor.systemOrange
+            autoStartServer()
+            checkServer()
         default: break
         }
     }
