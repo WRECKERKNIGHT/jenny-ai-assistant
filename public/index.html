@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.E.N.N.Y - Windows AI Assistant</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <div id="boot-screen" class="boot-screen">
+            <div class="boot-content">
+                <div class="boot-logo">
+                    <div class="boot-ring"></div>
+                    <span class="boot-text">J.E.N.N.Y</span>
+                </div>
+                <div class="boot-subtitle">Just a Enhanced Neural Network for You</div>
+                <div class="boot-progress">
+                    <div class="boot-bar" id="bootBar"></div>
+                </div>
+                <div class="boot-status" id="bootStatus">Initializing systems...</div>
+            </div>
+        </div>
+
+        <div id="main-app" class="main-app hidden">
+            <nav class="sidebar" id="sidebar">
+                <div class="sidebar-header">
+                    <div class="logo-container">
+                        <div class="logo-glow"></div>
+                        <span class="logo-text">J.E.N.N.Y</span>
+                    </div>
+                    <button class="sidebar-toggle" id="sidebarToggle">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 12h18M3 6h18M3 18h18"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="nav-items">
+                    <button class="nav-item active" data-view="chat">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <span>Chat</span>
+                    </button>
+                    <button class="nav-item" data-view="system">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+                        </svg>
+                        <span>System</span>
+                    </button>
+                    <button class="nav-item" data-view="widgets">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                            <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                        </svg>
+                        <span>Widgets</span>
+                    </button>
+                    <button class="nav-item" data-view="notes">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                        </svg>
+                        <span>Notes</span>
+                    </button>
+                    <button class="nav-item" data-view="todos">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                        <span>Todos</span>
+                    </button>
+                    <button class="nav-item" data-view="vault">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                        <span>Vault</span>
+                    </button>
+                    <button class="nav-item" data-view="commands">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+                        </svg>
+                        <span>Commands</span>
+                    </button>
+                </div>
+
+                <div class="sidebar-footer">
+                    <button class="overlay-toggle" id="overlayToggle">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="3" width="20" height="14" rx="2"/>
+                            <path d="M8 21h8M12 17v4"/>
+                        </svg>
+                        Overlay Mode
+                    </button>
+                    <div class="owner-badge">
+                        <div class="status-dot online"></div>
+                        Boss: Harshit
+                    </div>
+                </div>
+            </nav>
+
+            <main class="content" id="content">
+                <div class="greeting-banner" id="greetingBanner">
+                    <div class="greeting-text" id="greetingText">Welcome, Boss!</div>
+                    <button class="greeting-close" id="greetingClose">&times;</button>
+                </div>
+
+                <div class="view active" id="view-chat">
+                    <div class="chat-container">
+                        <div class="chat-messages" id="chatMessages">
+                            <div class="system-msg">
+                                <div class="msg-content">J.E.N.N.Y is online. All systems ready for your commands, Boss!</div>
+                            </div>
+                        </div>
+                        <div class="chat-input-area">
+                            <div class="input-container">
+                                <button class="voice-btn" id="voiceBtn" title="Voice Input">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                                        <line x1="12" y1="19" x2="12" y2="23"/>
+                                        <line x1="8" y1="23" x2="16" y2="23"/>
+                                    </svg>
+                                </button>
+                                <input type="text" id="chatInput" placeholder="Type a command or ask anything, Boss..."
+                                       autocomplete="off">
+                                <button class="send-btn" id="sendBtn" title="Send">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="22" y1="2" x2="11" y2="13"/>
+                                        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="quick-actions">
+                                <button class="quick-btn" onclick="sendQuick('What time is it?')">Time</button>
+                                <button class="quick-btn" onclick="sendQuick('What is the weather?')">Weather</button>
+                                <button class="quick-btn" onclick="sendQuick('Tell me a joke')">Joke</button>
+                                <button class="quick-btn" onclick="sendQuick('Show me the news')">News</button>
+                                <button class="quick-btn" onclick="sendQuick('System status')">System</button>
+                                <button class="quick-btn" onclick="sendQuick('What can you do?')">Help</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="view" id="view-system">
+                    <div class="view-header">
+                        <h2>System Monitor</h2>
+                        <span class="view-subtitle" id="uptimeDisplay">Uptime: --</span>
+                    </div>
+                    <div class="system-grid">
+                        <div class="system-card cpu-card">
+                            <div class="card-icon cpu-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="4" y="4" width="16" height="16" rx="2"/>
+                                    <rect x="9" y="9" width="6" height="6"/>
+                                    <path d="M15 2v2M9 2v2M15 20v2M9 20v2M2 15h2M2 9h2M20 15h2M20 9h2"/>
+                                </svg>
+                            </div>
+                            <div class="card-label">CPU</div>
+                            <div class="card-value" id="cpuValue">--%</div>
+                            <div class="progress-bar"><div class="progress-fill cpu-fill" id="cpuBar"></div></div>
+                        </div>
+                        <div class="system-card ram-card">
+                            <div class="card-icon ram-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="6" width="20" height="12" rx="2"/>
+                                    <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M10 14h.01M14 14h.01M18 14h.01"/>
+                                </svg>
+                            </div>
+                            <div class="card-label">RAM</div>
+                            <div class="card-value" id="ramValue">--%</div>
+                            <div class="progress-bar"><div class="progress-fill ram-fill" id="ramBar"></div></div>
+                            <div class="card-detail" id="ramDetail">-- / -- GB</div>
+                        </div>
+                        <div class="system-card disk-card">
+                            <div class="card-icon disk-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                                    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                                </svg>
+                            </div>
+                            <div class="card-label">Disk</div>
+                            <div class="card-value" id="diskValue">--%</div>
+                            <div class="progress-bar"><div class="progress-fill disk-fill" id="diskBar"></div></div>
+                            <div class="card-detail" id="diskDetail">-- GB free</div>
+                        </div>
+                        <div class="system-card battery-card">
+                            <div class="card-icon battery-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="1" y="6" width="18" height="12" rx="2"/>
+                                    <line x1="23" y1="10" x2="23" y2="14"/>
+                                    <rect x="3" y="8" width="12" height="8" rx="1" id="batteryFill"/>
+                                </svg>
+                            </div>
+                            <div class="card-label">Battery</div>
+                            <div class="card-value" id="batteryValue">--%</div>
+                            <div class="card-detail" id="batteryDetail">--</div>
+                        </div>
+                        <div class="system-card network-card">
+                            <div class="card-icon network-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                                    <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                                    <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                                    <line x1="12" y1="20" x2="12.01" y2="20"/>
+                                </svg>
+                            </div>
+                            <div class="card-label">Network</div>
+                            <div class="card-value" id="netValue">--</div>
+                            <div class="card-detail" id="netDetail">--</div>
+                        </div>
+                        <div class="system-card os-card">
+                            <div class="card-icon os-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                    <path d="M8 21h8M12 17v4"/>
+                                </svg>
+                            </div>
+                            <div class="card-label">OS</div>
+                            <div class="card-value" id="osValue">Windows</div>
+                            <div class="card-detail" id="hostnameValue">--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="view" id="view-widgets">
+                    <div class="view-header">
+                        <h2>Widgets</h2>
+                    </div>
+                    <div class="widgets-grid">
+                        <div class="widget weather-widget floating" id="weatherWidget">
+                            <div class="widget-header">
+                                <span class="widget-title">Weather</span>
+                                <span class="widget-location" id="widgetLocation">--</span>
+                            </div>
+                            <div class="widget-body">
+                                <div class="weather-temp" id="widgetTemp">--°C</div>
+                                <div class="weather-desc" id="widgetDesc">Loading...</div>
+                            </div>
+                        </div>
+                        <div class="widget clock-widget floating" id="clockWidget">
+                            <div class="widget-header">
+                                <span class="widget-title">Clock</span>
+                            </div>
+                            <div class="widget-body">
+                                <div class="clock-time" id="widgetTime">--:--</div>
+                                <div class="clock-date" id="widgetDate">---</div>
+                            </div>
+                        </div>
+                        <div class="widget quote-widget floating" id="quoteWidget">
+                            <div class="widget-header">
+                                <span class="widget-title">Quote</span>
+                                <button class="widget-refresh" onclick="loadQuote()">&#x21bb;</button>
+                            </div>
+                            <div class="widget-body">
+                                <div class="quote-text" id="widgetQuote">Loading inspiration...</div>
+                                <div class="quote-author" id="widgetQuoteAuthor">--</div>
+                            </div>
+                        </div>
+                        <div class="widget crypto-widget floating" id="cryptoWidget">
+                            <div class="widget-header">
+                                <span class="widget-title">Crypto</span>
+                                <button class="widget-refresh" onclick="loadCrypto()">&#x21bb;</button>
+                            </div>
+                            <div class="widget-body" id="cryptoBody">
+                                Loading...
+                            </div>
+                        </div>
+                        <div class="widget news-widget floating" id="newsWidget">
+                            <div class="widget-header">
+                                <span class="widget-title">Top News</span>
+                                <button class="widget-refresh" onclick="loadNews()">&#x21bb;</button>
+                            </div>
+                            <div class="widget-body" id="newsBody">
+                                Loading...
+                            </div>
+                        </div>
+                        <div class="widget fact-widget floating" id="factWidget">
+                            <div class="widget-header">
+                                <span class="widget-title">Did You Know?</span>
+                                <button class="widget-refresh" onclick="loadFact()">&#x21bb;</button>
+                            </div>
+                            <div class="widget-body">
+                                <div class="fact-text" id="widgetFact">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="view" id="view-notes">
+                    <div class="view-header">
+                        <h2>Notes</h2>
+                    </div>
+                    <div class="notes-container">
+                        <div class="notes-input-area">
+                            <textarea id="notesInput" placeholder="Write your notes here, Boss..." rows="6"></textarea>
+                            <button class="btn-primary" onclick="saveNote()">Save Note</button>
+                        </div>
+                        <div class="notes-list" id="notesList"></div>
+                    </div>
+                </div>
+
+                <div class="view" id="view-todos">
+                    <div class="view-header">
+                        <h2>Todo List</h2>
+                    </div>
+                    <div class="todos-container">
+                        <div class="todo-input-area">
+                            <input type="text" id="todoInput" placeholder="Add a new task, Boss...">
+                            <button class="btn-primary" onclick="addTodo()">Add</button>
+                        </div>
+                        <div class="todos-list" id="todosList"></div>
+                    </div>
+                </div>
+
+                <div class="view" id="view-vault">
+                    <div class="view-header">
+                        <h2>Memory Vault</h2>
+                        <button class="btn-danger" onclick="clearVault()">Clear Vault</button>
+                    </div>
+                    <div class="vault-input-area">
+                        <input type="text" id="vaultInput" placeholder="Remember something, Boss...">
+                        <button class="btn-primary" onclick="addVault()">Save to Vault</button>
+                    </div>
+                    <div class="vault-list" id="vaultList"></div>
+                </div>
+
+                <div class="view" id="view-commands">
+                    <div class="view-header">
+                        <h2>Available Commands</h2>
+                    </div>
+                    <div class="commands-list">
+                        <div class="command-category">
+                            <h3>System Control</h3>
+                            <div class="command-item"><code>open [app]</code><span>Open any application (notepad, chrome, vscode, etc.)</span></div>
+                            <div class="command-item"><code>close [app]</code><span>Close an application</span></div>
+                            <div class="command-item"><code>lock</code><span>Lock your workstation</span></div>
+                            <div class="command-item"><code>sleep</code><span>Put system to sleep</span></div>
+                            <div class="command-item"><code>shutdown</code><span>Shutdown in 60 seconds</span></div>
+                            <div class="command-item"><code>restart</code><span>Restart system</span></div>
+                            <div class="command-item"><code>screenshot</code><span>Take a screenshot</span></div>
+                        </div>
+                        <div class="command-category">
+                            <h3>Volume & Display</h3>
+                            <div class="command-item"><code>volume [0-100]</code><span>Set volume level</span></div>
+                            <div class="command-item"><code>mute / unmute</code><span>Toggle audio</span></div>
+                            <div class="command-item"><code>brightness [0-100]</code><span>Set screen brightness</span></div>
+                        </div>
+                        <div class="command-category">
+                            <h3>Web & Search</h3>
+                            <div class="command-item"><code>search [query]</code><span>Google search</span></div>
+                            <div class="command-item"><code>youtube [query]</code><span>Search YouTube</span></div>
+                            <div class="command-item"><code>instagram [query]</code><span>Search Instagram</span></div>
+                            <div class="command-item"><code>open [url]</code><span>Open any website</span></div>
+                        </div>
+                        <div class="command-category">
+                            <h3>Productivity</h3>
+                            <div class="command-item"><code>add todo [task]</code><span>Add a todo item</span></div>
+                            <div class="command-item"><code>list todos</code><span>Show all todos</span></div>
+                            <div class="command-item"><code>add note [text]</code><span>Add a note</span></div>
+                            <div class="command-item"><code>remember [text]</code><span>Save to vault</span></div>
+                            <div class="command-item"><code>timer [duration]</code><span>Set a timer</span></div>
+                        </div>
+                        <div class="command-category">
+                            <h3>Information</h3>
+                            <div class="command-item"><code>weather</code><span>Current weather</span></div>
+                            <div class="command-item"><code>news</code><span>Top news stories</span></div>
+                            <div class="command-item"><code>quote</code><span>Inspirational quote</span></div>
+                            <div class="command-item"><code>fact</code><span>Random fact</span></div>
+                            <div class="command-item"><code>crypto</code><span>Crypto prices</span></div>
+                            <div class="command-item"><code>define [word]</code><span>Dictionary lookup</span></div>
+                            <div class="command-item"><code>ip address</code><span>Your public IP info</span></div>
+                        </div>
+                        <div class="command-category">
+                            <h3>Navigation</h3>
+                            <div class="command-item"><code>open desktop</code><span>Open Desktop folder</span></div>
+                            <div class="command-item"><code>open downloads</code><span>Open Downloads folder</span></div>
+                            <div class="command-item"><code>open documents</code><span>Open Documents folder</span></div>
+                            <div class="command-item"><code>open [folder path]</code><span>Open any folder</span></div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
