@@ -976,28 +976,47 @@ def execute_command(command):
 
 
 def get_tts(text):
+    global _tts_engine_cache
     try:
         if pyttsx3:
-            engine = pyttsx3.init()
-            voices = engine.getProperty('voices')
-            for v in voices:
-                if any(name in v.name.lower() for name in ['david', 'mark', 'zira', 'hazel']):
-                    engine.setProperty('voice', v.id)
+            if not hasattr(get_tts, '_engine'):
+                engine = pyttsx3.init()
+                voices = engine.getProperty('voices')
+                preferred = ['david', 'mark', 'zira', 'hazel', 'susan', 'george']
+                for pref in preferred:
+                    for v in voices:
+                        if pref in v.name.lower():
+                            engine.setProperty('voice', v.id)
+                            break
+                    else:
+                        continue
                     break
-            engine.setProperty('rate', 175)
-            engine.setProperty('volume', 0.9)
-            audio_data = []
-            import io
-
-            def save_to_file(text, engine):
-                engine.save_to_file(text, str(DATA_DIR / "tts_output.wav"))
-                engine.runAndWait()
-
-            save_to_file(text, engine)
+                engine.setProperty('rate', 175)
+                engine.setProperty('volume', 0.9)
+                get_tts._engine = engine
+            get_tts._engine.save_to_file(text, str(DATA_DIR / "tts_output.wav"))
+            get_tts._engine.runAndWait()
             return str(DATA_DIR / "tts_output.wav")
     except Exception:
         pass
     return None
+
+
+def get_available_voices():
+    voices_list = []
+    try:
+        if pyttsx3:
+            engine = pyttsx3.init()
+            for v in engine.getProperty('voices'):
+                voices_list.append({
+                    "id": v.id,
+                    "name": v.name,
+                    "language": getattr(v, 'languages', ['en'])[0] if getattr(v, 'languages', None) else 'en'
+                })
+            del engine
+    except Exception:
+        pass
+    return voices_list
 
 
 @app.route('/')
@@ -1230,6 +1249,46 @@ def api_command():
         result = get_reply(cmd)
         return jsonify({"reply": result, "type": "chat"})
     return jsonify({"error": "No command"}), 400
+
+
+@app.route('/api/voices', methods=['GET'])
+def api_voices():
+    return jsonify({"voices": get_available_voices()})
+
+
+@app.route('/api/chat-history', methods=['GET'])
+def api_chat_history():
+    history = load_json(HISTORY_FILE, {"messages": []})
+    return jsonify(history)
+
+
+@app.route('/api/chat-history', methods=['POST'])
+def api_chat_history_post():
+    data = request.get_json(force=True, silent=True) or {}
+    history = load_json(HISTORY_FILE, {"messages": []})
+    history["messages"].append({
+        "role": data.get("role", "user"),
+        "content": data.get("content", ""),
+        "timestamp": datetime.datetime.now().isoformat()
+    })
+    if len(history["messages"]) > 100:
+        history["messages"] = history["messages"][-100:]
+    save_json(HISTORY_FILE, history)
+    return jsonify({"status": "ok"})
+
+
+@app.route('/api/chat-history', methods=['DELETE'])
+def api_chat_history_clear():
+    save_json(HISTORY_FILE, {"messages": []})
+    return jsonify({"status": "ok"})
+
+
+@app.route('/api/system-actions', methods=['POST'])
+def api_system_actions():
+    data = request.get_json(force=True, silent=True) or {}
+    action = data.get("action", "")
+    result = execute_system_command(action)
+    return jsonify({"reply": result or "Unknown action, Boss!", "type": "system"})
 
 
 if __name__ == '__main__':
