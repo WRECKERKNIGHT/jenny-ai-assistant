@@ -289,6 +289,35 @@
                                 <div class="fact-text" id="widgetFact">Loading...</div>
                             </div>
                         </div>
+                        <div class="widget pomodoro-widget floating" id="pomodoroWidget">
+                            <div class="widget-header">
+                                <span class="widget-title">Pomodoro</span>
+                            </div>
+                            <div class="widget-body" style="text-align:center;">
+                                <div class="clock-time" id="pomodoroTime">25:00</div>
+                                <div style="margin-top:10px;display:flex;gap:8px;justify-content:center;">
+                                    <button class="quick-btn" onclick="pomodoroStart()" style="font-size:11px;">Start</button>
+                                    <button class="quick-btn" onclick="pomodoroPause()" style="font-size:11px;">Pause</button>
+                                    <button class="quick-btn" onclick="pomodoroReset()" style="font-size:11px;">Reset</button>
+                                </div>
+                                <div style="margin-top:8px;font-size:11px;color:var(--text-dim);" id="pomodoroStatus">Ready to focus, Boss!</div>
+                            </div>
+                        </div>
+                        <div class="widget timer-widget floating" id="timerWidget">
+                            <div class="widget-header">
+                                <span class="widget-title">Quick Timer</span>
+                            </div>
+                            <div class="widget-body" style="text-align:center;">
+                                <div style="display:flex;gap:5px;justify-content:center;flex-wrap:wrap;">
+                                    <button class="quick-btn" onclick="setQuickTimer(60)">1 min</button>
+                                    <button class="quick-btn" onclick="setQuickTimer(300)">5 min</button>
+                                    <button class="quick-btn" onclick="setQuickTimer(600)">10 min</button>
+                                    <button class="quick-btn" onclick="setQuickTimer(1800)">30 min</button>
+                                </div>
+                                <div class="clock-time" id="quickTimerDisplay" style="font-size:24px;margin-top:10px;">--:--</div>
+                                <div style="margin-top:5px;font-size:11px;color:var(--text-dim);" id="quickTimerStatus">Set a timer, Boss!</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

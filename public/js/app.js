@@ -479,3 +479,95 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// ===== POMODORO TIMER =====
+let pomodoroInterval = null;
+let pomodoroTime = 25 * 60;
+let pomodoroRunning = false;
+let pomodoroIsWork = true;
+
+function pomodoroStart() {
+    if (pomodoroRunning) return;
+    pomodoroRunning = true;
+    document.getElementById('pomodoroStatus').textContent = pomodoroIsWork ? 'Focus time, Boss!' : 'Break time, Boss!';
+    pomodoroInterval = setInterval(() => {
+        pomodoroTime--;
+        if (pomodoroTime <= 0) {
+            clearInterval(pomodoroInterval);
+            pomodoroRunning = false;
+            if (pomodoroIsWork) {
+                pomodoroIsWork = false;
+                pomodoroTime = 5 * 60;
+                document.getElementById('pomodoroStatus').textContent = 'Work done! Take a break, Boss!';
+            } else {
+                pomodoroIsWork = true;
+                pomodoroTime = 25 * 60;
+                document.getElementById('pomodoroStatus').textContent = 'Break over! Back to work, Boss!';
+            }
+            try {
+                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVggoKIeGBGPX2Dh4FfWpCQkYF1bIyTlJF2bY+XmJN4cZCZm5Z7d5OanZd9e5abnpqAf5mcnJuBgZ2enp2Cg6Cfn5+DhKGhoJ+EhaOioZ+GhqSkop+Hh6Wkop+IiKWkop+Jiaalop+Ki6alop+LjKalop+MjKalop+Oj6alop+PkKalop+Rk6alop+SlKalop+Tlaalop+Vmaalop+Xmaalop+Znaalop+bnqalop+enqalop+gn6alop+in6alop+joKalop+kpqalop+mp6alop+pq6alop+srKalop+uqqalop+wq6alop+yraqKoZ+tq6alop+xrKqlpJ6uq6alopyyq6alopylrKqlpJ6vq6alopyjrKqlpJ6yrKqlpJ+zrKqlpJ+1rKqlpJ+2rKqlpJ+3rKqlpJ+4rKqlpJ+5rKqlpJ+6rKqlpJ+7rKqlpJ+8rKqlpJ+9rKqlpJ++rKqlpJ++rKqlpJ++rKqlpJ++rKqlpJ++rKqlpJ++rKqlpJ++rKqlpJ++rA==');
+                audio.play();
+            } catch(e) {}
+        }
+        const min = Math.floor(pomodoroTime / 60);
+        const sec = pomodoroTime % 60;
+        document.getElementById('pomodoroTime').textContent = `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    }, 1000);
+}
+
+function pomodoroPause() {
+    if (pomodoroInterval) {
+        clearInterval(pomodoroInterval);
+        pomodoroRunning = false;
+        document.getElementById('pomodoroStatus').textContent = 'Paused. Resume when ready, Boss!';
+    }
+}
+
+function pomodoroReset() {
+    clearInterval(pomodoroInterval);
+    pomodoroRunning = false;
+    pomodoroIsWork = true;
+    pomodoroTime = 25 * 60;
+    document.getElementById('pomodoroTime').textContent = '25:00';
+    document.getElementById('pomodoroStatus').textContent = 'Ready to focus, Boss!';
+}
+
+// ===== QUICK TIMER =====
+let quickTimerInterval = null;
+let quickTimerTime = 0;
+
+function setQuickTimer(seconds) {
+    if (quickTimerInterval) clearInterval(quickTimerInterval);
+    quickTimerTime = seconds;
+    document.getElementById('quickTimerStatus').textContent = 'Timer running...';
+    quickTimerInterval = setInterval(() => {
+        quickTimerTime--;
+        if (quickTimerTime <= 0) {
+            clearInterval(quickTimerInterval);
+            document.getElementById('quickTimerStatus').textContent = 'Time is up, Boss!';
+            document.getElementById('quickTimerDisplay').textContent = '00:00';
+            try {
+                for (let i = 0; i < 3; i++) {
+                    setTimeout(() => {
+                        try {
+                            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                            const osc = ctx.createOscillator();
+                            const gain = ctx.createGain();
+                            osc.connect(gain);
+                            gain.connect(ctx.destination);
+                            osc.frequency.value = 800;
+                            osc.type = 'sine';
+                            gain.gain.value = 0.3;
+                            osc.start();
+                            setTimeout(() => { osc.stop(); ctx.close(); }, 300);
+                        } catch(e) {}
+                    }, i * 500);
+                }
+            } catch(e) {}
+            return;
+        }
+        const min = Math.floor(quickTimerTime / 60);
+        const sec = quickTimerTime % 60;
+        document.getElementById('quickTimerDisplay').textContent = `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    }, 1000);
+}
