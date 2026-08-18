@@ -1,145 +1,98 @@
 """
-J.E.N.N.Y - Windows Launcher
-Starts server, GUI, and wake word detector
+J.E.N.N.Y v2.0 — Windows Desktop AI Assistant
+Launcher: starts server + dashboard
 """
-
-import sys
-import os
-import time
-import threading
 import subprocess
+import sys
+import time
+import os
+import webbrowser
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent
+SERVER_PY = BASE_DIR / "server.py"
+DASHBOARD_PY = BASE_DIR / "dashboard.py"
 
+def check_deps():
+    required = ["flask", "flask_cors", "psutil"]
+    optional = ["pyttsx3", "qrcode", "PIL", "speech_recognition", "requests"]
+    missing_r = []
+    missing_o = []
+    for pkg in required:
+        try:
+            __import__(pkg)
+        except ImportError:
+            missing_r.append(pkg)
+    for pkg in optional:
+        try:
+            __import__(pkg)
+        except ImportError:
+            missing_o.append(pkg)
+    if missing_r:
+        print(f"[!] Missing required packages: {', '.join(missing_r)}")
+        print(f"    Run: pip install {' '.join(missing_r)}")
+        return False
+    if missing_o:
+        print(f"[*] Optional packages not found: {', '.join(missing_o)}")
+        print(f"    Some features may be limited.")
+        print(f"    Run: pip install {' '.join(missing_o)}")
+    return True
 
 def start_server():
-    print("[*] Starting J.E.N.N.Y server...")
-    server_script = BASE_DIR / "server.py"
-    subprocess.Popen(
-        [sys.executable, str(server_script)],
+    print("[*] Starting Flask server...")
+    creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+    proc = subprocess.Popen(
+        [sys.executable, str(SERVER_PY)],
         cwd=str(BASE_DIR),
-        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+        creationflags=creationflags,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
+    time.sleep(3)
+    if proc.poll() is not None:
+        stderr = proc.stderr.read().decode(errors="replace")
+        print(f"[!] Server failed to start: {stderr[:500]}")
+        return None
+    print(f"[+] Server started (PID: {proc.pid})")
+    return proc
 
-
-def start_overlay():
-    print("[*] Starting overlay GUI...")
-    gui_script = BASE_DIR / "gui.py"
-    subprocess.Popen(
-        [sys.executable, str(gui_script), "overlay"],
-        cwd=str(BASE_DIR)
+def start_dashboard():
+    print("[*] Starting dashboard...")
+    creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+    proc = subprocess.Popen(
+        [sys.executable, str(DASHBOARD_PY)],
+        cwd=str(BASE_DIR),
+        creationflags=creationflags,
     )
-
-
-def start_main_app():
-    print("[*] Starting main application...")
-    gui_script = BASE_DIR / "gui.py"
-    subprocess.Popen(
-        [sys.executable, str(gui_script), "main"],
-        cwd=str(BASE_DIR)
-    )
-
-
-def start_wakeword():
-    print("[*] Starting wake word detector...")
-    wakeword_script = BASE_DIR / "scripts" / "wakeword.py"
-    subprocess.Popen(
-        [sys.executable, str(wakeword_script)],
-        cwd=str(BASE_DIR)
-    )
-
-
-def wait_for_server(timeout=15):
-    import urllib.request
-    start = time.time()
-    while time.time() - start < timeout:
-        try:
-            urllib.request.urlopen("http://localhost:5000", timeout=2)
-            return True
-        except Exception:
-            time.sleep(0.5)
-    return False
-
+    print(f"[+] Dashboard started (PID: {proc.pid})")
+    return proc
 
 def main():
     print("=" * 55)
-    print("  J.E.N.N.Y - Windows AI Assistant Launcher")
-    print("  Just a Enhanced Neural Network for You")
+    print("   J.E.N.N.Y v2.0 — Windows Desktop AI Assistant")
+    print("   Just an Enhanced Neural Network for You")
     print("=" * 55)
     print()
-    print("  Choose launch mode:")
-    print("  1. Full App (Server + Main Window)")
-    print("  2. Overlay Mode (Server + Transparent Overlay)")
-    print("  3. Server Only")
-    print("  4. Server + Wake Word Detector")
-    print("  5. Everything (Server + Main App + Wake Word)")
-    print()
-
-    choice = input("  Enter choice (1-5, default=1): ").strip() or "1"
-
-    if choice == "1":
-        start_server()
-        print("[*] Waiting for server to start...")
-        if wait_for_server():
-            print("[+] Server is online!")
-            time.sleep(0.5)
-            start_main_app()
-        else:
-            print("[!] Server may still be starting. Check http://localhost:5000")
-
-    elif choice == "2":
-        start_server()
-        print("[*] Waiting for server to start...")
-        if wait_for_server():
-            print("[+] Server is online!")
-            time.sleep(0.5)
-            start_overlay()
-        else:
-            print("[!] Server may still be starting. Check http://localhost:5000")
-
-    elif choice == "3":
-        start_server()
-        print("[*] Server starting at http://localhost:5000")
-        print("[*] Press Ctrl+C to stop")
+    if not check_deps():
+        print("\nInstall missing packages and try again.")
+        input("Press Enter to exit...")
+        return
+    server_proc = start_server()
+    if not server_proc:
+        print("\nServer failed. Dashboard will show waiting screen.")
+        print("You can start server manually: python server.py")
+    dashboard_proc = start_dashboard()
+    try:
+        dashboard_proc.wait()
+    except KeyboardInterrupt:
+        print("\n[*] Shutting down...")
+    if server_proc:
+        server_proc.terminate()
         try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            print("\n[*] Shutting down...")
+            server_proc.wait(timeout=5)
+        except:
+            server_proc.kill()
+    print("[+] Goodbye, Boss!")
 
-    elif choice == "4":
-        start_server()
-        if wait_for_server():
-            start_wakeword()
-            print("[*] Wake word detector active. Say 'Hey Jenny' to activate!")
-            try:
-                while True:
-                    time.sleep(1)
-            except KeyboardInterrupt:
-                print("\n[*] Shutting down...")
-
-    elif choice == "5":
-        start_server()
-        if wait_for_server():
-            print("[+] Server online!")
-            time.sleep(0.3)
-            start_main_app()
-            time.sleep(0.3)
-            start_wakeword()
-            print("[+] All systems active!")
-            try:
-                while True:
-                    time.sleep(1)
-            except KeyboardInterrupt:
-                print("\n[*] Shutting down all components...")
-
-    else:
-        print("[!] Invalid choice. Starting default mode...")
-        start_server()
-        if wait_for_server():
-            start_main_app()
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
