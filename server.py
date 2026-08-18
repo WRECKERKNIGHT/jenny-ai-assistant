@@ -318,7 +318,64 @@ def generate_offline_reply(user_input):
         ]
         return random.choice(quotes) + " - For you, Boss!"
 
-    return f"I'm running in offline mode right now, Boss. I can still help with calculations, time, date, and basic tasks. Connect me to the internet for full capabilities!"
+    convert_match = re.search(r'convert\s+(\d+\.?\d*)\s*(celsius|fahrenheit|kelvin|km|mi|kg|lb|lbs|oz|gallon|litre|liter|inch|cm|feet|foot|meter|metre|yards?)\s+(?:to|in)\s+(celsius|fahrenheit|kelvin|km|mi|kg|lb|lbs|oz|gallon|litre|liter|inch|cm|feet|foot|meter|metre|yards?)', lower)
+    if convert_match:
+        val = float(convert_match.group(1))
+        from_u = convert_match.group(2)
+        to_u = convert_match.group(3)
+        all_conv = {
+            ('celsius','fahrenheit'): lambda x: x*9/5+32, ('fahrenheit','celsius'): lambda x: (x-32)*5/9,
+            ('celsius','kelvin'): lambda x: x+273.15, ('kelvin','celsius'): lambda x: x-273.15,
+            ('fahrenheit','kelvin'): lambda x: (x-32)*5/9+273.15, ('kelvin','fahrenheit'): lambda x: (x-273.15)*9/5+32,
+            ('km','mi'): lambda x: x*0.621371, ('mi','km'): lambda x: x*1.60934,
+            ('cm','inch'): lambda x: x/2.54, ('inch','cm'): lambda x: x*2.54,
+            ('feet','meter'): lambda x: x*0.3048, ('meter','feet'): lambda x: x*3.28084,
+            ('kg','lb'): lambda x: x*2.20462, ('lb','kg'): lambda x: x/2.20462,
+            ('kg','oz'): lambda x: x*35.274, ('oz','kg'): lambda x: x/35.274,
+            ('gallon','litre'): lambda x: x*3.78541, ('litre','gallon'): lambda x: x/3.78541,
+            ('liter','gallon'): lambda x: x/3.78541, ('gallon','liter'): lambda x: x*3.78541,
+        }
+        key = (from_u, to_u)
+        if key in all_conv:
+            return f"{val} {from_u} = {all_conv[key](val):.2f} {to_u}, Boss!"
+        return f"I can't convert {from_u} to {to_u} directly, Boss!"
+
+    hex_match = re.search(r'(?:hexadecimal|hex)\s+(\d+)', lower)
+    if hex_match:
+        return f"{hex_match.group(1)} in hex is 0x{int(hex_match.group(1)):X}, Boss!"
+
+    binary_match = re.search(r'binary\s+(\d+)', lower)
+    if binary_match:
+        return f"{binary_match.group(1)} in binary is {bin(int(binary_match.group(1)))}, Boss!"
+
+    roman_match = re.search(r'roman\s+(?:numeral\s+)?(\d+)', lower)
+    if roman_match:
+        num = int(roman_match.group(1))
+        vals = [(1000,'M'),(900,'CM'),(500,'D'),(400,'CD'),(100,'C'),(90,'XC'),
+                (50,'L'),(40,'XL'),(10,'X'),(9,'IX'),(5,'V'),(4,'IV'),(1,'I')]
+        result = ''
+        for v, s in vals:
+            while num >= v:
+                result += s
+                num -= v
+        return f"Roman numeral: {result}, Boss!"
+
+    if any(w in lower for w in ["roll a dice", "roll dice"]):
+        return f"You rolled a {random.randint(1, 6)}, Boss!"
+
+    if any(w in lower for w in ["flip a coin", "coin flip"]):
+        return f"It's {random.choice(['Heads', 'Tails'])}, Boss!"
+
+    if any(w in lower for w in ["pick a random number", "random number"]):
+        return f"Your random number is {random.randint(1, 100)}, Boss!"
+
+    if "generate password" in lower or "random password" in lower:
+        import string
+        chars = string.ascii_letters + string.digits + "!@#$%^&*"
+        pwd = ''.join(random.choice(chars) for _ in range(16))
+        return f"Here's a secure password: {pwd}\nCopy it quickly, Boss!"
+
+    return f"I'm running in offline mode right now, Boss. I can still help with calculations, time, date, conversions, and basic tasks. Connect me to the internet for full capabilities!"
 
 
 bot_context = []
