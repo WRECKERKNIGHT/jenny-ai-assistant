@@ -70,6 +70,17 @@ function setupNavigation() {
     document.getElementById('overlayToggle').addEventListener('click', () => {
         document.body.classList.toggle('overlay-mode');
     });
+
+    document.getElementById('themeToggle').addEventListener('click', () => {
+        document.body.classList.toggle('light-theme');
+        const isLight = document.body.classList.contains('light-theme');
+        localStorage.setItem('jenny-theme', isLight ? 'light' : 'dark');
+    });
+
+    const savedTheme = localStorage.getItem('jenny-theme');
+    if (savedTheme === 'light') {
+        document.body.classList.add('light-theme');
+    }
 }
 
 function switchView(view) {

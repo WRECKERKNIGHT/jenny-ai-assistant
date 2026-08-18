@@ -31,6 +31,21 @@ body {
     overflow: hidden;
     height: 100vh;
     width: 100vw;
+    transition: background 0.3s ease, color 0.3s ease;
+}
+
+body.light-theme {
+    --bg-primary: #f5f5f8;
+    --bg-secondary: #eaeaf0;
+    --bg-card: rgba(240, 240, 248, 0.95);
+    --bg-glass: rgba(245, 245, 250, 0.85);
+    --text-primary: #1a1a2e;
+    --text-secondary: #555570;
+    --text-dim: #8888a0;
+    --border: rgba(0, 0, 0, 0.08);
+    --border-accent: rgba(0, 150, 200, 0.3);
+    --accent-dim: rgba(0, 150, 200, 0.1);
+    --accent-glow: rgba(0, 150, 200, 0.15);
 }
 
 #app { height: 100vh; width: 100vw; position: relative; }
@@ -235,6 +250,29 @@ body {
 .overlay-toggle:hover {
     background: var(--accent);
     color: var(--bg-primary);
+}
+
+.theme-toggle {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-family: 'Inter', sans-serif;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: var(--transition);
+    margin-bottom: 10px;
+}
+
+.theme-toggle:hover {
+    border-color: var(--border-accent);
+    color: var(--accent);
 }
 
 .owner-badge {
