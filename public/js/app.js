@@ -144,6 +144,40 @@ function copyMessage(btn) {
     });
 }
 
+function exportChat() {
+    const messages = document.querySelectorAll('#chatMessages .message');
+    let text = 'J.E.N.N.Y Chat Export\n' + '='.repeat(40) + '\n\n';
+    messages.forEach(msg => {
+        const label = msg.querySelector('.msg-label');
+        const content = msg.querySelector('.msg-text') || msg.querySelector('.msg-content');
+        if (label && content) {
+            text += `[${label.textContent}]: ${content.textContent}\n\n`;
+        }
+    });
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `jenny-chat-${new Date().toISOString().split('T')[0]}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function clearChat() {
+    const container = document.getElementById('chatMessages');
+    container.innerHTML = '';
+    addSystemMsg('Chat cleared. Ready for new commands, Boss!');
+}
+
+function addSystemMsg(text) {
+    const container = document.getElementById('chatMessages');
+    const msg = document.createElement('div');
+    msg.className = 'system-msg';
+    msg.innerHTML = `<div class="msg-content">${escapeHtml(text)}</div>`;
+    container.appendChild(msg);
+    container.scrollTop = container.scrollHeight;
+}
+
 function showTyping() {
     const container = document.getElementById('chatMessages');
     const typing = document.createElement('div');
