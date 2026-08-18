@@ -21,6 +21,11 @@ import datetime
 import urllib.request
 import urllib.parse
 from pathlib import Path
+
+try:
+    from scripts.extended_commands import handle_extended_commands
+except ImportError:
+    handle_extended_commands = None
 from flask import Flask, request, jsonify, send_from_directory, Response
 from flask_cors import CORS
 
@@ -952,6 +957,13 @@ def execute_system_command(command):
     if re.match(r'^(?:clear|wipe|reset)\s+(?:vault|memory|remember)', lower):
         save_json(VAULT_FILE, {"entries": []})
         return "Vault cleared. Fresh start, Boss!"
+
+    if handle_extended_commands:
+        ext_result = handle_extended_commands(command)
+        if ext_result:
+            if isinstance(ext_result, tuple):
+                return ext_result[0]
+            return ext_result
 
     return None
 
