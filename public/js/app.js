@@ -52,6 +52,7 @@ function initApp() {
     setupNavigation();
     setupChat();
     setupVoice();
+    setupKeyboardShortcuts();
 }
 
 // ===== NAVIGATION =====
@@ -624,4 +625,37 @@ function setQuickTimer(seconds) {
         const sec = quickTimerTime % 60;
         document.getElementById('quickTimerDisplay').textContent = `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
     }, 1000);
+}
+
+// ===== KEYBOARD SHORTCUTS =====
+function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key === '/') {
+            e.preventDefault();
+            switchView('chat');
+            document.getElementById('chatInput').focus();
+        }
+        if (e.ctrlKey && e.key === 'l') {
+            e.preventDefault();
+            clearChat();
+        }
+        if (e.ctrlKey && e.key === 'e') {
+            e.preventDefault();
+            exportChat();
+        }
+        if (e.ctrlKey && e.key === 'm') {
+            e.preventDefault();
+            toggleVoice();
+        }
+        if (e.key === 'Escape') {
+            if (isListening) stopListening();
+        }
+        if (e.ctrlKey && e.key === '1') { e.preventDefault(); switchView('chat'); }
+        if (e.ctrlKey && e.key === '2') { e.preventDefault(); switchView('system'); }
+        if (e.ctrlKey && e.key === '3') { e.preventDefault(); switchView('widgets'); }
+        if (e.ctrlKey && e.key === '4') { e.preventDefault(); switchView('notes'); }
+        if (e.ctrlKey && e.key === '5') { e.preventDefault(); switchView('todos'); }
+        if (e.ctrlKey && e.key === '6') { e.preventDefault(); switchView('vault'); }
+        if (e.ctrlKey && e.key === '7') { e.preventDefault(); switchView('commands'); }
+    });
 }
