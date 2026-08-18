@@ -128,11 +128,20 @@ function addMessage(text, type) {
     msg.innerHTML = `
         <div class="msg-bubble">
             <div class="msg-label">${type === 'user' ? 'Harshit' : 'Jenny'}</div>
-            ${escapeHtml(text)}
+            <div class="msg-text">${escapeHtml(text)}</div>
+            ${type === 'assistant' ? '<button class="copy-btn" onclick="copyMessage(this)" title="Copy">📋</button>' : ''}
         </div>
     `;
     container.appendChild(msg);
     container.scrollTop = container.scrollHeight;
+}
+
+function copyMessage(btn) {
+    const text = btn.parentElement.querySelector('.msg-text').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = '✅';
+        setTimeout(() => btn.textContent = '📋', 1500);
+    });
 }
 
 function showTyping() {
