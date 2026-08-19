@@ -1662,29 +1662,57 @@ function deleteNote(idx) {
 
 function loadCommandsPanel(el) {
   el.innerHTML = `
-<div class="cmd-ref-item"><div class="cc">summon activity / system / weather / emails / processes / vault / clipboard / settings / commands / files / notes</div><div class="cd">Open a panel</div></div>
-<div class="cmd-ref-item"><div class="cc">close [panel] / close all</div><div class="cd">Dismiss panels</div></div>
-<div class="cmd-ref-item"><div class="cc">set a timer for 5 minutes</div><div class="cd">Timer with voice alert</div></div>
+<h3 style="font-family:var(--orbitron);font-size:12px;color:var(--gold);letter-spacing:2px;margin:0 0 12px 0;text-transform:uppercase;">System Control</h3>
+<div class="cmd-ref-item"><div class="cc">open notepad / calculator / paint / chrome / edge / vscode / discord / spotify / word / excel / powerpoint</div><div class="cd">Launch any app</div></div>
+<div class="cmd-ref-item"><div class="cc">close notepad / chrome / any app</div><div class="cd">Kill any running app</div></div>
+<div class="cmd-ref-item"><div class="cc">lock pc / lock screen</div><div class="cd">Lock Windows screen</div></div>
+<div class="cmd-ref-item"><div class="cc">take screenshot / screenshot</div><div class="cd">Save screenshot to Desktop</div></div>
+<div class="cmd-ref-item"><div class="cc">volume 50 / volume up / volume down / mute / unmute</div><div class="cd">Audio volume controls</div></div>
+<div class="cmd-ref-item"><div class="cc">shutdown / restart / sleep</div><div class="cd">Power controls</div></div>
+<div class="cmd-ref-item"><div class="cc">empty trash / empty recycle bin</div><div class="cd">Clear recycle bin</div></div>
+<div class="cmd-ref-item"><div class="cc">minimize all / show desktop</div><div class="cd">Minimize all windows</div></div>
+<div class="cmd-ref-item"><div class="cc">open terminal / open cmd</div><div class="cd">Open terminal or command prompt</div></div>
+
+<h3 style="font-family:var(--orbitron);font-size:12px;color:var(--gold);letter-spacing:2px;margin:16px 0 12px 0;text-transform:uppercase;">File & Folder Access</h3>
+<div class="cmd-ref-item"><div class="cc">open desktop / downloads / documents / pictures / music / videos</div><div class="cd">Open common folders</div></div>
+<div class="cmd-ref-item"><div class="cc">browse C:\path\to\folder / open folder [path]</div><div class="cd">Open any folder by path</div></div>
+<div class="cmd-ref-item"><div class="cc">open chrome bookmarks / show bookmarks</div><div class="cd">Access Chrome bookmarks</div></div>
+
+<h3 style="font-family:var(--orbitron);font-size:12px;color:var(--gold);letter-spacing:2px;margin:16px 0 12px 0;text-transform:uppercase;">Web & Browser</h3>
+<div class="cmd-ref-item"><div class="cc">open google.com / open youtube.com / open [any website]</div><div class="cd">Open website in Chrome</div></div>
+<div class="cmd-ref-item"><div class="cc">news / headlines / top news</div><div class="cd">Latest news headlines</div></div>
+<div class="cmd-ref-item"><div class="cc">bitcoin price / crypto prices</div><div class="cd">Live crypto prices</div></div>
+
+<h3 style="font-family:var(--orbitron);font-size:12px;color:var(--gold);letter-spacing:2px;margin:16px 0 12px 0;text-transform:uppercase;">System Info</h3>
+<div class="cmd-ref-item"><div class="cc">cpu usage / cpu info</div><div class="cd">Processor usage & model</div></div>
+<div class="cmd-ref-item"><div class="cc">ram usage / memory info</div><div class="cd">RAM usage & total</div></div>
+<div class="cmd-ref-item"><div class="cc">battery level / battery</div><div class="cd">Battery percentage & charging</div></div>
+<div class="cmd-ref-item"><div class="cc">disk usage / storage / free space</div><div class="cd">Disk space info</div></div>
+<div class="cmd-ref-item"><div class="cc">system info / about my pc / my system</div><div class="cd">Full system information</div></div>
+<div class="cmd-ref-item"><div class="cc">uptime / how long has pc been on</div><div class="cd">System uptime</div></div>
+<div class="cmd-ref-item"><div class="cc">wifi / network / internet status</div><div class="cd">Network & WiFi info</div></div>
+<div class="cmd-ref-item"><div class="cc">hostname / computer name</div><div class="cd">PC name</div></div>
+<div class="cmd-ref-item"><div class="cc">running processes / task manager</div><div class="cd">List running processes</div></div>
+
+<h3 style="font-family:var(--orbitron);font-size:12px;color:var(--gold);letter-spacing:2px;margin:16px 0 12px 0;text-transform:uppercase;">Knowledge & Chat</h3>
+<div class="cmd-ref-item"><div class="cc">what is AI / python / CPU / RAM / WiFi / encryption / blockchain</div><div class="cd">50+ offline tech topics</div></div>
+<div class="cmd-ref-item"><div class="cc">what time / today's date / what day / what month / what year</div><div class="cd">Date & time queries</div></div>
+<div class="cmd-ref-item"><div class="cc">what is 42 * 7 / calculate 100 + 200 / math</div><div class="cd">Quick math calculator</div></div>
+<div class="cmd-ref-item"><div class="cc">convert 100 F to C / convert 50 C to F</div><div class="cd">Temperature conversion</div></div>
+<div class="cmd-ref-item"><div class="cc">25% of 200 / what is 30 percent of 150</div><div class="cd">Percentage calculator</div></div>
+<div class="cmd-ref-item"><div class="cc">weather / temperature / forecast</div><div class="cd">Live weather info</div></div>
+<div class="cmd-ref-item"><div class="cc">tell me a joke / something funny</div><div class="cd">Random jokes</div></div>
+<div class="cmd-ref-item"><div class="cc">give me a quote / inspire me / motivational quote</div><div class="cd">Inspirational quotes</div></div>
+<div class="cmd-ref-item"><div class="cc">tell me a fact / fun fact / random fact</div><div class="cd">Interesting facts</div></div>
+
+<h3 style="font-family:var(--orbitron);font-size:12px;color:var(--gold);letter-spacing:2px;margin:16px 0 12px 0;text-transform:uppercase;">Utility</h3>
+<div class="cmd-ref-item"><div class="cc">set a timer for 5 minutes / remind me in 30 seconds</div><div class="cd">Timer with alert</div></div>
+<div class="cmd-ref-item"><div class="cc">remember [fact] / save to vault [note]</div><div class="cd">Save to memory vault</div></div>
 <div class="cmd-ref-item"><div class="cc">briefing / daily briefing</div><div class="cd">Full system overview</div></div>
-<div class="cmd-ref-item"><div class="cc">tell me a joke / fun fact / quote</div><div class="cd">Entertainment</div></div>
-<div class="cmd-ref-item"><div class="cc">what is 42 * 7 / calculate 100 / 3</div><div class="cd">Quick math</div></div>
-<div class="cmd-ref-item"><div class="cc">lock pc / sleep pc / screenshot</div><div class="cd">System controls</div></div>
-<div class="cmd-ref-item"><div class="cc">volume [0-100] / mute / unmute</div><div class="cd">Audio controls</div></div>
-<div class="cmd-ref-item"><div class="cc">open [app] / close [app]</div><div class="cd">Launch or quit app</div></div>
-<div class="cmd-ref-item"><div class="cc">play / pause / next / previous</div><div class="cd">Media controls</div></div>
-<div class="cmd-ref-item"><div class="cc">remember [fact]</div><div class="cd">Save to vault</div></div>
-<div class="cmd-ref-item"><div class="cc">check emails / read mail</div><div class="cd">Read Mail.app</div></div>
-<div class="cmd-ref-item"><div class="cc">shutdown / restart</div><div class="cd">Power controls</div></div>
-<div class="cmd-ref-item"><div class="cc">battery / wifi</div><div class="cd">Quick status checks</div></div>
-<div class="cmd-ref-item"><div class="cc">flip a coin / roll dice / random number 1-100</div><div class="cd">Randomizers</div></div>
-<div class="cmd-ref-item"><div class="cc">convert 100 miles to km / 72 fahrenheit to celsius</div><div class="cd">Unit conversion</div></div>
-<div class="cmd-ref-item"><div class="cc">brightness up / down</div><div class="cd">Screen brightness</div></div>
-<div class="cmd-ref-item"><div class="cc">remote mode / stay awake</div><div class="cd">Keep Mac awake for remote access</div></div>
-<div class="cmd-ref-item"><div class="cc">remote mode off / allow sleep</div><div class="cd">Resume normal sleep</div></div>
-<div class="cmd-ref-item"><div class="cc">I'm on my way home</div><div class="cd">Activate remote mode + show URL</div></div>
-<div class="cmd-ref-item"><div class="cc">wake up / sleep</div><div class="cd">Display wake/sleep</div></div>
-<div class="cmd-ref-item"><div class="cc">tell me about [topic]</div><div class="cd">Ask anything (Gemini)</div></div>
-<div class="cmd-ref-item"><div class="cc">Keyboard: Esc = close panels, Cmd+K = focus input</div><div class="cd">Shortcuts</div></div>`;
+<div class="cmd-ref-item"><div class="cc">who are you / your name / what can you do / capabilities</div><div class="cd">About JENNY</div></div>
+<div class="cmd-ref-item"><div class="cc">who made you / your creator</div><div class="cd">Meet the creator</div></div>
+<div class="cmd-ref-item"><div class="cc">hello / hi / hey / how are you</div><div class="cd">Greetings & small talk</div></div>
+<div class="cmd-ref-item"><div class="cc">Keyboard: Esc = close panels, Cmd+K = focus input</div><div class="cd">Keyboard shortcuts</div></div>`;
 }
 
 // ================================================
