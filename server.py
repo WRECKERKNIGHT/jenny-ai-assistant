@@ -547,6 +547,40 @@ def api_open_chrome():
         except: return jsonify({"success": False})
     return jsonify({"success": False, "error": "No URL"})
 
+@app.route("/api/folder-contents")
+def api_folder_contents():
+    path = request.args.get("path", str(Path.home()))
+    try:
+        p = Path(path)
+        if not p.exists(): return jsonify({"success": False, "error": "Path not found"})
+        items = []
+        for i in sorted(p.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+            try:
+                stat = i.stat()
+                items.append({"name": i.name, "isDir": i.is_dir(), "size": stat.st_size, "modified": datetime.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")})
+            except: items.append({"name": i.name, "isDir": i.is_dir(), "size": 0, "modified": ""})
+        return jsonify({"success": True, "path": str(p), "parent": str(p.parent) if p.parent != p else "", "items": items[:200], "total": len(items)})
+    except Exception as e: return jsonify({"success": False, "error": str(e)})
+
+@app.route("/api/open-folder")
+def api_open_folder():
+    path = request.args.get("path", "")
+    if path:
+        try: subprocess.Popen(["explorer", path]); return jsonify({"success": True, "message": f"Opened {path}"})
+        except: return jsonify({"success": False})
+    return jsonify({"success": False})
+
+@app.route("/api/desktop-shortcuts")
+def api_desktop_shortcuts():
+    try:
+        desktop = Path.home() / "Desktop"
+        shortcuts = []
+        for f in desktop.iterdir():
+            if f.suffix.lower() in (".lnk", ".url", ".exe", ".bat", ".ps1", ".py", ".js", ".html"):
+                shortcuts.append({"name": f.stem, "ext": f.suffix, "path": str(f)})
+        return jsonify({"success": True, "shortcuts": shortcuts[:30]})
+    except: return jsonify({"success": True, "shortcuts": []})
+
 
 if __name__ == "__main__":
     print("=" * 55)
