@@ -1772,7 +1772,28 @@ async function sendMessage(text) {
     if (data.success && data.reply) {
       addAIMessage(data.reply.text);
       if (data.reply.command?.action === 'vault-save') { await fetch('/api/vault', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: data.reply.command.value?.text || '' }) }); toast('Saved to vault, BOSS.', 'ok'); }
-      if (data.reply.command && data.reply.command.action !== 'vault-save') { await fetch('/api/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data.reply.command) }); }
+      else if (data.reply.command?.action === 'open-chrome-bookmarks') {
+        try {
+          const bmr = await fetch('/api/chrome-bookmarks');
+          const bmd = await bmr.json();
+          if (bmd.success && bmd.bookmarks && bmd.bookmarks.length > 0) {
+            let bmText = `**Your Chrome Bookmarks** (${bmd.total} total):\n\n`;
+            bmd.bookmarks.slice(0, 15).forEach((b, i) => { bmText += `${i+1}. **${b.name}** — ${b.url}\n`; });
+            if (bmd.total > 15) bmText += `\n_...and ${bmd.total - 15} more._`;
+            addAIMessage(bmText);
+          } else { addAIMessage('No Chrome bookmarks found, Boss.'); }
+        } catch(e) { addAIMessage('Could not load Chrome bookmarks, Boss.'); }
+      }
+      else if (data.reply.command?.action === 'open-folder') {
+        const folderPath = data.reply.command.value;
+        window.open(`/api/open-folder?path=${encodeURIComponent(folderPath)}`, '_blank');
+        await fetch('/api/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data.reply.command) });
+      }
+      else if (data.reply.command?.action === 'open-chrome') {
+        const url = data.reply.command.value;
+        await fetch(`/api/open-chrome?url=${encodeURIComponent(url)}`);
+      }
+      else if (data.reply.command) { await fetch('/api/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data.reply.command) }); }
       speak(data.reply.speech || data.reply.text);
     } else { addAIMessage('Something went wrong, BOSS. Please try again.'); setOrbState('idle'); }
   } catch { removeTyping(); addAIMessage('Connection error, BOSS. Please try again.'); setOrbState('idle'); }
