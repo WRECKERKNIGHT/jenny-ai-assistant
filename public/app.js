@@ -410,11 +410,14 @@ function pushSpark(key, val) {
 function drawSparkline(canvasId, data, color) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const W = rect.width || 300;
+  const H = rect.height || 44;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
   const ctx = canvas.getContext('2d');
-  
-  const W = 400;
-  const H = 100;
-  
+  ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, W, H);
   
   if (data.length < 2) return;
@@ -453,13 +456,13 @@ function drawSparkline(canvasId, data, color) {
     }
   });
   ctx.strokeStyle = color;
-  ctx.lineWidth = 3.5;
+  ctx.lineWidth = 2;
   ctx.stroke();
   
   const lastX = (data.length - 1) * step;
   const lastY = H - (data[data.length - 1] / 100) * (H - 8);
   ctx.beginPath();
-  ctx.arc(lastX, lastY, 5.5, 0, Math.PI * 2);
+  ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
   ctx.fillStyle = color;
   ctx.fill();
 }
