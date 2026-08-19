@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+npm-cache/
+dist/
+
+# Environment and sensitive data
+.env
+vault.json
+settings.json
+
+# Native app binaries (built from source via scripts/build-apps.sh)
+bin/JennyMenuBarApp
+bin/JennyDesktop
+bin/JennyAI.app/Contents/MacOS/
+bin/JennyDesktop.app/Contents/MacOS/
+
+# OS generated files
+.DS_Store
+*.log
+*.zip

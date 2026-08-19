@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>J.E.N.N.Y. Mobile Remote</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/logo.png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    :root {
+      --bg: #000000;
+      --glass-bg: rgba(0, 0, 0, 0.6);
+      --glass-card: rgba(255, 255, 255, 0.04);
+      --glass-border: rgba(229, 193, 88, 0.3);
+      --gold: #e5c158;
+      --gold-dim: rgba(229, 193, 88, 0.2);
+      --silver: #c0c0c0;
+      --txt: #ffffff;
+      --txt2: #d1d5db;
+      --mono: -apple-system, BlinkMacSystemFont, 'SF Mono', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+    body {
+      background: #000000;
+      color: var(--txt);
+      font-family: var(--mono);
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* NATIVE MOBILE HEADER */
+    .app-header {
+      padding: env(safe-area-inset-top, 16px) 20px 14px;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(30px);
+      -webkit-backdrop-filter: blur(30px);
+      border-bottom: 1px solid var(--glass-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .app-logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      border: 1px solid var(--glass-border);
+    }
+    .app-title {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 3px;
+      color: #fff;
+    }
+    .app-status {
+      font-size: 9px;
+      color: var(--gold);
+      letter-spacing: 1px;
+    }
+    .net-badge {
+      font-size: 9px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      background: var(--gold-dim);
+      border: 1px solid var(--glass-border);
+      color: var(--gold);
+    }
+
+    /* MAIN APP BODY */
+    .app-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      gap: 14px;
+      overflow-y: auto;
+    }
+
+    /* ORB TOUCH SECTION */
+    .orb-stage {
+      background: var(--glass-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      position: relative;
+    }
+    .mic-orb {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(229,193,88,0.3) 0%, rgba(0,0,0,0.8) 70%);
+      border: 2px solid var(--gold);
+      box-shadow: 0 0 30px var(--gold-dim);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      color: var(--gold);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .mic-orb:active {
+      transform: scale(0.92);
+      box-shadow: 0 0 50px var(--gold);
+    }
+    .mic-orb.listening {
+      border-color: #ff3b30;
+      color: #ff3b30;
+      box-shadow: 0 0 40px rgba(255, 59, 48, 0.5);
+      animation: pulse-red 1.2s infinite;
+    }
+    @keyframes pulse-red {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+    }
+    .orb-hint {
+      font-size: 10px;
+      color: var(--silver);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    /* TELEMETRY METERS */
+    .telemetry-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .telemeter {
+      background: var(--glass-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      padding: 10px;
+      text-align: center;
+    }
+    .meter-val {
+      font-size: 16px;
+      font-weight: 800;
+      color: #fff;
+      margin-top: 4px;
+    }
+    .meter-lbl {
+      font-size: 8px;
+      color: var(--silver);
+      letter-spacing: 1px;
+    }
+
+    /* POWER CONTROL GRID */
+    .section-title {
+      font-size: 10px;
+      color: var(--gold);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .control-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .ctrl-card {
+      background: var(--glass-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      padding: 14px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: var(--txt2);
+      font-size: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .ctrl-card:active {
+      background: var(--gold);
+      color: #000;
+      transform: scale(0.95);
+    }
+    .ctrl-card i {
+      font-size: 16px;
+      color: var(--gold);
+    }
+    .ctrl-card:active i {
+      color: #000;
+    }
+
+    /* COMMAND TERMINAL INPUT */
+    .terminal-box {
+      display: flex;
+      gap: 10px;
+      background: rgba(0,0,0,0.6);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 6px;
+    }
+    .terminal-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 10px 14px;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    .terminal-btn {
+      width: 44px;
+      height: 44px;
+      background: var(--gold-dim);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      color: var(--gold);
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .terminal-btn:active {
+      background: var(--gold);
+      color: #000;
+    }
+
+    /* RESPONSE LOG FEED */
+    .log-feed {
+      background: var(--glass-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 12px;
+      max-height: 160px;
+      overflow-y: auto;
+      font-size: 11px;
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .log-item {
+      padding: 6px 10px;
+      border-radius: 8px;
+      word-break: break-word;
+    }
+    .log-item.user {
+      align-self: flex-end;
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+    }
+    .log-item.jenny {
+      align-self: flex-start;
+      background: rgba(0,0,0,0.5);
+      border-left: 3px solid var(--gold);
+      color: var(--txt2);
+    }
+
+    /* PENDING AUTHORIZATION OVERLAYS */
+    .auth-overlay {
+      position: fixed; inset: 0; z-index: 9999;
+      background: radial-gradient(circle at 50% 30%, rgba(229,193,88,0.15), transparent 60%), #000;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 30px; text-align: center; gap: 24px;
+      transition: all 0.5s ease;
+    }
+    .auth-overlay.hidden {
+      opacity: 0; pointer-events: none; transform: scale(1.05);
+    }
+    .auth-icon {
+      font-size: 60px; color: var(--gold);
+      filter: drop-shadow(0 0 15px rgba(229,193,88,0.4));
+      animation: auth-float 3s ease-in-out infinite;
+    }
+    @keyframes auth-float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    .auth-title {
+      font-family: monospace; font-size: 16px; font-weight: 800;
+      letter-spacing: 3px; color: var(--gold);
+    }
+    .auth-desc {
+      font-size: 13px; color: var(--txt2); line-height: 1.6; max-width: 280px;
+    }
+    .auth-spinner {
+      width: 40px; height: 40px; border: 3px solid rgba(229,193,88,0.1);
+      border-top-color: var(--gold); border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Denied overlay specifically */
+    .auth-overlay.denied {
+      background: radial-gradient(circle at 50% 30%, rgba(255,0,85,0.15), transparent 60%), #000;
+    }
+    .auth-overlay.denied .auth-icon {
+      color: #ff0055; filter: drop-shadow(0 0 15px rgba(255,0,85,0.4));
+    }
+    .auth-overlay.denied .auth-title {
+      color: #ff0055;
+    }
+    /* Mobile Media controller style */
+    .media-row {
+      display: flex; gap: 12px; justify-content: center; margin: 10px 0 20px;
+    }
+    .media-btn {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(0,212,230,0.15);
+      border-radius: 12px; width: 60px; height: 50px; display: flex; align-items: center;
+      justify-content: center; color: var(--cyan); font-size: 16px; cursor: pointer;
+      transition: all 0.2s ease; outline: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+    .media-btn:active {
+      transform: scale(0.95); background: rgba(0,212,230,0.1); border-color: var(--cyan);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- PENDING AUTHORIZATION SCREEN -->
+  <div class="auth-overlay" id="auth-pending-screen">
+    <div class="auth-icon"><i class="fa-solid fa-key"></i></div>
+    <div class="auth-title">AUTHORIZATION REQUIRED</div>
+    <div class="auth-desc">Please click <strong>Allow Access</strong> on your MacBook desktop console to link this mobile device.</div>
+    <div class="auth-spinner"></div>
+  </div>
+
+  <!-- ACCESS DENIED SCREEN -->
+  <div class="auth-overlay denied hidden" id="auth-denied-screen">
+    <div class="auth-icon"><i class="fa-solid fa-ban"></i></div>
+    <div class="auth-title">ACCESS DENIED</div>
+    <div class="auth-desc">Your MacBook administrator has denied access for this device. Contact owner for re-authorization.</div>
+  </div>
+
+  <!-- HEADER -->
+  <header class="app-header">
+    <div class="brand-group">
+      <img src="/logo.png" class="app-logo" alt="JENNY">
+      <div>
+        <div class="app-title">J.E.N.N.Y.</div>
+        <div class="app-status">REMOTE OS 6.0</div>
+      </div>
+    </div>
+    <div class="net-badge" id="net-status">ONLINE</div>
+  </header>
+
+  <!-- BODY -->
+  <div class="app-body">
+
+    <!-- ORB STAGE -->
+    <div class="orb-stage">
+      <div class="mic-orb" id="mic-orb">
+        <i class="fa-solid fa-microphone"></i>
+      </div>
+      <div class="orb-hint" id="orb-hint">TAP ORB FOR VOICE COMMAND</div>
+    </div>
+
+    <!-- TELEMETRY -->
+    <div class="telemetry-row">
+      <div class="telemeter">
+        <div class="meter-lbl">CPU</div>
+        <div class="meter-val" id="m-cpu">--%</div>
+      </div>
+      <div class="telemeter">
+        <div class="meter-lbl">RAM</div>
+        <div class="meter-val" id="m-ram">--%</div>
+      </div>
+      <div class="telemeter">
+        <div class="meter-lbl">BATTERY</div>
+        <div class="meter-val" id="m-bat">--%</div>
+      </div>
+    </div>
+
+    <!-- QUICK CONTROLS -->
+    <div class="section-title"><i class="fa-solid fa-bolt"></i> Remote Control Dock</div>
+    <div class="control-grid">
+      <div class="ctrl-card" data-cmd="Hi I am on my way home">
+        <i class="fa-solid fa-car"></i> On Way Home
+      </div>
+      <div class="ctrl-card" data-cmd="wake mac display">
+        <i class="fa-solid fa-sun"></i> Wake Mac
+      </div>
+      <div class="ctrl-card" data-cmd="lock screen">
+        <i class="fa-solid fa-lock"></i> Lock Screen
+      </div>
+      <div class="ctrl-card" data-cmd="purge ram">
+        <i class="fa-solid fa-broom"></i> Purge RAM
+      </div>
+      <div class="ctrl-card" data-cmd="read my emails">
+        <i class="fa-solid fa-envelope"></i> Read Mail
+      </div>
+      <div class="ctrl-card" data-cmd="open youtube">
+        <i class="fa-solid fa-play"></i> YouTube
+      </div>
+      <div class="ctrl-card" data-cmd="volume 80">
+        <i class="fa-solid fa-volume-high"></i> Volume 80%
+      </div>
+      <div class="ctrl-card" data-cmd="system info">
+        <i class="fa-solid fa-microchip"></i> System Info
+      </div>
+      <div class="ctrl-card" data-cmd="take screenshot">
+        <i class="fa-solid fa-camera"></i> Screenshot
+      </div>
+    </div>
+
+    <!-- MEDIA PLAYBACK -->
+    <div class="section-title" style="margin-top: 20px;"><i class="fa-solid fa-music"></i> Media Controller</div>
+    <div class="media-row">
+      <button class="media-btn" id="mobile-media-prev" title="Previous"><i class="fa-solid fa-backward"></i></button>
+      <button class="media-btn" id="mobile-media-play" title="Play/Pause"><i class="fa-solid fa-play"></i><i class="fa-solid fa-pause"></i></button>
+      <button class="media-btn" id="mobile-media-next" title="Next"><i class="fa-solid fa-forward"></i></button>
+    </div>
+
+    <!-- COMMAND TERMINAL -->
+    <div class="terminal-box">
+      <input type="text" id="term-input" class="terminal-input" placeholder="Type remote command...">
+      <button id="term-send" class="terminal-btn"><i class="fa-solid fa-paper-plane"></i></button>
+    </div>
+
+    <!-- RESPONSE FEED -->
+    <div class="log-feed" id="log-feed">
+      <div class="log-item jenny">
+        <strong>JENNY:</strong> Mobile Remote Link active. Directing Mac OS.
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const serverUrl = window.location.origin;
+    const logFeed = document.getElementById('log-feed');
+    const termInput = document.getElementById('term-input');
+    const termSend = document.getElementById('term-send');
+    const micOrb = document.getElementById('mic-orb');
+    const orbHint = document.getElementById('orb-hint');
+
+    function appendLog(sender, text) {
+      const d = document.createElement('div');
+      d.className = `log-item ${sender === 'USER' ? 'user' : 'jenny'}`;
+      d.innerHTML = `<strong>${sender}:</strong> ${text.replace(/\n/g, '<br>')}`;
+      logFeed.appendChild(d);
+      logFeed.scrollTop = logFeed.scrollHeight;
+    }
+
+    window._speechUtteranceStore = [];
+    window._speechHeartbeat = null;
+
+    function speakMobile(text) {
+      if (!('speechSynthesis' in window) || !text) return;
+      
+      window.speechSynthesis.cancel();
+      if (window._speechHeartbeat) clearInterval(window._speechHeartbeat);
+      window._speechUtteranceStore = [];
+
+      const clean = text
+        .replace(/[*_#`~]/g, '')
+        .replace(/https?:\/\/\S+/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (!clean) return;
+
+      const sentences = clean.match(/[^.!?]+[.!?]+/g) || [clean];
+      const spokenText = sentences[0].slice(0, 140).trim();
+
+      const u = new SpeechSynthesisUtterance(spokenText);
+      window._speechUtteranceStore.push(u);
+
+      u.rate = 1.05;
+      u.pitch = 1.0;
+      u.volume = 1.0;
+
+      const voices = window.speechSynthesis.getVoices();
+      const female = voices.find(v => /samantha|karen|moira|tessa|zira|google.*female/i.test(v.name)) || voices[0];
+      if (female) u.voice = female;
+
+      window._speechHeartbeat = setInterval(() => {
+        if (window.speechSynthesis.speaking) {
+          window.speechSynthesis.pause();
+          window.speechSynthesis.resume();
+        } else {
+          clearInterval(window._speechHeartbeat);
+        }
+      }, 1400);
+
+      u.onend = () => {
+        if (window._speechHeartbeat) clearInterval(window._speechHeartbeat);
+        window._speechUtteranceStore = [];
+      };
+
+      u.onerror = () => {
+        if (window._speechHeartbeat) clearInterval(window._speechHeartbeat);
+        window._speechUtteranceStore = [];
+      };
+
+      window.speechSynthesis.speak(u);
+    }
+
+    // ================================================
+    // DEVICE AUTHENTICATION STATE & REGISTRATION
+    // ================================================
+    function getDeviceId() {
+      let id = localStorage.getItem('jenny_device_id');
+      if (!id) {
+        id = 'dev_' + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('jenny_device_id', id);
+      }
+      return id;
+    }
+
+    function getDeviceOS() {
+      const ua = navigator.userAgent;
+      if (/android/i.test(ua)) return 'Android';
+      if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) return 'iOS';
+      if (/macintosh/i.test(ua)) return 'macOS';
+      if (/windows/i.test(ua)) return 'Windows';
+      return 'Mobile Device';
+    }
+
+    function getDeviceBrowser() {
+      const ua = navigator.userAgent;
+      if (/chrome/i.test(ua)) return 'Chrome';
+      if (/safari/i.test(ua) && !/chrome/i.test(ua)) return 'Safari';
+      if (/firefox/i.test(ua)) return 'Firefox';
+      return 'Web Browser';
+    }
+
+    async function checkDeviceAuth() {
+      const deviceId = getDeviceId();
+      const os = getDeviceOS();
+      const browser = getDeviceBrowser();
+
+      try {
+        const res = await fetch(`${serverUrl}/api/device/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId, os, browser })
+        });
+        const data = await res.json();
+        if (data.success && data.device) {
+          updateAuthUI(data.device.status);
+        }
+      } catch (e) {
+        console.error('[DeviceAuth] Registration failed', e);
+      }
+    }
+
+    function updateAuthUI(status) {
+      const pendingScreen = document.getElementById('auth-pending-screen');
+      const deniedScreen = document.getElementById('auth-denied-screen');
+
+      if (status === 'approved') {
+        pendingScreen.classList.add('hidden');
+        deniedScreen.classList.add('hidden');
+      } else if (status === 'denied') {
+        pendingScreen.classList.add('hidden');
+        deniedScreen.classList.remove('hidden');
+      } else {
+        pendingScreen.classList.remove('hidden');
+        deniedScreen.classList.add('hidden');
+      }
+    }
+
+    async function pollAuthStatus() {
+      const deviceId = getDeviceId();
+      try {
+        const res = await fetch(`${serverUrl}/api/device/status/${deviceId}`);
+        const data = await res.json();
+        if (data.success) {
+          updateAuthUI(data.status);
+          if (data.status === 'approved') {
+            await pollDeviceCommands();
+          }
+        }
+      } catch (e) {
+        console.error('[DeviceAuth] Polling status failed', e);
+      }
+    }
+
+    async function pollDeviceCommands() {
+      const deviceId = getDeviceId();
+      try {
+        const res = await fetch(`${serverUrl}/api/device/command/poll/${deviceId}`);
+        const data = await res.json();
+        if (data.success && data.commands && data.commands.length > 0) {
+          data.commands.forEach(cmd => {
+            executePhoneCommand(cmd.action, cmd.value);
+          });
+        }
+      } catch (e) {
+        console.error('[DeviceAuth] Polling commands failed', e);
+      }
+    }
+
+    function executePhoneCommand(action, value) {
+      appendLog('HOST_CMD', `Received remote action: ${action.toUpperCase()}`);
+      
+      if (action === 'buzz') {
+        try {
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const oscillator = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          oscillator.type = 'sawtooth';
+          oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+          oscillator.frequency.exponentialRampToValueAtTime(1760, audioCtx.currentTime + 0.4);
+          gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+          oscillator.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          oscillator.start();
+          oscillator.stop(audioCtx.currentTime + 0.5);
+        } catch (err) {
+          console.error('Audio buzz failed', err);
+        }
+      }
+      
+      if (action === 'vibrate') {
+        if (navigator.vibrate) {
+          navigator.vibrate([200, 100, 200, 100, 300]);
+        } else {
+          showMobileToast('Vibration not supported on this browser.');
+        }
+      }
+      
+      if (action === 'toggle-flash') {
+        const strobe = document.createElement('div');
+        strobe.style.position = 'fixed';
+        strobe.style.inset = '0';
+        strobe.style.background = '#ffffff';
+        strobe.style.zIndex = '999998';
+        document.body.appendChild(strobe);
+        let flashes = 0;
+        const interval = setInterval(() => {
+          strobe.style.visibility = strobe.style.visibility === 'hidden' ? 'visible' : 'hidden';
+          flashes++;
+          if (flashes > 12) {
+            clearInterval(interval);
+            strobe.remove();
+          }
+        }, 80);
+      }
+      
+      if (action === 'toast') {
+        showMobileToast(value || 'System ping, BOSS!');
+      }
+
+      if (action === 'volume') {
+        showMobileToast(`Volume updated remotely to ${value}%`);
+      }
+    }
+
+    function showMobileToast(msg) {
+      const toastDiv = document.createElement('div');
+      toastDiv.style.position = 'fixed';
+      toastDiv.style.bottom = '80px';
+      toastDiv.style.left = '50%';
+      toastDiv.style.transform = 'translateX(-50%)';
+      toastDiv.style.background = 'rgba(208, 132, 0, 0.95)';
+      toastDiv.style.border = '1px solid #d08400';
+      toastDiv.style.color = '#ffffff';
+      toastDiv.style.padding = '12px 24px';
+      toastDiv.style.borderRadius = '30px';
+      toastDiv.style.fontSize = '12px';
+      toastDiv.style.fontFamily = 'monospace';
+      toastDiv.style.zIndex = '999999';
+      toastDiv.style.boxShadow = '0 0 20px rgba(208, 132, 0, 0.4)';
+      toastDiv.textContent = msg;
+      document.body.appendChild(toastDiv);
+      setTimeout(() => {
+        toastDiv.remove();
+      }, 3000);
+    }
+
+    checkDeviceAuth();
+    setInterval(pollAuthStatus, 1500);
+
+    async function executeRemote(cmd) {
+      if (!cmd.trim()) return;
+      appendLog('USER', cmd);
+      termInput.value = '';
+
+      try {
+        const res = await fetch(`${serverUrl}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: cmd, deviceId: getDeviceId() })
+        });
+        const d = await res.json();
+        if (d.success && d.reply) {
+          appendLog('JENNY', d.reply.text);
+          speakMobile(d.reply.speech || d.reply.text);
+          if (d.reply.command && d.reply.command.action !== 'vault-save') {
+            await fetch(`${serverUrl}/api/control`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...d.reply.command, deviceId: getDeviceId() })
+            });
+          }
+        }
+      } catch (e) {
+        appendLog('JENNY', 'Connection error to Mac.');
+      }
+    }
+
+    termSend.addEventListener('click', () => executeRemote(termInput.value));
+    termInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') executeRemote(termInput.value); });
+
+    document.querySelectorAll('.ctrl-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const cmd = card.dataset.cmd;
+        if (cmd) executeRemote(cmd);
+      });
+    });
+
+    // Bind Mobile Media Controller Buttons
+    document.getElementById('mobile-media-prev')?.addEventListener('click', async () => {
+      try {
+        await fetch(`${serverUrl}/api/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'media', value: 'previous', deviceId: getDeviceId() })
+        });
+      } catch (e) {}
+    });
+    document.getElementById('mobile-media-play')?.addEventListener('click', async () => {
+      try {
+        await fetch(`${serverUrl}/api/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'media', value: 'playpause', deviceId: getDeviceId() })
+        });
+      } catch (e) {}
+    });
+    document.getElementById('mobile-media-next')?.addEventListener('click', async () => {
+      try {
+        await fetch(`${serverUrl}/api/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'media', value: 'next', deviceId: getDeviceId() })
+        });
+      } catch (e) {}
+    });
+
+    // REAL-TIME DICTATION & VOICE MIC CONTROL
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    let listening = false;
+    let dictationTimer = null;
+
+    if (SR) {
+      recognition = new SR();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        listening = true;
+        micOrb.classList.add('listening');
+        orbHint.textContent = 'DICTATING... SPEAK NOW';
+      };
+
+      recognition.onresult = (e) => {
+        let interim = '';
+        let final = '';
+        for (let i = e.resultIndex; i < e.results.length; ++i) {
+          if (e.results[i].isFinal) final += e.results[i][0].transcript;
+          else interim += e.results[i][0].transcript;
+        }
+        const text = final || interim;
+        termInput.value = text;
+        orbHint.textContent = text ? `"${text}"` : 'DICTATING... SPEAK NOW';
+
+        clearTimeout(dictationTimer);
+        if (final.trim()) {
+          dictationTimer = setTimeout(() => {
+            executeRemote(final.trim());
+            recognition.stop();
+          }, 800);
+        }
+      };
+
+      recognition.onend = () => {
+        listening = false;
+        micOrb.classList.remove('listening');
+        orbHint.textContent = 'TAP ORB FOR VOICE COMMAND';
+      };
+
+      recognition.onerror = (err) => {
+        listening = false;
+        micOrb.classList.remove('listening');
+        orbHint.textContent = 'TAP ORB FOR VOICE COMMAND';
+      };
+
+      micOrb.addEventListener('click', async () => {
+        if (listening) {
+          recognition.stop();
+        } else {
+          try {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+              await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
+            }
+            recognition.start();
+          } catch (e) {
+            orbHint.textContent = 'MIC ACCESS DENIED';
+          }
+        }
+      });
+    }
+
+    // TELEMETRY REFRESH
+    async function refreshTelemetry() {
+      try {
+        const res = await fetch(`${serverUrl}/api/system-status`);
+        const d = await res.json();
+        if (d.success) {
+          document.getElementById('m-cpu').textContent = (d.cpu?.usage || 0) + '%';
+          document.getElementById('m-ram').textContent = (d.ram?.usage || 0) + '%';
+          document.getElementById('m-bat').textContent = Math.round(d.battery?.level || 100) + '%';
+        }
+      } catch {}
+    }
+    refreshTelemetry();
+    setInterval(refreshTelemetry, 3000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>J.E.N.N.Y.</title>
+  <link rel="icon" href="logo.png">
+  <link rel="apple-touch-icon" href="logo.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Pre-dashboard Welcome Screen Overlay -->
+  <div id="pre-dashboard-overlay" class="pre-dashboard-overlay">
+    <div class="welcome-content">
+      <div class="welcome-glitch-container">
+        <h1 class="welcome-title text-glow">HI I AM YOUR ASSISTANT AT JOB F.R.I.D.A.Y</h1>
+      </div>
+      <p class="welcome-instruction">CLICK ANYWHERE TO START</p>
+      <div class="welcome-rings">
+        <div class="wring wring1"></div>
+        <div class="wring wring2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOOT SCREEN — CINEMATIC -->
+  <div id="boot-screen">
+    <!-- Layer 1: Star field -->
+    <canvas id="boot-stars" class="boot-layer"></canvas>
+    <!-- Layer 2: Grid with perspective -->
+    <div class="boot-layer boot-grid-perspective"></div>
+    <!-- Layer 3: Data streams -->
+    <canvas id="boot-datastreams" class="boot-layer"></canvas>
+    <!-- Layer 4: Central orb + rings -->
+    <div class="boot-center">
+      <div class="boot-energy-ring er1"></div>
+      <div class="boot-energy-ring er2"></div>
+      <div class="boot-energy-ring er3"></div>
+      <div class="boot-energy-ring er4"></div>
+      <!-- Hypermaximalist HUD brackets & ticks -->
+      <div class="hud-bracket hb-left"></div>
+      <div class="hud-bracket hb-right"></div>
+      <div class="hud-circle-ticks"></div>
+      <div class="hud-coordinates">
+        <div class="hud-coord-item">[ SYS_LOC: 84.992.11A ]</div>
+        <div class="hud-coord-item">[ DECK_LNK: ACTIVE ]</div>
+      </div>
+      <div class="boot-core">
+        <div class="boot-core-inner"></div>
+        <div class="boot-core-pulse"></div>
+      </div>
+      <div class="boot-scan-beam"></div>
+    </div>
+    <!-- Layer 5: Title + text -->
+    <div class="boot-text-layer">
+      <div class="boot-glitch-wrap">
+        <h1 class="boot-title" id="boot-title" data-text="J.E.N.N.Y.">J.E.N.N.Y.</h1>
+      </div>
+      <p class="boot-sub" id="boot-sub">JUST ENHANCED NEURAL NETWORK YIELDING</p>
+      <div class="boot-progress-wrap">
+        <div class="boot-bar-track"><div class="boot-bar-fill" id="boot-bar"></div></div>
+        <div class="boot-percentage" id="boot-percentage">0%</div>
+      </div>
+      <div class="boot-terminal" id="boot-terminal">
+        <div class="boot-terminal-header">
+          <span class="bt-dot red"></span><span class="bt-dot yellow"></span><span class="bt-dot green"></span>
+          <span class="bt-title">FRIDAY CORE v3.7.1</span>
+        </div>
+        <div class="boot-terminal-body" id="boot-logs"></div>
+      </div>
+    </div>
+    <!-- Layer 6: Flash overlay -->
+    <div class="boot-flash" id="boot-flash"></div>
+    <!-- Layer 7: Scanlines -->
+  </div>
+
+  <div id="press-start-screen" class="press-start-overlay" style="display:none">
+    <!-- Starfield canvas -->
+    <canvas id="press-start-stars" style="position:absolute; inset:0; pointer-events:none; z-index:1; opacity:0.6;"></canvas>
+    <div class="hologram-grid" style="z-index:2"></div>
+    <div class="press-start-content" style="position:relative; z-index:3">
+      <div class="press-start-orb-container">
+        <div class="press-start-ring ring-1"></div>
+        <div class="press-start-ring ring-2"></div>
+        <div class="press-start-ring ring-3"></div>
+        <div class="press-start-core">
+          <i class="fa-solid fa-power-off"></i>
+        </div>
+      </div>
+      <h1 class="press-start-title">J.E.N.N.Y. AI</h1>
+      <div class="press-start-subtitle">NEURAL MATRIX READY & LOCKED</div>
+      <div class="press-start-anywhere">
+        [ CLICK ANYWHERE TO INITIALIZE NEURAL INTERFACE ]
+      </div>
+      <div class="press-start-hint">Unlocks Audio, Voice Dictation & Personal User Memory Profile</div>
+    </div>
+  </div>
+
+  <div id="main-app" style="display:none">
+    <!-- Twinkling stars background -->
+    <canvas id="main-stars" style="position:absolute; inset:0; pointer-events:none; z-index:1; opacity:0.65;"></canvas>
+    <div class="scanlines" style="z-index:3"></div>
+    <div class="holographic" style="z-index:3"></div>
+    <div class="mouse-glow" id="mouse-glow" style="z-index:3"></div>
+
+    <!-- LEFT PANEL — Holographic Command Center -->
+    <aside class="holo-panel" id="holo-panel">
+      <div class="holo-bg">
+        <div class="holo-grid"></div>
+        <div class="holo-glow"></div>
+        <div class="holo-scanline"></div>
+      </div>
+
+      <div class="holo-header">
+        <span class="mode-badge" id="mode-badge">OFFLINE</span>
+        <span class="quota-pill" id="quota-pill">
+          <i class="fa-solid fa-bolt"></i>
+          <span id="quota-rpm">--/--</span> RPM
+        </span>
+      </div>
+
+      <div class="sys-monitor" id="sys-monitor">
+        <div class="sys-media-row" style="margin-top: 0; margin-bottom: 8px;">
+          <button class="sys-media-btn" id="media-btn-prev" title="Previous"><i class="fa-solid fa-backward"></i></button>
+          <button class="sys-media-btn" id="media-btn-play" title="Play/Pause"><i class="fa-solid fa-play"></i><i class="fa-solid fa-pause"></i></button>
+          <button class="sys-media-btn" id="media-btn-next" title="Next"><i class="fa-solid fa-forward"></i></button>
+        </div>
+        <div class="sys-graph-row">
+          <div class="sys-graph-card">
+            <div class="sys-graph-header">
+              <span class="sys-graph-label">CPU</span>
+              <span class="sys-graph-val" id="sys-cpu-val">0%</span>
+            </div>
+            <canvas class="sys-sparkline" id="spark-cpu" width="400" height="100"></canvas>
+            <div class="sys-graph-sub" id="sys-cpu-model"></div>
+          </div>
+          <div class="sys-graph-card">
+            <div class="sys-graph-header">
+              <span class="sys-graph-label">RAM</span>
+              <span class="sys-graph-val" id="sys-ram-val">0%</span>
+            </div>
+            <canvas class="sys-sparkline" id="spark-ram" width="400" height="100"></canvas>
+            <div class="sys-graph-sub" id="sys-ram-info"></div>
+          </div>
+        </div>
+        <div class="sys-graph-row">
+          <div class="sys-graph-card">
+            <div class="sys-graph-header">
+              <span class="sys-graph-label">DISK</span>
+              <span class="sys-graph-val" id="sys-disk-val">0%</span>
+            </div>
+            <canvas class="sys-sparkline" id="spark-disk" width="400" height="100"></canvas>
+            <div class="sys-graph-sub" id="sys-disk-info"></div>
+          </div>
+          <div class="sys-graph-card">
+            <div class="sys-graph-header">
+              <span class="sys-graph-label">NET</span>
+              <span class="sys-graph-val" id="sys-net-val">--</span>
+            </div>
+            <canvas class="sys-sparkline" id="spark-net" width="400" height="100"></canvas>
+            <div class="sys-graph-sub" id="sys-net-info"></div>
+          </div>
+        </div>
+        <div class="sys-info-row">
+          <div class="sys-info-chip"><i class="fa-solid fa-clock"></i> <span id="sys-uptime">--</span></div>
+          <div class="sys-info-chip"><i class="fa-solid fa-battery-full"></i> <span id="sys-battery">--</span></div>
+          <div class="sys-info-chip"><i class="fa-solid fa-wifi"></i> <span id="sys-wifi">--</span></div>
+        </div>
+      </div>
+
+      <div class="orb-section">
+        <div class="holo-orb-stage" id="orb-stage">
+          <canvas id="orb-canvas" width="500" height="500"></canvas>
+          <div class="orb-click-zone" id="orb-click" title="Click to talk">
+            <i class="fa-solid fa-microphone mic-icon"></i>
+          </div>
+          <div class="holo-projection">
+            <div class="proj-line"></div>
+            <div class="proj-line"></div>
+            <div class="proj-line"></div>
+            <div class="proj-line"></div>
+            <div class="proj-line"></div>
+          </div>
+          <div class="orb-rgb-glow" id="orb-rgb-glow">
+            <div class="rgb-r"></div>
+            <div class="rgb-g"></div>
+            <div class="rgb-b"></div>
+          </div>
+        </div>
+
+        <div class="holo-status" id="holo-status">STANDBY</div>
+        <div class="holo-label" id="holo-label">Tap the orb or type a command</div>
+
+        <div class="speech-waves" id="speech-waves">
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div>
+        </div>
+
+        <div class="timer-pill hidden" id="timer-pill">
+          <i class="fa-solid fa-stopwatch"></i>
+          <span id="timer-display">0:00</span>
+        </div>
+
+        <nav class="holo-dock" id="holo-dock">
+          <button class="dock-btn" data-panel="activity" title="PC Activity"><i class="fa-solid fa-chart-line"></i></button>
+          <button class="dock-btn" data-panel="system" title="System"><i class="fa-solid fa-microchip"></i></button>
+          <button class="dock-btn" data-panel="weather" title="Weather"><i class="fa-solid fa-cloud-sun"></i></button>
+          <button class="dock-btn" data-panel="emails" title="Emails"><i class="fa-solid fa-envelope"></i></button>
+          <button class="dock-btn" data-panel="processes" title="Processes"><i class="fa-solid fa-list-ol"></i></button>
+          <button class="dock-btn" data-panel="vault" title="Vault"><i class="fa-solid fa-database"></i></button>
+          <button class="dock-btn" data-panel="clipboard" title="Clipboard"><i class="fa-solid fa-clipboard"></i></button>
+          <button class="dock-btn" data-panel="files" title="Files"><i class="fa-solid fa-folder-tree"></i></button>
+          <button class="dock-btn" data-panel="notes" title="Notes"><i class="fa-solid fa-note-sticky"></i></button>
+          <button class="dock-btn" data-panel="training" title="AI Training Hub"><i class="fa-solid fa-brain"></i></button>
+          <button class="dock-btn" data-panel="settings" title="Settings"><i class="fa-solid fa-gear"></i></button>
+          <button class="dock-btn" data-panel="commands" title="Commands"><i class="fa-solid fa-terminal"></i></button>
+        </nav>
+      </div>
+    </aside>
+
+    <!-- RIGHT PANEL — Chat & Output -->
+    <main class="chat-panel" id="chat-panel">
+      <header class="hdr">
+        <div class="hdr-l">
+          <img src="logo.png" class="hdr-logo" alt="JENNY">
+          <span class="logo">J.E.N.N.Y.</span>
+          <span class="ver" id="app-version">v1.0</span>
+        </div>
+        <div class="hdr-r">
+          <span class="hdr-conn-status" id="hdr-conn-status">
+            <span class="dot-pulse" id="status-dot"></span>
+            <span id="status-text">connecting</span>
+          </span>
+          <span class="hdr-sep">|</span>
+          <span class="hdr-date" id="hdr-date"></span>
+          <span class="hdr-sep">|</span>
+          <span id="hdr-clock">00:00:00</span>
+        </div>
+      </header>
+
+      <div class="chat-ambient" id="chat-ambient">
+        <div class="ambient-chip" id="ambient-weather">
+          <i class="fa-solid fa-cloud-sun"></i>
+          <span id="ambient-weather-text">--</span>
+        </div>
+        <div class="ambient-chip" id="ambient-system">
+          <i class="fa-solid fa-microchip"></i>
+          <span id="ambient-system-text">CPU --% | RAM --%</span>
+        </div>
+        <div class="ambient-chip" id="ambient-uptime">
+          <i class="fa-solid fa-clock"></i>
+          <span id="ambient-uptime-text">Uptime --</span>
+        </div>
+        <div class="ambient-chip" id="ambient-ping">
+          <i class="fa-solid fa-signal"></i>
+          <span id="ambient-ping-text">--ms</span>
+        </div>
+        <div class="ambient-chip" id="ambient-net">
+          <i class="fa-solid fa-arrow-down"></i>
+          <span id="ambient-net-text">--</span>
+        </div>
+        <div class="ambient-chip hidden" id="ambient-remote">
+          <i class="fa-solid fa-tower-broadcast"></i>
+          <span id="ambient-remote-text">Remote</span>
+        </div>
+      </div>
+
+      <div class="chat-area" id="chat-area">
+        <div class="particle-bg" id="particle-bg"></div>
+        <div class="chat-scroll" id="chat-scroll">
+          <div class="msgs" id="msgs"></div>
+        </div>
+        <div class="welcome-screen" id="welcome-screen">
+          <div class="welcome-orb">
+            <div class="sun"></div>
+            <div class="orbit orbit-1">
+              <div class="planet planet-1"></div>
+            </div>
+            <div class="orbit orbit-2">
+              <div class="planet planet-2"></div>
+            </div>
+            <div class="orbit orbit-3">
+              <div class="planet planet-3"></div>
+            </div>
+          </div>
+          <div class="welcome-title">J.E.N.N.Y.</div>
+          <div class="welcome-sub">What can I help you with, BOSS?</div>
+
+          <div class="welcome-vitals">
+            <div class="wv-item">
+              <div class="wv-ring" id="wv-cpu-ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,215,0,0.1)" stroke-width="2"/><circle cx="18" cy="18" r="16" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-dasharray="100.5" stroke-dashoffset="100.5" stroke-linecap="round" class="wv-fill" id="wv-cpu-fill" transform="rotate(-90 18 18)"/></svg><span class="wv-pct" id="wv-cpu-pct">--</span></div>
+              <span class="wv-lbl">CPU</span>
+            </div>
+            <div class="wv-item">
+              <div class="wv-ring" id="wv-ram-ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,45,135,0.1)" stroke-width="2"/><circle cx="18" cy="18" r="16" fill="none" stroke="var(--pink)" stroke-width="2" stroke-dasharray="100.5" stroke-dashoffset="100.5" stroke-linecap="round" class="wv-fill" id="wv-ram-fill" transform="rotate(-90 18 18)"/></svg><span class="wv-pct" id="wv-ram-pct">--</span></div>
+              <span class="wv-lbl">RAM</span>
+            </div>
+            <div class="wv-item">
+              <div class="wv-ring" id="wv-batt-ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="rgba(139,92,246,0.1)" stroke-width="2"/><circle cx="18" cy="18" r="16" fill="none" stroke="var(--purple)" stroke-width="2" stroke-dasharray="100.5" stroke-dashoffset="100.5" stroke-linecap="round" class="wv-fill" id="wv-batt-fill" transform="rotate(-90 18 18)"/></svg><span class="wv-pct" id="wv-batt-pct">--</span></div>
+              <span class="wv-lbl">BATT</span>
+            </div>
+            <div class="wv-item">
+              <div class="wv-ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,215,0,0.1)" stroke-width="2"/><circle cx="18" cy="18" r="16" fill="none" stroke="var(--gold)" stroke-width="2" stroke-dasharray="100.5" stroke-dashoffset="100.5" stroke-linecap="round" class="wv-fill" id="wv-uptime-fill" transform="rotate(-90 18 18)"/></svg><span class="wv-pct" id="wv-uptime-pct">--</span></div>
+              <span class="wv-lbl">UPTIME</span>
+            </div>
+          </div>
+
+          <div class="welcome-actions">
+            <button class="welcome-card" data-cmd="briefing">
+              <i class="fa-solid fa-clipboard-list"></i>
+              <span class="wc-title">Briefing</span>
+              <span class="wc-desc">Full system overview</span>
+            </button>
+            <button class="welcome-card" data-cmd="what's the weather">
+              <i class="fa-solid fa-cloud-sun"></i>
+              <span class="wc-title">Weather</span>
+              <span class="wc-desc">Current conditions</span>
+            </button>
+            <button class="welcome-card" data-cmd="set a timer for 5 minutes">
+              <i class="fa-solid fa-stopwatch"></i>
+              <span class="wc-title">Timer</span>
+              <span class="wc-desc">Set a countdown</span>
+            </button>
+            <button class="welcome-card" data-cmd="check emails">
+              <i class="fa-solid fa-envelope"></i>
+              <span class="wc-title">Emails</span>
+              <span class="wc-desc">Check inbox</span>
+            </button>
+            <button class="welcome-card" data-cmd="open commands">
+              <i class="fa-solid fa-terminal"></i>
+              <span class="wc-title">Commands</span>
+              <span class="wc-desc">All available</span>
+            </button>
+            <button class="welcome-card" data-cmd="tell me a joke">
+              <i class="fa-solid fa-face-laugh"></i>
+              <span class="wc-title">Entertain</span>
+              <span class="wc-desc">Jokes &amp; facts</span>
+            </button>
+            <button class="welcome-card" data-cmd="lock screen">
+              <i class="fa-solid fa-lock"></i>
+              <span class="wc-title">Lock</span>
+              <span class="wc-desc">Lock screen</span>
+            </button>
+            <button class="welcome-card" data-cmd="open safari">
+              <i class="fa-solid fa-globe"></i>
+              <span class="wc-title">Browser</span>
+              <span class="wc-desc">Open Safari</span>
+            </button>
+            <button class="welcome-card" data-cmd="tell me a fun fact">
+              <i class="fa-solid fa-lightbulb"></i>
+              <span class="wc-title">Fun Fact</span>
+              <span class="wc-desc">Random knowledge</span>
+            </button>
+          </div>
+
+          <div class="welcome-footer-hint">
+            <i class="fa-solid fa-keyboard"></i>
+            <span>Esc to close panels &middot; Cmd+K to focus input &middot; Type or speak to interact</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="input-bar">
+        <div class="input-stats" id="input-stats">
+          <span id="char-count">0</span>
+          <span class="input-sep">|</span>
+          <span id="word-count">0 words</span>
+        </div>
+        <div class="txt-wrap">
+          <input type="text" id="chat-input" placeholder="Ask me anything, BOSS..." autocomplete="off">
+          <button class="send" id="send-btn"><i class="fa-solid fa-arrow-up"></i></button>
+        </div>
+      </div>
+    </main>
+
+    <!-- RIGHTMOST PANEL — Phone Access Link -->
+    <aside class="phone-link-panel" id="phone-link-panel">
+      <div class="holo-bg">
+        <div class="holo-grid"></div>
+        <div class="holo-glow"></div>
+        <div class="holo-scanline"></div>
+      </div>
+
+      <div class="phone-panel-header">
+        <span class="phone-badge"><i class="fa-solid fa-mobile-screen-button"></i> MOBILE ACCESS</span>
+        <span class="phone-count-pill" id="phone-active-count">0 linked</span>
+      </div>
+
+      <div class="phone-panel-content">
+        <!-- QR CODE STAGE (Waiting/Unlinked State) -->
+        <div class="phone-qr-stage" id="phone-qr-stage">
+          <div class="qr-container-box">
+            <img id="phone-qr-img" src="" alt="QR Code Link">
+            <div class="qr-scanner-overlay"></div>
+          </div>
+          <div class="phone-link-label">Scan to connect phone</div>
+          
+          <div class="phone-urls-box">
+            <div class="url-copy-row">
+              <span class="url-label">Public URL:</span>
+              <span class="url-text" id="phone-url-pub">Retrieving...</span>
+              <button class="copy-url-btn" onclick="copyTextFromElement('phone-url-pub')"><i class="fa-regular fa-copy"></i></button>
+            </div>
+            <div class="url-copy-row">
+              <span class="url-label">Local Wi-Fi:</span>
+              <span class="url-text" id="phone-url-loc">Retrieving...</span>
+              <button class="copy-url-btn" onclick="copyTextFromElement('phone-url-loc')"><i class="fa-regular fa-copy"></i></button>
+            </div>
+          </div>
+          <div class="phone-status-pulse">
+            <div class="pulse-ring"></div>
+            <span>WAITING FOR INCOMING LINK...</span>
+          </div>
+        </div>
+
+        <!-- AUTHORIZATION / CONFIRMATION PROMPT (Pending State) -->
+        <div class="phone-pending-stage hidden" id="phone-pending-stage">
+          <div class="device-icon-shield">
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+          <div class="device-alert-title">ACCESS REQUEST</div>
+          
+          <div class="device-spec-card">
+            <div class="spec-row">
+              <span class="spec-lbl">Device OS:</span>
+              <span class="spec-val" id="pending-device-os">Unknown</span>
+            </div>
+            <div class="spec-row">
+              <span class="spec-lbl">Browser:</span>
+              <span class="spec-val" id="pending-device-browser">Unknown</span>
+            </div>
+            <div class="spec-row">
+              <span class="spec-lbl">IP Address:</span>
+              <span class="spec-val" id="pending-device-ip">127.0.0.1</span>
+            </div>
+          </div>
+
+          <div class="device-action-row">
+            <button class="device-btn approve-btn" id="pending-approve-btn">
+              <i class="fa-solid fa-check"></i> ALLOW ACCESS
+            </button>
+            <button class="device-btn deny-btn" id="pending-deny-btn">
+              <i class="fa-solid fa-xmark"></i> DENY
+            </button>
+          </div>
+        </div>
+
+        <!-- LINKED DEVICES LIST (Approved State) -->
+        <div class="phone-linked-stage hidden" id="phone-linked-stage">
+          <div class="linked-title">CONNECTED PHONE</div>
+          <div class="linked-device-card">
+            <div class="device-icon-box">
+              <i class="fa-solid fa-mobile-screen"></i>
+              <span class="live-indicator"></span>
+            </div>
+            <div class="device-desc">
+              <div class="device-name" id="linked-device-name">iPhone</div>
+              <div class="device-meta" id="linked-device-meta">Safari · 192.168.1.5</div>
+            </div>
+            <button class="revoke-btn" id="linked-revoke-btn" title="Disconnect Device">
+              <i class="fa-solid fa-link-slash"></i>
+            </button>
+          </div>
+
+          <div class="linked-stats-grid">
+            <div class="stat-box">
+              <div class="stat-lbl">Latency</div>
+              <div class="stat-val" id="phone-stat-ping">--ms</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-lbl">Role</div>
+              <div class="stat-val" id="phone-stat-role">Controller</div>
+            </div>
+          </div>
+
+          <div class="linked-ctrl-section">
+            <div class="ctrl-title">REMOTE COMMANDS</div>
+            <div class="ctrl-grid">
+              <button class="ctrl-btn" onclick="triggerPhoneAction('buzz')" title="Play alert sound on phone">
+                <i class="fa-solid fa-volume-high"></i>
+                <span>Buzz Phone</span>
+              </button>
+              <button class="ctrl-btn" onclick="triggerPhoneAction('toast')" title="Send banner toast message to phone">
+                <i class="fa-solid fa-message"></i>
+                <span>Send Toast</span>
+              </button>
+              <button class="ctrl-btn" onclick="triggerPhoneAction('vibrate')" title="Vibrate phone device">
+                <i class="fa-solid fa-mobile-retro"></i>
+                <span>Vibrate</span>
+              </button>
+              <button class="ctrl-btn" onclick="triggerPhoneAction('toggle-flash')" title="Toggle screen flash strobe light">
+                <i class="fa-solid fa-lightbulb"></i>
+                <span>Flashlight</span>
+              </button>
+            </div>
+            
+            <div class="ctrl-row">
+              <span class="ctrl-lbl">Device Volume</span>
+              <input type="range" min="0" max="100" value="70" class="ctrl-slider" oninput="setPhoneVolume(this.value)">
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- PANELS (floating glassmorphic, draggable) -->
+    <div class="panels" id="panels"></div>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
