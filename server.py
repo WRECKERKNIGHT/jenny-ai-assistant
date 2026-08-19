@@ -78,7 +78,135 @@ def offline_reply(text):
         return {"text": random.choice(["Hello Boss! How can I help?","Hey Boss! What can I do for you?"]), "speech": "Hello Boss! How can I help?"}
     if any(w in lo for w in ["thank","thanks"]):
         return {"text": random.choice(["Happy to help, Boss!","Anything for you, Boss!"]), "speech": "Happy to help, Boss!"}
-    return {"text": "I'm running offline, Boss. I can still help with basic tasks!", "speech": "I'm running offline, Boss."}
+
+    m = re.search(r"(?:open|launch|start|run)\s+(.+)", lo)
+    if m:
+        app_name = m.group(1).strip()
+        if any(w in app_name for w in ["folder", "directory", "explorer", "file manager"]):
+            path_match = re.search(r"(?:folder|directory)\s+(.+)", app_name)
+            path = path_match.group(1).strip() if path_match else str(Path.home())
+            return {"text": f"Opening folder **{path}**, Boss!", "speech": f"Opening folder {path}, Boss.", "command": {"action": "open-app", "value": path}}
+        if "chrome" in app_name and ("bookmark" in lo or "bookmarks" in lo):
+            return {"text": "Loading your Chrome bookmarks, Boss!", "speech": "Loading Chrome bookmarks, Boss.", "command": {"action": "open-chrome-bookmarks", "value": ""}}
+        if any(w in app_name for w in ["website", "site", "url", "page"]) or "." in app_name:
+            url = app_name
+            if not url.startswith("http"): url = "https://" + url
+            return {"text": f"Opening **{url}** in Chrome, Boss!", "speech": f"Opening {url} in Chrome, Boss.", "command": {"action": "open-chrome", "value": url}}
+        return {"text": f"Opening **{app_name}** for you, Boss!", "speech": f"Opening {app_name}, Boss.", "command": {"action": "open-app", "value": app_name}}
+
+    m = re.search(r"(?:close|quit|exit|kill|stop)\s+(.+)", lo)
+    if m:
+        app_name = m.group(1).strip()
+        return {"text": f"Closing **{app_name}**, Boss!", "speech": f"Closing {app_name}, Boss.", "command": {"action": "close-app", "value": app_name}}
+
+    if any(w in lo for w in ["chrome bookmarks", "bookmarks", "my bookmarks", "show bookmarks", "bookmark list"]):
+        return {"text": "Loading your Chrome bookmarks, Boss!", "speech": "Loading Chrome bookmarks, Boss.", "command": {"action": "open-chrome-bookmarks", "value": ""}}
+
+    m = re.search(r"(?:browse|open folder|go to folder|navigate to|show folder)\s+(.+)", lo)
+    if m:
+        path = m.group(1).strip()
+        return {"text": f"Opening folder **{path}**, Boss!", "speech": f"Opening {path}, Boss.", "command": {"action": "open-folder", "value": path}}
+
+    if any(w in lo for w in ["open desktop", "show desktop", "my desktop"]):
+        return {"text": "Opening your Desktop, Boss!", "speech": "Opening Desktop, Boss.", "command": {"action": "open-folder", "value": str(Path.home() / "Desktop")}}
+
+    if any(w in lo for w in ["open downloads", "show downloads", "my downloads"]):
+        return {"text": "Opening Downloads, Boss!", "speech": "Opening Downloads, Boss.", "command": {"action": "open-folder", "value": str(Path.home() / "Downloads")}}
+
+    if any(w in lo for w in ["open documents", "show documents", "my documents"]):
+        return {"text": "Opening Documents, Boss!", "speech": "Opening Documents, Boss.", "command": {"action": "open-folder", "value": str(Path.home() / "Documents")}}
+
+    if any(w in lo for w in ["open pictures", "show pictures", "my pictures"]):
+        return {"text": "Opening Pictures, Boss!", "speech": "Opening Pictures, Boss.", "command": {"action": "open-folder", "value": str(Path.home() / "Pictures")}}
+
+    if any(w in lo for w in ["open music", "show music", "my music"]):
+        return {"text": "Opening Music, Boss!", "speech": "Opening Music, Boss.", "command": {"action": "open-folder", "value": str(Path.home() / "Music")}}
+
+    if any(w in lo for w in ["open videos", "show videos", "my videos"]):
+        return {"text": "Opening Videos, Boss!", "speech": "Opening Videos, Boss.", "command": {"action": "open-folder", "value": str(Path.home() / "Videos")}}
+
+    if any(w in lo for w in ["open chrome", "launch chrome", "start chrome"]):
+        return {"text": "Opening Chrome, Boss!", "speech": "Opening Chrome, Boss.", "command": {"action": "open-app", "value": "chrome"}}
+
+    if any(w in lo for w in ["open edge", "launch edge", "start edge", "open browser"]):
+        return {"text": "Opening Edge, Boss!", "speech": "Opening Edge, Boss.", "command": {"action": "open-app", "value": "msedge"}}
+
+    if any(w in lo for w in ["open vscode", "open code", "launch vscode", "open visual studio"]):
+        return {"text": "Opening VS Code, Boss!", "speech": "Opening VS Code, Boss.", "command": {"action": "open-app", "value": "code"}}
+
+    if any(w in lo for w in ["open discord", "launch discord"]):
+        return {"text": "Opening Discord, Boss!", "speech": "Opening Discord, Boss.", "command": {"action": "open-app", "value": "discord"}}
+
+    if any(w in lo for w in ["open spotify", "launch spotify"]):
+        return {"text": "Opening Spotify, Boss!", "speech": "Opening Spotify, Boss.", "command": {"action": "open-app", "value": "spotify"}}
+
+    if any(w in lo for w in ["open word", "open ms word", "launch word"]):
+        return {"text": "Opening Microsoft Word, Boss!", "speech": "Opening Word, Boss.", "command": {"action": "open-app", "value": "winword"}}
+
+    if any(w in lo for w in ["open excel", "launch excel"]):
+        return {"text": "Opening Excel, Boss!", "speech": "Opening Excel, Boss.", "command": {"action": "open-app", "value": "excel"}}
+
+    if any(w in lo for w in ["open powerpoint", "open ppt", "launch powerpoint"]):
+        return {"text": "Opening PowerPoint, Boss!", "speech": "Opening PowerPoint, Boss.", "command": {"action": "open-app", "value": "powerpnt"}}
+
+    if any(w in lo for w in ["open paint", "launch paint"]):
+        return {"text": "Opening Paint, Boss!", "speech": "Opening Paint, Boss.", "command": {"action": "open-app", "value": "mspaint"}}
+
+    if any(w in lo for w in ["open notepad", "launch notepad"]):
+        return {"text": "Opening Notepad, Boss!", "speech": "Opening Notepad, Boss.", "command": {"action": "open-app", "value": "notepad"}}
+
+    if any(w in lo for w in ["open calculator", "launch calculator", "calc"]):
+        return {"text": "Opening Calculator, Boss!", "speech": "Opening Calculator, Boss.", "command": {"action": "open-app", "value": "calc"}}
+
+    if any(w in lo for w in ["cpu usage", "cpu info", "processor"]):
+        return {"text": f"CPU is at **{system_cache['cpu']}%** usage, Boss. Model: **{platform.processor() or 'Unknown'}** with **{psutil.cpu_count()}** cores.", "speech": f"CPU is at {system_cache['cpu']} percent usage, Boss."}
+
+    if any(w in lo for w in ["ram usage", "memory info", "ram info", "memory usage"]):
+        return {"text": f"RAM usage: **{system_cache['ram']}%** used, **{system_cache['ram_used']} GB** / **{system_cache['ram_total']} GB**, Boss.", "speech": f"RAM usage is {system_cache['ram']} percent, {system_cache['ram_used']} gigabytes used out of {system_cache['ram_total']}."}
+
+    if any(w in lo for w in ["battery level", "battery", "battery percentage", "battery status"]):
+        ch = "charging" if system_cache["charging"] else "on battery"
+        return {"text": f"Battery: **{system_cache['battery']}%** ({ch}), Boss.", "speech": f"Battery at {system_cache['battery']} percent, {ch}, Boss."}
+
+    if any(w in lo for w in ["disk usage", "storage", "free space", "disk space"]):
+        return {"text": f"Disk usage: **{system_cache['disk']}%** used, **{system_cache['disk_free']} GB** free of **{system_cache['disk_total']} GB**, Boss.", "speech": f"Disk usage is {system_cache['disk']} percent, {system_cache['disk_free']} gigabytes free."}
+
+    if any(w in lo for w in ["system info", "about my pc", "my system", "computer info", "system information"]):
+        return {"text": f"OS: **{platform.system()} {platform.release()}**\nCPU: **{platform.processor() or 'Unknown'}**\nRAM: **{system_cache['ram_used']} / {system_cache['ram_total']} GB**\nHostname: **{platform.node()}**\nBattery: **{system_cache['battery']}%**", "speech": f"Running {platform.system()} {platform.release()} on {platform.processor() or 'Unknown CPU'} with {system_cache['ram_used']} gigabytes of RAM used."}
+
+    if any(w in lo for w in ["uptime", "how long", "up time"]):
+        up = system_cache["uptime"]
+        hours, remainder = divmod(up, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return {"text": f"System uptime: **{hours}h {minutes}m {seconds}s**, Boss.", "speech": f"System has been up for {hours} hours and {minutes} minutes, Boss."}
+
+    if any(w in lo for w in ["hostname", "computer name", "pc name", "my name"]):
+        return {"text": f"Your computer name is **{platform.node()}**, Boss.", "speech": f"Your computer name is {platform.node()}, Boss."}
+
+    if any(w in lo for w in ["wifi", "network", "internet status"]):
+        try:
+            r = subprocess.run(["netsh", "wlan", "show", "interfaces"], capture_output=True, text=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
+            ssid = ""; sig = ""
+            for l in r.stdout.split("\n"):
+                if "SSID" in l and "BSSID" not in l: ssid = l.split(":",1)[-1].strip()
+                if "Signal" in l: sig = l.split(":",1)[-1].strip()
+            return {"text": f"Connected to **{ssid}** with **{sig}** signal strength, Boss.", "speech": f"Connected to {ssid} with {sig} signal strength, Boss."}
+        except: return {"text": "Could not retrieve WiFi info, Boss.", "speech": "Could not retrieve WiFi info, Boss."}
+
+    if any(w in lo for w in ["running processes", "task manager", "what's running"]):
+        try:
+            r = subprocess.run(["tasklist", "/fo", "csv", "/nh"], capture_output=True, text=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
+            procs = []
+            for line in r.stdout.strip().split("\n")[:15]:
+                parts = line.strip('"').split('","')
+                if len(parts) >= 5: procs.append(f"{parts[0]} (PID:{parts[1]})")
+            return {"text": f"Top processes:\n" + "\n".join(f"- **{p}**" for p in procs), "speech": f"Found {len(procs)} processes running, Boss."}
+        except: return {"text": "Could not list processes, Boss.", "speech": "Could not list processes, Boss."}
+
+    if any(w in lo for w in ["who made you", "your creator", "who created you", "your developer"]):
+        return {"text": "I was created by **Harshit** (WRECKERKNIGHT) — the Boss himself! Built with Python, Flask, and pure love. 💛", "speech": "I was created by Harshit, also known as WRECKERKNIGHT. Built with Python and Flask."}
+
+    return None
 
 def update_telemetry():
     import psutil
