@@ -505,6 +505,48 @@ def api_tts():
         threading.Thread(target=_s,daemon=True).start()
     return jsonify({"success":True})
 
+@app.route("/api/chrome-bookmarks")
+def api_chrome_bookmarks():
+    try:
+        bm_path = Path.home() / "AppData" / "Local" / "Google" / "Chrome" / "User Data" / "Default" / "Bookmarks"
+        if not bm_path.exists():
+            for p in Path.home().iterdir():
+                bp = p / "AppData" / "Local" / "Google" / "Chrome" / "User Data" / "Default" / "Bookmarks"
+                if bp.exists(): bm_path = bp; break
+        if not bm_path.exists(): return jsonify({"success": True, "bookmarks": [], "message": "Chrome bookmarks not found"})
+        data = json.loads(bm_path.read_text(encoding="utf-8"))
+        bookmarks = []
+        def walk(node, path=""):
+            if node.get("type") == "url":
+                bookmarks.append({"name": node.get("name",""), "url": node.get("url",""), "path": path})
+            elif node.get("type") == "folder":
+                folder_name = node.get("name","")
+                for child in node.get("children", []):
+                    walk(child, f"{path}/{folder_name}" if path else folder_name)
+        roots = data.get("roots", {})
+        for key in ["bookmark_bar", "other", "synced"]:
+            if key in roots: walk(roots[key])
+        return jsonify({"success": True, "bookmarks": bookmarks[:100], "total": len(bookmarks)})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e), "bookmarks": []})
+
+@app.route("/api/open-chrome", methods=["GET","POST"])
+def api_open_chrome():
+    d = request.args if request.method == "GET" else (request.get_json(force=True, silent=True) or {})
+    url = d.get("url", "")
+    if url:
+        try:
+            chrome_paths = [
+                r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+                str(Path.home() / "AppData" / "Local" / "Google" / "Chrome" / "Application" / "chrome.exe"),
+            ]
+            chrome = next((p for p in chrome_paths if Path(p).exists()), None)
+            if chrome: subprocess.Popen([chrome, url]); return jsonify({"success": True, "message": f"Opened in Chrome: {url}"})
+            else: webbrowser.open(url); return jsonify({"success": True, "message": f"Opened in default browser: {url}"})
+        except: return jsonify({"success": False})
+    return jsonify({"success": False, "error": "No URL"})
+
 
 if __name__ == "__main__":
     print("=" * 55)
