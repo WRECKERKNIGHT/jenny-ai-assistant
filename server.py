@@ -206,6 +206,55 @@ def offline_reply(text):
     if any(w in lo for w in ["who made you", "your creator", "who created you", "your developer"]):
         return {"text": "I was created by **Harshit** (WRECKERKNIGHT) — the Boss himself! Built with Python, Flask, and pure love. 💛", "speech": "I was created by Harshit, also known as WRECKERKNIGHT. Built with Python and Flask."}
 
+    if any(w in lo for w in ["what is", "who is", "define", "meaning of", "explain"]):
+        if not get_gemini_key():
+            words = lo.replace("what is", "").replace("who is", "").replace("define", "").replace("meaning of", "").replace("explain", "").strip()
+            knowledge = {
+                "ai": "Artificial Intelligence (AI) is the simulation of human intelligence by machines, especially computer systems. It includes learning, reasoning, problem-solving, perception, and language understanding.",
+                "machine learning": "Machine Learning is a subset of AI where systems learn from data without being explicitly programmed, improving their performance over time.",
+                "python": "Python is a high-level, interpreted programming language known for its simplicity and versatility. It's used in web development, data science, AI, automation, and more.",
+                "javascript": "JavaScript is a programming language primarily used for web development. It enables interactive web pages and is supported by all modern browsers.",
+                "html": "HTML (HyperText Markup Language) is the standard markup language for creating web pages and web applications.",
+                "css": "CSS (Cascading Style Sheets) is a style sheet language used for describing the presentation of documents written in HTML.",
+                "api": "API (Application Programming Interface) is a set of rules that allows different software applications to communicate with each other.",
+                "database": "A database is an organized collection of structured information or data stored electronically in a computer system.",
+                "blockchain": "Blockchain is a decentralized, distributed digital ledger used to record transactions across many computers, ensuring that records cannot be altered retroactively.",
+                "cloud computing": "Cloud computing is the delivery of computing services over the internet, including servers, storage, databases, networking, software, and analytics.",
+                "internet": "The Internet is a global system of interconnected computer networks that uses TCP/IP to communicate between networks and devices.",
+                "wifi": "WiFi is a wireless networking technology that allows devices to connect to the internet and communicate with each other using radio waves.",
+                "cpu": "CPU (Central Processing Unit) is the primary component of a computer that performs most of the processing inside the computer.",
+                "ram": "RAM (Random Access Memory) is a form of computer memory that can be read and changed in any order, typically used to store working data.",
+                "gpu": "GPU (Graphics Processing Unit) is a specialized electronic circuit designed to rapidly manipulate and alter memory to accelerate the creation of images.",
+                "ssd": "SSD (Solid State Drive) is a storage device that uses integrated circuit assemblies to store data persistently using flash memory.",
+                "operating system": "An Operating System (OS) is system software that manages computer hardware and software resources and provides common services for programs.",
+                "windows": "Windows is a group of several proprietary graphical operating system families developed by Microsoft.",
+                "linux": "Linux is an open-source Unix-like operating system kernel first released by Linus Torvalds in 1991.",
+                "algorithm": "An algorithm is a finite sequence of well-defined, computer-implementable instructions, typically to solve a class of problems.",
+                "binary": "Binary is a number system that uses only two digits: 0 and 1. It is the fundamental language of computers.",
+                "encryption": "Encryption is the process of converting information or data into a code to prevent unauthorized access.",
+                "firewall": "A firewall is a network security system that monitors and controls incoming and outgoing network traffic based on predetermined rules.",
+                "virus": "A computer virus is a malicious software program designed to spread from computer to computer and can damage data or software.",
+                "hacker": "A hacker is a person who uses computers to gain unauthorized access to data. White-hat hackers do this legally to improve security.",
+                "git": "Git is a distributed version control system designed to track changes in source code during software development.",
+                "github": "GitHub is a web-based platform for version control and collaboration, allowing developers to work together on projects from anywhere.",
+                "docker": "Docker is a platform for developing, shipping, and running applications using containerization technology.",
+                "neural network": "A neural network is a computing system inspired by biological neural networks in the brain, used in deep learning for pattern recognition.",
+                "deep learning": "Deep learning is a subset of machine learning that uses neural networks with many layers to analyze various factors of data.",
+                "quantum computing": "Quantum computing uses quantum-mechanical phenomena like superposition and entanglement to perform computation.",
+                "iot": "IoT (Internet of Things) refers to the network of physical devices embedded with sensors and software to connect and exchange data.",
+                "5g": "5G is the fifth generation of mobile network technology, offering faster speeds, lower latency, and more capacity than 4G.",
+                "augmented reality": "Augmented Reality (AR) overlays digital information on the real world through devices like smartphones or AR glasses.",
+                "virtual reality": "Virtual Reality (VR) is a simulated experience that can be similar to or completely different from the real world, using headsets.",
+            }
+            best_match = None
+            for k, v in knowledge.items():
+                if k in words: best_match = v; break
+            if best_match:
+                return {"text": best_match, "speech": best_match[:200] + "..."}
+            if words:
+                return {"text": f"I'd need an internet connection to look up **{words}** for you, Boss. I do know some offline topics though! Try asking about AI, Python, CPU, RAM, WiFi, encryption, and more.", "speech": f"I'd need an internet connection to look that up, Boss. Try asking about AI, Python, or other tech topics I know offline."}
+        return {"text": "I'm running offline, Boss. For detailed answers, set up a Gemini API key! I can still control your system, check weather, and more.", "speech": "I'm running offline, Boss. I can still control your system and help with many things."}
+
     return None
 
 def update_telemetry():
