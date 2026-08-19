@@ -105,6 +105,36 @@
     <div class="holographic" style="z-index:3"></div>
     <div class="mouse-glow" id="mouse-glow" style="z-index:3"></div>
 
+    <!-- OVERLAY MINI MODE -->
+    <div id="overlay-mini" style="display:none;position:fixed;bottom:20px;right:20px;width:320px;z-index:9998;background:rgba(8,8,14,0.92);border:1px solid rgba(255,215,0,0.2);border-radius:16px;padding:16px;backdrop-filter:blur(20px);box-shadow:0 8px 40px rgba(0,0,0,0.6);cursor:move;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <span style="font-family:var(--orbitron);font-size:11px;color:var(--gold);letter-spacing:2px;">J.E.N.N.Y. OVERLAY</span>
+        <button onclick="toggleOverlay()" style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:14px;padding:2px 6px;" title="Close overlay"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <div style="flex:1;text-align:center;">
+          <div style="font-family:var(--orbitron);font-size:18px;color:#fff;" id="ov-cpu">--%</div>
+          <div style="font-family:var(--mono);font-size:8px;color:var(--gold);letter-spacing:1px;">CPU</div>
+        </div>
+        <div style="flex:1;text-align:center;">
+          <div style="font-family:var(--orbitron);font-size:18px;color:#fff;" id="ov-ram">--%</div>
+          <div style="font-family:var(--mono);font-size:8px;color:var(--gold);letter-spacing:1px;">RAM</div>
+        </div>
+        <div style="flex:1;text-align:center;">
+          <div style="font-family:var(--orbitron);font-size:18px;color:#fff;" id="ov-bat">--%</div>
+          <div style="font-family:var(--mono);font-size:8px;color:var(--gold);letter-spacing:1px;">BAT</div>
+        </div>
+      </div>
+      <div id="ov-time" style="font-family:var(--mono);font-size:10px;color:var(--txt2);text-align:center;margin-bottom:8px;">--:--</div>
+      <div style="display:flex;gap:6px;justify-content:center;">
+        <button onclick="sendMessage('screenshot')" class="dock-btn" style="width:32px;height:32px;font-size:12px;" title="Screenshot"><i class="fa-solid fa-camera"></i></button>
+        <button onclick="sendMessage('lock pc')" class="dock-btn" style="width:32px;height:32px;font-size:12px;" title="Lock"><i class="fa-solid fa-lock"></i></button>
+        <button onclick="sendMessage('weather')" class="dock-btn" style="width:32px;height:32px;font-size:12px;" title="Weather"><i class="fa-solid fa-cloud-sun"></i></button>
+        <button onclick="sendMessage('tell me a joke')" class="dock-btn" style="width:32px;height:32px;font-size:12px;" title="Joke"><i class="fa-solid fa-face-laugh"></i></button>
+        <button onclick="toggleOverlay()" class="dock-btn" style="width:32px;height:32px;font-size:12px;" title="Full mode"><i class="fa-solid fa-expand"></i></button>
+      </div>
+    </div>
+
     <!-- LEFT PANEL — Holographic Command Center -->
     <aside class="holo-panel" id="holo-panel">
       <div class="holo-bg">
@@ -221,6 +251,7 @@
           <button class="dock-btn" data-panel="training" title="AI Training Hub"><i class="fa-solid fa-brain"></i></button>
           <button class="dock-btn" data-panel="settings" title="Settings"><i class="fa-solid fa-gear"></i></button>
           <button class="dock-btn" data-panel="commands" title="Commands"><i class="fa-solid fa-terminal"></i></button>
+          <button class="dock-btn" onclick="toggleOverlay()" title="Mini Overlay Mode"><i class="fa-solid fa-window-restore"></i></button>
         </nav>
       </div>
     </aside>

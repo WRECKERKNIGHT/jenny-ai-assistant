@@ -2423,3 +2423,53 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
+// ================================================
+// OVERLAY MINI MODE
+// ================================================
+let overlayVisible = false;
+let overlayInterval = null;
+
+function toggleOverlay() {
+  const ov = document.getElementById('overlay-mini');
+  if (!ov) return;
+  overlayVisible = !overlayVisible;
+  ov.style.display = overlayVisible ? 'block' : 'none';
+  if (overlayVisible) {
+    updateOverlay();
+    overlayInterval = setInterval(updateOverlay, 3000);
+    makeOverlayDraggable(ov);
+  } else {
+    clearInterval(overlayInterval);
+    overlayInterval = null;
+  }
+}
+
+async function updateOverlay() {
+  try {
+    const res = await fetch('/api/system-status');
+    const d = await res.json();
+    if (d.cpu !== undefined) document.getElementById('ov-cpu').textContent = Math.round(d.cpu) + '%';
+    if (d.ram !== undefined) document.getElementById('ov-ram').textContent = Math.round(d.ram) + '%';
+    if (d.battery !== undefined) document.getElementById('ov-bat').textContent = Math.round(d.battery) + '%';
+    document.getElementById('ov-time').textContent = new Date().toLocaleTimeString();
+  } catch(e) {}
+}
+
+function makeOverlayDraggable(el) {
+  let isDragging = false, startX, startY, origX, origY;
+  el.onmousedown = function(e) {
+    if (e.target.tagName === 'BUTTON' || e.target.tagName === 'I') return;
+    isDragging = true;
+    startX = e.clientX; startY = e.clientY;
+    origX = el.offsetLeft; origY = el.offsetTop;
+    document.onmousemove = function(e) {
+      if (!isDragging) return;
+      el.style.right = 'auto';
+      el.style.bottom = 'auto';
+      el.style.left = (origX + e.clientX - startX) + 'px';
+      el.style.top = (origY + e.clientY - startY) + 'px';
+    };
+    document.onmouseup = function() { isDragging = false; };
+  };
+}
