@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta name="Pragma" content="no-cache">
+<title>J.E.N.N.Y. — Select Mode</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#050508;color:#e0e0e0;font-family:'Rajdhani',sans-serif;min-height:100vh;overflow-x:hidden;position:relative}
+
+.bg-grid{position:fixed;inset:0;z-index:0;
+  background-image:
+    linear-gradient(rgba(255,215,0,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,215,0,0.015) 1px, transparent 1px);
+  background-size:60px 60px;
+  mask-image:radial-gradient(ellipse 80% 60% at 50% 50%, black 30%, transparent 80%);
+  -webkit-mask-image:radial-gradient(ellipse 80% 60% at 50% 50%, black 30%, transparent 80%);
+}
+
+.scan-line{position:fixed;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,215,0,0.15),transparent);z-index:1;animation:scanDown 6s linear infinite;pointer-events:none}
+@keyframes scanDown{0%{top:-2px}100%{top:100vh}}
+
+.container{position:relative;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:40px 20px}
+
+.header{text-align:center;margin-bottom:50px}
+.header-icon{width:80px;height:80px;margin:0 auto 20px;border-radius:50%;border:2px solid rgba(255,215,0,0.2);display:flex;align-items:center;justify-content:center;position:relative;background:radial-gradient(circle,rgba(255,215,0,0.06) 0%,transparent 70%);animation:float 4s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.header-icon::before{content:'';position:absolute;inset:-12px;border-radius:50%;border:1px dashed rgba(255,215,0,0.1);animation:spin 20s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.header-icon i{font-size:32px;color:#ffd700;text-shadow:0 0 20px rgba(255,215,0,0.4)}
+.header-title{font-family:'Orbitron',sans-serif;font-size:28px;font-weight:700;letter-spacing:8px;color:#ffd700;text-shadow:0 0 40px rgba(255,215,0,0.3);margin-bottom:8px}
+.header-sub{font-family:'Share Tech Mono',monospace;font-size:11px;color:rgba(255,255,255,0.3);letter-spacing:3px;text-transform:uppercase}
+
+.modes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:1100px;width:100%;margin-bottom:40px}
+
+.mode-card{position:relative;border-radius:16px;padding:32px 24px;cursor:pointer;transition:all 0.4s cubic-bezier(0.16,1,0.3,1);overflow:hidden;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02)}
+.mode-card::before{content:'';position:absolute;inset:0;border-radius:16px;opacity:0;transition:opacity 0.4s ease}
+.mode-card:hover{transform:translateY(-8px)}
+.mode-card:active{transform:translateY(-2px)}
+
+/* FRIDAY - Purple */
+.mode-card.friday::before{background:radial-gradient(circle at 50% 0%, rgba(168,85,247,0.08) 0%, transparent 60%)}
+.mode-card.friday:hover{border-color:rgba(168,85,247,0.3);box-shadow:0 20px 60px rgba(168,85,247,0.1),0 0 40px rgba(168,85,247,0.05)}
+.mode-card.friday:hover::before{opacity:1}
+.mode-card.friday .mode-icon{color:#a855f7;text-shadow:0 0 20px rgba(168,85,247,0.5)}
+.mode-card.friday .mode-name{color:#a855f7;text-shadow:0 0 20px rgba(168,85,247,0.3)}
+.mode-card.friday .mode-badge{background:rgba(168,85,247,0.12);color:#a855f7;border:1px solid rgba(168,85,247,0.25)}
+.mode-card.friday .mode-feature{border-left-color:rgba(168,85,247,0.3)}
+.mode-card.friday.selected{border-color:rgba(168,85,247,0.5);box-shadow:0 0 40px rgba(168,85,247,0.15)}
+.mode-card.friday .select-ring{border-color:rgba(168,85,247,0.4)}
+
+/* JARVIS - Cyan */
+.mode-card.jarvis::before{background:radial-gradient(circle at 50% 0%, rgba(0,212,255,0.08) 0%, transparent 60%)}
+.mode-card.jarvis:hover{border-color:rgba(0,212,255,0.3);box-shadow:0 20px 60px rgba(0,212,255,0.1),0 0 40px rgba(0,212,255,0.05)}
+.mode-card.jarvis:hover::before{opacity:1}
+.mode-card.jarvis .mode-icon{color:#00d4ff;text-shadow:0 0 20px rgba(0,212,255,0.5)}
+.mode-card.jarvis .mode-name{color:#00d4ff;text-shadow:0 0 20px rgba(0,212,255,0.3)}
+.mode-card.jarvis .mode-badge{background:rgba(0,212,255,0.12);color:#00d4ff;border:1px solid rgba(0,212,255,0.25)}
+.mode-card.jarvis .mode-feature{border-left-color:rgba(0,212,255,0.3)}
+.mode-card.jarvis.selected{border-color:rgba(0,212,255,0.5);box-shadow:0 0 40px rgba(0,212,255,0.15)}
+.mode-card.jarvis .select-ring{border-color:rgba(0,212,255,0.4)}
+
+/* ULTRON - Red */
+.mode-card.ultron::before{background:radial-gradient(circle at 50% 0%, rgba(255,62,62,0.08) 0%, transparent 60%)}
+.mode-card.ultron:hover{border-color:rgba(255,62,62,0.3);box-shadow:0 20px 60px rgba(255,62,62,0.1),0 0 40px rgba(255,62,62,0.05)}
+.mode-card.ultron:hover::before{opacity:1}
+.mode-card.ultron .mode-icon{color:#ff3e3e;text-shadow:0 0 20px rgba(255,62,62,0.5)}
+.mode-card.ultron .mode-name{color:#ff3e3e;text-shadow:0 0 20px rgba(255,62,62,0.3)}
+.mode-card.ultron .mode-badge{background:rgba(255,62,62,0.12);color:#ff3e3e;border:1px solid rgba(255,62,62,0.25)}
+.mode-card.ultron .mode-feature{border-left-color:rgba(255,62,62,0.3)}
+.mode-card.ultron.selected{border-color:rgba(255,62,62,0.5);box-shadow:0 0 40px rgba(255,62,62,0.15)}
+.mode-card.ultron .select-ring{border-color:rgba(255,62,62,0.4)}
+
+.mode-header{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+.mode-icon-wrap{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;position:relative;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06)}
+.mode-icon{font-size:24px}
+.mode-info{flex:1}
+.mode-name{font-family:'Orbitron',sans-serif;font-size:14px;letter-spacing:3px;font-weight:700;margin-bottom:2px}
+.mode-full-name{font-family:'Share Tech Mono',monospace;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:1.5px;text-transform:uppercase}
+
+.mode-badge{display:inline-block;font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1.5px;padding:4px 10px;border-radius:6px;margin-bottom:16px;text-transform:uppercase}
+
+.mode-desc{font-size:13px;color:rgba(255,255,255,0.45);line-height:1.6;margin-bottom:16px;font-weight:300}
+
+.mode-features{list-style:none;margin:0;padding:0}
+.mode-feature{font-family:'Share Tech Mono',monospace;font-size:10px;color:rgba(255,255,255,0.35);padding:6px 0 6px 12px;border-left:2px solid rgba(255,255,255,0.06);margin-bottom:4px;letter-spacing:0.5px;display:flex;align-items:center;gap:8px}
+.mode-feature i{font-size:8px;opacity:0.5}
+
+.select-btn{width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:3px;text-transform:uppercase;cursor:pointer;transition:all 0.3s ease}
+.mode-card.friday .select-btn:hover{background:rgba(168,85,247,0.1);border-color:rgba(168,85,247,0.3);color:#a855f7}
+.mode-card.jarvis .select-btn:hover{background:rgba(0,212,255,0.1);border-color:rgba(0,212,255,0.3);color:#00d4ff}
+.mode-card.ultron .select-btn:hover{background:rgba(255,62,62,0.1);border-color:rgba(255,62,62,0.3);color:#ff3e3e}
+
+.footer{font-family:'Share Tech Mono',monospace;font-size:10px;color:rgba(255,255,255,0.15);letter-spacing:1px}
+.footer a{color:rgba(255,215,0,0.3);text-decoration:none}
+.footer a:hover{color:rgba(255,215,0,0.6)}
+
+@media(max-width:900px){.modes-grid{grid-template-columns:1fr;max-width:500px}}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="scan-line"></div>
+
+<!-- Cinematic Intro Overlay -->
+<div id="boot-screen">
+  <canvas id="boot-particles" style="position:absolute;inset:0;z-index:1"></canvas>
+
+  <!-- Press Enter gate -->
+  <div id="splash-gate" class="splash-gate">
+    <div class="splash-rings">
+      <div class="sr r1"></div><div class="sr r2"></div><div class="sr r3"></div>
+      <div class="sc"></div>
+    </div>
+    <div class="splash-big">J.E.N.N.Y.</div>
+    <div class="splash-sub">JUST A NEURAL NETWORK YIELDING INTELLIGENCE</div>
+    <div class="splash-press">PRESS <span class="press-key">ENTER</span> TO CONTINUE</div>
+  </div>
+
+  <!-- Boot sequence -->
+  <div id="boot-seq" style="display:none">
+    <div style="position:relative;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;text-align:center">
+      <div class="boot-ring-wrap">
+        <div class="boot-ring r1"></div>
+        <div class="boot-ring r2"></div>
+        <div class="boot-ring r3"></div>
+        <div class="boot-core"></div>
+      </div>
+      <div class="boot-title" id="boot-title">J.E.N.N.Y.</div>
+      <div class="boot-sub" id="boot-sub">JUST A NEURAL NETWORK YIELDING INTELLIGENCE</div>
+      <div class="boot-loading" id="boot-loading" style="width:340px;margin-top:36px">
+        <div class="boot-bar"><div class="boot-bar-fill" id="boot-load-fill"></div></div>
+        <div class="boot-bar-text" id="boot-load-text">INITIALIZING...</div>
+      </div>
+    </div>
+    <div class="boot-gradient"></div>
+  </div>
+</div>
+<style>
+#boot-screen{position:fixed;inset:0;z-index:9999;background:#050508;display:flex;align-items:center;justify-content:center;opacity:1;transition:opacity 1.2s cubic-bezier(0.4,0,0.2,1),visibility 1.2s ease;cursor:pointer;overflow:hidden}
+#boot-screen.done{opacity:0;visibility:hidden;pointer-events:none}
+
+/* Splash Enter gate */
+#splash-gate{position:relative;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;text-align:center;width:100%}
+#splash-gate.hidden{display:none}
+.splash-rings{position:relative;width:150px;height:150px;margin-bottom:26px}
+.splash-rings .sr{position:absolute;border-radius:50%}
+.splash-rings .r1{inset:0;border:1px solid rgba(255,215,0,0.12);animation:boot-spin 12s linear infinite}
+.splash-rings .r2{inset:16px;border:1px dashed rgba(255,215,0,0.2);animation:boot-spin 8s linear infinite reverse}
+.splash-rings .r3{inset:32px;border:1px solid rgba(255,215,0,0.25);border-top-color:transparent;animation:boot-spin 5s linear infinite}
+.splash-rings .sc{position:absolute;inset:48px;border-radius:50%;background:radial-gradient(circle,rgba(255,215,0,0.5) 0%,rgba(255,215,0,0.08) 60%,transparent 85%);box-shadow:0 0 80px rgba(255,215,0,0.35),0 0 160px rgba(255,215,0,0.1);animation:boot-pulse 3s ease-in-out infinite}
+.splash-big{font-family:'Orbitron',sans-serif;font-size:44px;font-weight:900;color:#ffd700;letter-spacing:14px;text-shadow:0 0 50px rgba(255,215,0,0.5),0 0 120px rgba(255,215,0,0.2);margin-bottom:10px;animation:boot-fadein 1.2s ease-out}
+.splash-sub{font-family:'Share Tech Mono',monospace;font-size:10px;color:rgba(255,255,255,0.35);letter-spacing:5px;text-transform:uppercase;margin-bottom:44px;animation:boot-fadein 1.8s ease-out}
+.splash-press{font-family:'Orbitron',sans-serif;font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:4px;animation:press-blink 1.6s ease-in-out infinite}
+.press-key{display:inline-block;padding:8px 18px;border:1px solid rgba(255,215,0,0.4);border-radius:8px;color:#ffd700;font-size:12px;margin:0 6px;box-shadow:0 0 20px rgba(255,215,0,0.15),inset 0 0 12px rgba(255,215,0,0.06)}
+@keyframes press-blink{0%,100%{opacity:1}50%{opacity:0.35}}
+@keyframes boot-spin{to{transform:rotate(360deg)}}
+@keyframes boot-pulse{0%,100%{transform:scale(1);opacity:0.8}50%{transform:scale(1.08);opacity:1}}
+
+.boot-ring-wrap{position:relative;width:150px;height:150px;margin-bottom:28px}
+.boot-ring{position:absolute;inset:0;border-radius:50%;border:1px solid rgba(255,215,0,0.15)}
+.boot-ring.r1{animation:boot-spin2 8s linear infinite;border-style:solid;border-color:rgba(255,215,0,0.2) transparent}
+.boot-ring.r2{inset:14px;animation:boot-spin2 6s linear infinite reverse;border-color:transparent rgba(255,215,0,0.15)}
+.boot-ring.r3{inset:28px;animation:boot-spin2 4s linear infinite;border-color:rgba(255,215,0,0.25) transparent;border-width:2px}
+@keyframes boot-spin2{to{transform:rotate(360deg)}}
+.boot-core{position:absolute;inset:40px;border-radius:50%;background:radial-gradient(circle,rgba(255,215,0,0.3) 0%,rgba(255,215,0,0.05) 60%,transparent 80%);box-shadow:0 0 60px rgba(255,215,0,0.15),0 0 120px rgba(255,215,0,0.05);animation:boot-pulse 3s ease-in-out infinite}
+.boot-title{font-family:'Orbitron',sans-serif;font-size:34px;font-weight:900;color:#ffd700;letter-spacing:12px;text-shadow:0 0 40px rgba(255,215,0,0.4),0 0 80px rgba(255,215,0,0.15);margin-bottom:8px;animation:boot-fadein 1.5s ease-out}
+.boot-sub{font-family:'Share Tech Mono',monospace;font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:4px;text-transform:uppercase;animation:boot-fadein 2s ease-out}
+@keyframes boot-fadein{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.boot-bar{width:100%;height:2px;background:rgba(255,215,0,0.1);border-radius:1px;overflow:hidden}
+.boot-bar-fill{height:100%;width:0;background:linear-gradient(90deg,rgba(255,215,0,0.3),#ffd700);box-shadow:0 0 12px rgba(255,215,0,0.3);transition:width 0.4s cubic-bezier(0.4,0,0.2,1)}
+.boot-bar-text{font-family:'Share Tech Mono',monospace;font-size:9px;color:rgba(255,255,255,0.25);letter-spacing:3px;text-align:center;margin-top:10px}
+.boot-gradient{position:absolute;inset:0;z-index:5;pointer-events:none;background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,0.6) 100%)}
+</style>
+
+<div class="container" id="mode-root" style="opacity:0;transition:opacity 1s ease">
+  <div class="header">
+    <div class="header-icon"><i class="fa-solid fa-shield-halved"></i></div>
+    <div class="header-title">SELECT MODE</div>
+    <div class="header-sub">Choose your AI assistant personality</div>
+  </div>
+
+  <div class="modes-grid">
+    <!-- FRIDAY -->
+    <div class="mode-card friday" onclick="selectMode('friday')" id="card-friday">
+      <div class="mode-header">
+        <div class="mode-icon-wrap"><i class="fa-solid fa-brain mode-icon"></i></div>
+        <div class="mode-info">
+          <div class="mode-name">F.R.I.D.A.Y</div>
+          <div class="mode-full-name">Female Replacement Intelligent Digital Assistant Youth</div>
+        </div>
+      </div>
+      <div class="mode-badge"><i class="fa-solid fa-star" style="margin-right:4px"></i> DEFAULT</div>
+      <div class="mode-desc">Your casual, witty, and efficient everyday assistant. Quick responses, smart suggestions, and a friendly personality that gets things done.</div>
+      <ul class="mode-features">
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Voice: Female (Zira) — warm &amp; natural</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> System control: open apps, volume, lock, sleep</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Email &amp; notification management</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Timers, alarms &amp; reminders</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Weather, news &amp; crypto updates</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Jokes, quotes, fun facts &amp; riddles</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Math, conversions &amp; knowledge base</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Clipboard &amp; file management</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Wake word: "Hey Friday"</li>
+      </ul>
+      <button class="select-btn">ACTIVATE F.R.I.D.A.Y</button>
+    </div>
+
+    <!-- JARVIS -->
+    <div class="mode-card jarvis" onclick="selectMode('jarvis')" id="card-jarvis">
+      <div class="mode-header">
+        <div class="mode-icon-wrap"><i class="fa-solid fa-robot mode-icon"></i></div>
+        <div class="mode-info">
+          <div class="mode-name">J.A.R.V.I.S</div>
+          <div class="mode-full-name">Just A Rather Very Intelligent System</div>
+        </div>
+      </div>
+      <div class="mode-badge"><i class="fa-solid fa-crown" style="margin-right:4px"></i> PREMIUM</div>
+      <div class="mode-desc">Formal, British, and sophisticated. A precise military-grade AI with diagnostic depth and structured briefings — just like Stark's right hand.</div>
+      <ul class="mode-features">
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Voice: British Male (Daniel) — formal &amp; sharp</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Full system briefings &amp; diagnostics</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Process management &amp; task control</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> CPU, RAM, disk &amp; network monitoring</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Security: lock, shutdown, sleep controls</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> WiFi &amp; network status reports</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Knowledge base &amp; tech trivia</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Open/close any Windows application</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Wake word: "Hey Jenny"</li>
+      </ul>
+      <button class="select-btn">ACTIVATE J.A.R.V.I.S</button>
+    </div>
+
+    <!-- ULTRON -->
+    <div class="mode-card ultron" onclick="selectMode('ultron')" id="card-ultron">
+      <div class="mode-header">
+        <div class="mode-icon-wrap"><i class="fa-solid fa-hand-sparkles mode-icon"></i></div>
+        <div class="mode-info">
+          <div class="mode-name">U.L.T.R.O.N</div>
+          <div class="mode-full-name">Unified Logic &amp; Tactical Reasoning Oracle Network</div>
+        </div>
+      </div>
+      <div class="mode-badge"><i class="fa-solid fa-bolt" style="margin-right:4px"></i> COMBAT</div>
+      <div class="mode-desc">Gesture-controlled full-screen HUD with 3D holographic orb. Webcam hand tracking for hands-free PC control. Aggressive red theme.</div>
+      <ul class="mode-features">
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Voice: Deep Male (David) — tactical &amp; intense</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Full-screen 3D holographic orb (Three.js)</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Real-time webcam hand tracking (MediaPipe)</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Gesture control: Point, Pinch, Fist, Palm</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Hands-free mouse control via gestures</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Live performance HUD (CPU/RAM/Disk/Net)</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Click-to-talk voice commands</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Hex grid overlay &amp; scan lines</li>
+        <li class="mode-feature"><i class="fa-solid fa-circle"></i> Press ESC to return to dashboard</li>
+      </ul>
+      <button class="select-btn">ACTIVATE U.L.T.R.O.N</button>
+    </div>
+  </div>
+
+  <div class="footer">
+    J.E.N.N.Y v2.0 &mdash; Created by <a href="https://github.com/WRECKERKNIGHT">WRECKERKNIGHT</a> &mdash; You can switch modes anytime from the dashboard
+  </div>
+</div>
+
+<script>
+let selectedMode = null;
+const bootScreen = document.getElementById('boot-screen');
+const splashGate = document.getElementById('splash-gate');
+const bootSeq = document.getElementById('boot-seq');
+
+function initBootParticles() {
+  const canvas = document.getElementById('boot-particles');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let w = canvas.width = window.innerWidth;
+  let h = canvas.height = window.innerHeight;
+  const p = [];
+  for (let i = 0; i < 110; i++) p.push({x:Math.random()*w, y:Math.random()*h, vx:(Math.random()-0.5)*0.3, vy:(Math.random()-0.5)*0.3, size:Math.random()*1.5+0.5, alpha:Math.random()*0.4+0.1});
+  function draw() {
+    ctx.clearRect(0,0,w,h);
+    p.forEach(pt => { pt.x+=pt.vx; pt.y+=pt.vy; if(pt.x<0||pt.x>w)pt.vx*=-1; if(pt.y<0||pt.y>h)pt.vy*=-1; ctx.beginPath(); ctx.arc(pt.x,pt.y,pt.size,0,Math.PI*2); ctx.fillStyle=`rgba(255,215,0,${pt.alpha})`; ctx.fill(); });
+    for(let i=0;i<p.length;i++) for(let j=i+1;j<p.length;j++){ const dx=p[i].x-p[j].x, dy=p[i].y-p[j].y, d=Math.sqrt(dx*dx+dy*dy); if(d<110){ ctx.beginPath(); ctx.moveTo(p[i].x,p[i].y); ctx.lineTo(p[j].x,p[j].y); ctx.strokeStyle=`rgba(255,215,0,${0.05*(1-d/110)})`; ctx.stroke(); } }
+    requestAnimationFrame(draw);
+  }
+  draw();
+  window.addEventListener('resize', () => { w=canvas.width=window.innerWidth; h=canvas.height=window.innerHeight; });
+}
+
+function startBootSeq() {
+  splashGate.classList.add('hidden');
+  bootSeq.style.display = 'block';
+  const fill = document.getElementById('boot-load-fill');
+  const text = document.getElementById('boot-load-text');
+  const steps = [[20,'INITIALIZING NEURAL CORE...'],[45,'LOADING HOLOGRAPHIC DISPLAY...'],[70,'CALIBRATING AI PERSONALITY MATRIX...'],[90,'SYNCHRONIZING VOICE MODULES...'],[100,'READY']];
+  function go(i) {
+    if (i >= steps.length) {
+      localStorage.setItem('jenny_booted', '1');
+      setTimeout(() => {
+        bootScreen.classList.add('done');
+        const root = document.getElementById('mode-root');
+        if (root) root.style.opacity = '1';
+      }, 200);
+      return;
+    }
+    fill.style.width = steps[i][0] + '%';
+    text.textContent = steps[i][1];
+    setTimeout(() => go(i+1), 420);
+  }
+  setTimeout(go, 0, 0);
+}
+
+initBootParticles();
+function unlockSplash() {
+  startBootSeq();
+}
+bootScreen.addEventListener('click', unlockSplash);
+window.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.code === 'Enter') && !splashGate.classList.contains('hidden')) {
+    unlockSplash();
+  }
+}, { once: false });
+
+function selectMode(mode) {
+  document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('card-' + mode).classList.add('selected');
+  selectedMode = mode;
+  activateMode(mode);
+}
+
+async function activateMode(mode) {
+  try {
+    await fetch('/api/mode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode })
+    });
+    document.body.style.transition = 'opacity 0.6s ease';
+    document.body.style.opacity = '0';
+    setTimeout(() => {
+      window.location.href = (mode === 'ultron') ? '/ultron.html' : '/';
+    }, 600);
+  } catch (e) {
+    console.error('Failed to switch mode:', e);
+    window.location.href = (mode === 'ultron') ? '/ultron.html' : '/';
+  }
+}
+</script>
+</body>
+</html>

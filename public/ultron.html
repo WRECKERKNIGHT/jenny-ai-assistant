@@ -1,0 +1,871 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>U.L.T.R.O.N. — Gesture Interface</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#050508;color:#fff;overflow:hidden;font-family:'Rajdhani',sans-serif;height:100vh;width:100vw;cursor:crosshair;user-select:none}
+canvas#orb-canvas{position:fixed;inset:0;z-index:1}
+.corner{position:fixed;z-index:50;pointer-events:none;width:50px;height:50px}
+.corner-tl{top:12px;left:12px;border-top:1px solid rgba(255,62,62,0.3);border-left:1px solid rgba(255,62,62,0.3)}
+.corner-tr{top:12px;right:12px;border-top:1px solid rgba(255,62,62,0.3);border-right:1px solid rgba(255,62,62,0.3)}
+.corner-bl{bottom:12px;left:12px;border-bottom:1px solid rgba(255,62,62,0.3);border-left:1px solid rgba(255,62,62,0.3)}
+.corner-br{bottom:12px;right:12px;border-bottom:1px solid rgba(255,62,62,0.3);border-right:1px solid rgba(255,62,62,0.3)}
+.scan-line{position:fixed;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,62,62,0.06),transparent);z-index:2;animation:scan-move 8s linear infinite;pointer-events:none}
+@keyframes scan-move{0%{top:-1px}100%{top:100vh}}
+.scan-line-v{position:fixed;top:0;bottom:0;width:1px;background:linear-gradient(180deg,transparent,rgba(255,62,62,0.04),transparent);z-index:2;animation:scan-move-h 12s linear infinite;pointer-events:none}
+@keyframes scan-move-h{0%{left:-1px}100%{left:100vw}}
+.hex-overlay{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:0.015;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%23ff3e3e' fill-opacity='1'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")}
+#intro-overlay{position:fixed;inset:0;z-index:500;display:flex;align-items:center;justify-content:center;background:rgba(5,5,8,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);transition:opacity 0.6s cubic-bezier(0.16,1,0.3,1),visibility 0.6s}
+#intro-overlay.hidden{opacity:0;visibility:hidden;pointer-events:none}
+.intro-card{max-width:520px;width:90%;text-align:center;padding:48px 40px;border-radius:20px;border:1px solid rgba(255,62,62,0.15);background:rgba(255,62,62,0.03);position:relative;overflow:hidden}
+.intro-card::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,rgba(255,62,62,0.08) 0%,transparent 60%);pointer-events:none}
+.intro-orb{width:100px;height:100px;margin:0 auto 24px;border-radius:50%;border:2px solid rgba(255,62,62,0.2);display:flex;align-items:center;justify-content:center;position:relative;background:radial-gradient(circle,rgba(255,62,62,0.1) 0%,transparent 70%);animation:intro-float 4s ease-in-out infinite}
+@keyframes intro-float{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-8px) scale(1.03)}}
+.intro-orb::before{content:'';position:absolute;inset:-14px;border-radius:50%;border:1px dashed rgba(255,62,62,0.12);animation:intro-spin 20s linear infinite}
+@keyframes intro-spin{to{transform:rotate(360deg)}}
+.intro-orb-core{width:36px;height:36px;border-radius:50%;background:radial-gradient(circle,#ff3e3e 0%,rgba(255,62,62,0.3) 70%,transparent 100%);box-shadow:0 0 30px rgba(255,62,62,0.4),0 0 60px rgba(255,62,62,0.15);animation:intro-pulse 2s ease-in-out infinite}
+@keyframes intro-pulse{0%,100%{box-shadow:0 0 30px rgba(255,62,62,0.4),0 0 60px rgba(255,62,62,0.15)}50%{box-shadow:0 0 50px rgba(255,62,62,0.6),0 0 90px rgba(255,62,62,0.25)}}
+.intro-title{font-family:'Orbitron',sans-serif;font-size:28px;font-weight:900;letter-spacing:8px;color:#ff3e3e;text-shadow:0 0 40px rgba(255,62,62,0.4);margin-bottom:6px}
+.intro-subtitle{font-family:'Share Tech Mono',monospace;font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:3px;margin-bottom:28px;text-transform:uppercase}
+.intro-features{list-style:none;margin:0 0 32px;padding:0;text-align:left}
+.intro-features li{font-family:'Share Tech Mono',monospace;font-size:10px;color:rgba(255,255,255,0.35);padding:5px 0 5px 14px;border-left:2px solid rgba(255,62,62,0.15);margin-bottom:3px;letter-spacing:0.5px;display:flex;align-items:center;gap:8px}
+.intro-features li::before{content:'';width:4px;height:4px;border-radius:50%;background:#ff3e3e;flex-shrink:0;opacity:0.5}
+.intro-enter{padding:14px 40px;border-radius:10px;border:1px solid rgba(255,62,62,0.3);background:rgba(255,62,62,0.08);color:#ff3e3e;font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:4px;text-transform:uppercase;cursor:pointer;transition:all 0.4s cubic-bezier(0.16,1,0.3,1)}
+.intro-enter:hover{background:rgba(255,62,62,0.15);border-color:rgba(255,62,62,0.5);box-shadow:0 0 30px rgba(255,62,62,0.15);transform:translateY(-2px)}
+.intro-enter:active{transform:translateY(1px);box-shadow:0 0 15px rgba(255,62,62,0.1)}
+#hud-left{position:fixed;top:30px;left:30px;z-index:100;width:280px}
+.hud-title{font-family:'Orbitron',sans-serif;font-size:11px;color:#ff3e3e;letter-spacing:4px;margin-bottom:4px;text-shadow:0 0 15px rgba(255,62,62,0.5)}
+.hud-sub{font-family:'Share Tech Mono',monospace;font-size:9px;color:rgba(255,255,255,0.25);letter-spacing:2px;margin-bottom:20px}
+#hud-right{position:fixed;top:30px;right:30px;z-index:100;width:200px}
+.perf-row{margin-bottom:12px}
+.perf-label{font-family:'Share Tech Mono',monospace;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:2px;margin-bottom:3px;display:flex;justify-content:space-between}
+.perf-bar-bg{height:3px;background:rgba(255,255,255,0.04);border-radius:2px;overflow:hidden}
+.perf-bar{height:100%;border-radius:2px;transition:width 0.8s ease;width:0%;background:#ff3e3e;box-shadow:0 0 6px rgba(255,62,62,0.3)}
+#hud-bottom{position:fixed;bottom:90px;left:30px;z-index:100}
+.gesture-label{font-family:'Orbitron',sans-serif;font-size:10px;color:#ff3e3e;letter-spacing:3px;margin-bottom:4px}
+.gesture-desc{font-family:'Share Tech Mono',monospace;font-size:9px;color:rgba(255,255,255,0.2);letter-spacing:1px;max-width:280px;line-height:1.5}
+#gesture-cam-wrap{position:fixed;bottom:20px;right:20px;z-index:100;width:220px}
+#gesture-cam{width:100%;height:165px;border-radius:8px;border:1px solid rgba(255,62,62,0.2);object-fit:cover;transform:scaleX(-1);background:#0a0a0a;display:block}
+#cam-label{font-family:'Share Tech Mono',monospace;font-size:8px;color:rgba(255,62,62,0.4);letter-spacing:2px;text-align:center;margin-top:4px}
+#hand-canvas{position:absolute;top:0;left:0;width:100%;height:100%;border-radius:8px;pointer-events:none;transform:scaleX(-1)}
+#status-bar{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:200;display:flex;align-items:center;gap:12px;background:rgba(255,62,62,0.04);border:1px solid rgba(255,62,62,0.1);border-radius:20px;padding:6px 20px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+#nav-back{background:none;border:1px solid rgba(255,62,62,0.15);color:rgba(255,255,255,0.3);font-family:'Share Tech Mono',monospace;font-size:9px;padding:5px 14px;border-radius:14px;cursor:pointer;letter-spacing:2px;transition:all 0.3s}
+#nav-back:hover{border-color:rgba(255,62,62,0.5);color:#ff3e3e;background:rgba(255,62,62,0.04)}
+#voice-status{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,0.2);transition:all 0.3s}
+#voice-status.listening{color:#ff3e3e;text-shadow:0 0 10px rgba(255,62,62,0.3)}
+#voice-status.thinking{color:#ff9800;text-shadow:0 0 10px rgba(255,152,0,0.3)}
+#voice-status.speaking{color:#4caf50;text-shadow:0 0 10px rgba(76,175,80,0.3)}
+#voice-status.idle{color:rgba(255,255,255,0.2)}
+.status-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.2);transition:all 0.3s;flex-shrink:0}
+.status-dot.listening{background:#ff3e3e;box-shadow:0 0 8px rgba(255,62,62,0.5);animation:dot-pulse 1s ease-in-out infinite}
+.status-dot.thinking{background:#ff9800;box-shadow:0 0 8px rgba(255,152,0,0.5);animation:dot-pulse 0.5s ease-in-out infinite}
+.status-dot.speaking{background:#4caf50;box-shadow:0 0 8px rgba(76,175,80,0.5)}
+.status-dot.idle{background:rgba(255,255,255,0.15)}
+@keyframes dot-pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.status-sep{width:1px;height:14px;background:rgba(255,255,255,0.1)}
+#status-ai-name{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,62,62,0.6)}
+#mode-switch{position:fixed;top:70px;right:30px;z-index:150;display:flex;align-items:center;gap:6px;background:rgba(255,62,62,0.04);border:1px solid rgba(255,62,62,0.12);border-radius:12px;padding:6px 10px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.ms-label{font-family:'Share Tech Mono',monospace;font-size:8px;color:rgba(255,255,255,0.3);letter-spacing:2px;margin-right:2px}
+.ms-btn{background:none;border:1px solid transparent;color:rgba(255,255,255,0.35);font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;padding:5px 10px;border-radius:7px;cursor:pointer;transition:all 0.3s}
+.ms-btn:hover{color:#fff;background:rgba(255,255,255,0.05)}
+.ms-btn.active{color:#ff3e3e;border-color:rgba(255,62,62,0.4);background:rgba(255,62,62,0.1);text-shadow:0 0 8px rgba(255,62,62,0.4)}
+.ms-btn[data-mode="jarvis"]:hover{color:#00d4ff;background:rgba(0,212,255,0.08)}
+.ms-btn[data-mode="jarvis"].active{color:#00d4ff;border-color:rgba(0,212,255,0.4);background:rgba(0,212,255,0.1);text-shadow:0 0 8px rgba(0,212,255,0.4)}
+.ms-btn[data-mode="friday"]:hover{color:#a855f7;background:rgba(168,85,247,0.08)}
+.ms-btn[data-mode="friday"].active{color:#a855f7;border-color:rgba(168,85,247,0.4);background:rgba(168,85,247,0.1);text-shadow:0 0 8px rgba(168,85,247,0.4)}
+#chat-input-bar{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:160;display:flex;align-items:center;gap:10px;background:rgba(10,10,10,0.55);border:1px solid rgba(255,62,62,0.15);border-radius:50px;padding:8px 8px 8px 22px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);width:min(560px,90vw);box-shadow:0 8px 40px rgba(0,0,0,0.6)}
+#chat-input-bar input{flex:1;background:none;border:none;outline:none;color:#fff;font-family:'Share Tech Mono',monospace;font-size:12px;letter-spacing:1px;caret-color:#ff3e3e}
+#chat-input-bar input::placeholder{color:rgba(255,255,255,0.25);letter-spacing:1px}
+.chat-prompt{color:rgba(255,62,62,0.6);font-size:12px}
+.chat-send-ico{font-style:normal}
+#quick-directives{position:fixed;bottom:82px;left:50%;transform:translateX(-50%);z-index:155;display:flex;gap:8px;width:min(560px,90vw);justify-content:center;pointer-events:none}
+.qd-chip{pointer-events:auto;background:rgba(255,62,62,0.05);border:1px solid rgba(255,62,62,0.15);color:rgba(255,255,255,0.45);font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;padding:6px 12px;border-radius:16px;cursor:pointer;transition:all 0.3s;white-space:nowrap}
+.qd-chip:hover{background:rgba(255,62,62,0.15);color:#ff3e3e;border-color:rgba(255,62,62,0.4);box-shadow:0 0 16px rgba(255,62,62,0.2);transform:translateY(-2px)}
+.qd-chip:active{transform:translateY(0)}
+#chat-send{background:rgba(255,62,62,0.12);border:1px solid rgba(255,62,62,0.35);color:#ff3e3e;border-radius:50%;width:40px;height:40px;cursor:pointer;font-size:15px;transition:all 0.3s;display:flex;align-items:center;justify-content:center}
+#chat-send:hover{background:rgba(255,62,62,0.25);box-shadow:0 0 20px rgba(255,62,62,0.25);transform:scale(1.05)}
+#chat-mic{background:rgba(255,62,62,0.08);border:1px solid rgba(255,62,62,0.25);color:rgba(255,255,255,0.5);border-radius:50%;width:40px;height:40px;cursor:pointer;font-size:15px;transition:all 0.3s;display:flex;align-items:center;justify-content:center}
+#chat-mic:hover{color:#ff3e3e;border-color:rgba(255,62,62,0.5)}
+#chat-mic.active{color:#ff3e3e;border-color:#ff3e3e;background:rgba(255,62,62,0.2);box-shadow:0 0 20px rgba(255,62,62,0.3)}
+#conv-panel{position:fixed;bottom:120px;left:50%;transform:translateX(-50%);z-index:100;width:min(560px,92vw);max-height:220px;display:flex;flex-direction:column;gap:6px;overflow-y:auto;pointer-events:none;scrollbar-width:none;justify-content:flex-end;margin-bottom:8px}
+#conv-panel::-webkit-scrollbar{display:none}
+.conv-msg{padding:7px 12px;border-radius:8px;font-family:'Share Tech Mono',monospace;font-size:10px;line-height:1.5;letter-spacing:0.5px;animation:msg-in 0.3s cubic-bezier(0.16,1,0.3,1);max-width:90%}
+@keyframes msg-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.conv-msg.user{background:rgba(255,62,62,0.08);border:1px solid rgba(255,62,62,0.12);color:rgba(255,255,255,0.6);align-self:flex-end;text-align:right}
+.conv-msg.ai{background:rgba(255,62,62,0.04);border:1px solid rgba(255,62,62,0.08);color:rgba(255,255,255,0.45);align-self:flex-start}
+.conv-msg .conv-label{font-size:7px;color:rgba(255,62,62,0.4);letter-spacing:2px;text-transform:uppercase;margin-bottom:2px}
+#voice-text{position:fixed;bottom:160px;left:50%;transform:translateX(-50%);z-index:100;font-family:'Share Tech Mono',monospace;font-size:13px;color:rgba(255,62,62,0.6);text-align:center;letter-spacing:2px;max-width:500px;min-height:18px;opacity:0;transition:opacity 0.3s;pointer-events:none;text-shadow:0 0 20px rgba(255,62,62,0.2)}
+#voice-text.show{opacity:1}
+#hud-data{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);z-index:50;display:flex;gap:30px;pointer-events:none;opacity:0}
+.data-cell{text-align:center}
+.data-val{font-family:'Orbitron',sans-serif;font-size:16px;color:#ff3e3e;text-shadow:0 0 10px rgba(255,62,62,0.2)}
+.data-lbl{font-family:'Share Tech Mono',monospace;font-size:7px;color:rgba(255,255,255,0.2);letter-spacing:2px;margin-top:2px}
+#sys-lines{position:fixed;top:120px;left:30px;z-index:100;width:280px}
+.sys-line{font-family:'Share Tech Mono',monospace;font-size:9px;color:rgba(255,255,255,0.15);letter-spacing:1px;margin-bottom:3px;display:flex;justify-content:space-between}
+.sys-line span:last-child{color:rgba(255,62,62,0.4)}
+#toast{position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:300;font-family:'Share Tech Mono',monospace;font-size:11px;color:#ff3e3e;background:rgba(255,62,62,0.06);border:1px solid rgba(255,62,62,0.15);padding:6px 16px;border-radius:6px;opacity:0;transition:opacity 0.3s;letter-spacing:1px;pointer-events:none}
+#toast.show{opacity:1}
+#ai-response{position:fixed;bottom:220px;left:50%;transform:translateX(-50%);z-index:100;font-family:'Rajdhani',sans-serif;font-size:14px;color:rgba(255,255,255,0.35);text-align:center;letter-spacing:1px;max-width:500px;min-height:20px;opacity:0;transition:opacity 0.4s;pointer-events:none;line-height:1.6;padding:0 20px}
+#ai-response.show{opacity:1}
+#hand-fail-msg{position:fixed;bottom:90px;left:30px;z-index:99;font-family:'Share Tech Mono',monospace;font-size:8px;color:rgba(255,255,255,0.15);letter-spacing:1px;display:none}
+@media(max-width:900px){#hud-left{display:none}#hud-right{width:160px;top:20px;right:20px}#conv-panel{right:20px;width:calc(100vw - 40px);bottom:200px}#gesture-cam-wrap{width:160px}}
+</style>
+</head>
+<body>
+<div class="hex-overlay"></div>
+<canvas id="orb-canvas"></canvas>
+<div class="scan-line"></div>
+<div class="scan-line-v"></div>
+<div class="corner corner-tl"></div>
+<div class="corner corner-tr"></div>
+<div class="corner corner-bl"></div>
+<div class="corner corner-br"></div>
+<div id="intro-overlay">
+  <div class="intro-card">
+    <div class="intro-orb"><div class="intro-orb-core"></div></div>
+    <div class="intro-title">U.L.T.R.O.N.</div>
+    <div class="intro-subtitle">Unified Logic &amp; Tactical Reasoning Oracle Network</div>
+    <ul class="intro-features">
+      <li>Talk or TYPE to ULTRON — continuous tactical conversation</li>
+      <li>ULTRON greets you out loud on activation (deep voice)</li>
+      <li>Holographic orb: mouse-drag, scroll-zoom, WASD/arrows</li>
+      <li>Webcam hand tracking — pinch, point, fist, palm</li>
+      <li>Switch modes anytime via the top-right JARVIS/FRIDAY buttons</li>
+      <li>Live system diagnostics HUD + quick directive chips</li>
+      <li>Press SPACE for voice, press / to type, ESC to exit</li>
+    </ul>
+    <button class="intro-enter" id="intro-enter-btn">ACTIVATE U.L.T.R.O.N</button>
+  </div>
+</div>
+<div id="status-bar">
+  <button id="nav-back">&#9664; MODES</button>
+  <div class="status-dot idle" id="status-dot"></div>
+  <div id="voice-status" class="idle">STANDBY</div>
+  <span class="status-sep"></span>
+  <span id="status-ai-name">ULTRON</span>
+</div>
+<div id="mode-switch">
+  <span class="ms-label">MODE</span>
+  <button class="ms-btn" data-mode="jarvis">JARVIS</button>
+  <button class="ms-btn active" data-mode="ultron">ULTRON</button>
+  <button class="ms-btn" data-mode="friday">FRIDAY</button>
+</div>
+<div id="hud-left">
+  <div class="hud-title">U.L.T.R.O.N.</div>
+  <div class="hud-sub">UNIFIED LOGIC & TACTICAL REASONING ORACLE NETWORK</div>
+  <div id="sys-lines"></div>
+</div>
+<div id="hud-right">
+  <div class="perf-row"><div class="perf-label"><span>CPU</span><span id="p-cpu-v">--%</span></div><div class="perf-bar-bg"><div class="perf-bar" id="p-cpu-b"></div></div></div>
+  <div class="perf-row"><div class="perf-label"><span>RAM</span><span id="p-ram-v">--%</span></div><div class="perf-bar-bg"><div class="perf-bar" id="p-ram-b"></div></div></div>
+  <div class="perf-row"><div class="perf-label"><span>DISK</span><span id="p-disk-v">--%</span></div><div class="perf-bar-bg"><div class="perf-bar" id="p-disk-b"></div></div></div>
+  <div class="perf-row"><div class="perf-label"><span>NET</span><span id="p-net-v">--</span></div><div class="perf-bar-bg"><div class="perf-bar" id="p-net-b"></div></div></div>
+  <div class="perf-row" style="margin-top:16px"><div class="perf-label"><span>BATTERY</span><span id="p-bat-v">--%</span></div><div class="perf-bar-bg"><div class="perf-bar" id="p-bat-b" style="background:#22c55e"></div></div></div>
+  <div class="perf-row"><div class="perf-label"><span>UPTIME</span><span id="p-up-v">--</span></div></div>
+</div>
+<div id="sys-lines"></div>
+<div id="gesture-cam-wrap">
+  <video id="gesture-cam" autoplay playsinline muted></video>
+  <canvas id="hand-canvas"></canvas>
+  <div id="cam-label">GESTURE CAM</div>
+</div>
+<div id="hud-bottom">
+  <div class="gesture-label" id="gesture-label">NO HAND</div>
+  <div class="gesture-desc">Palm=Move | Pinch=Select | Open=Zoom Out | Fist=Reset | Peace=Zoom In | Point=Drag</div>
+</div>
+<div id="hand-fail-msg">MediaPipe CDN unreachable — using mouse/keyboard controls only</div>
+<div id="conv-panel"></div>
+<div id="quick-directives">
+  <button class="qd-chip" data-cmd="Run a full system diagnostic">&#9881; DIAGNOSE</button>
+  <button class="qd-chip" data-cmd="Tell me a joke">&#128514; ENTERTAIN</button>
+  <button class="qd-chip" data-cmd="What can you do?">&#10067; CAPABILITIES</button>
+  <button class="qd-chip" data-cmd="Lock the screen">&#128274; LOCK</button>
+</div>
+<div id="chat-input-bar">
+  <span class="chat-prompt">&#9654;</span>
+  <input id="chat-input" type="text" placeholder="Type to talk to ULTRON..." autocomplete="off">
+  <button id="chat-mic" title="Voice (or press SPACE)">&#127908;</button>
+  <button id="chat-send" title="Send"><i class="chat-send-ico">&#10148;</i></button>
+</div>
+<div id="hud-data">
+  <div class="data-cell"><div class="data-val" id="d-fps">60</div><div class="data-lbl">FPS</div></div>
+  <div class="data-cell"><div class="data-val" id="d-latency">--</div><div class="data-lbl">LATENCY</div></div>
+  <div class="data-cell"><div class="data-val" id="d-gesture">NONE</div><div class="data-lbl">GESTURE</div></div>
+  <div class="data-cell"><div class="data-val" id="d-hand">0</div><div class="data-lbl">HANDS</div></div>
+  <div class="data-cell"><div class="data-val" id="d-mode">ULTRON</div><div class="data-lbl">MODE</div></div>
+</div>
+<div id="ai-response"></div>
+<div id="toast"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script>
+(function(){
+'use strict';
+
+var V = window.THREE;
+if(!V){document.body.innerHTML='<div style="color:#ff3e3e;font-family:monospace;padding:40px;">Failed to load Three.js.</div>';return;}
+
+var orbTarget = {rx:0, ry:0, scale:1};
+var orbCurrent = {rx:0, ry:0, scale:1};
+var gestureName = 'NONE';
+var smoothX = 0.5, smoothY = 0.5;
+var lastFrameTime = performance.now();
+var fps = 60;
+var introDismissed = false;
+var conversationMode = false;
+var isListening = false;
+var isSpeaking = false;
+var isThinking = false;
+var handTrackingAvailable = false;
+var handTrackingFailed = false;
+var currentUtterance = null;
+var voicesReady = false;
+var recognition = null;
+var handsModel = null;
+var camStream = null;
+
+var voiceBtn = null;
+var voiceText = null;
+function voiceIndicator(text) {
+  if (text == null) return;
+  if (text) document.getElementById('voice-status').textContent = text;
+}
+var aiResponse = document.getElementById('ai-response');
+var convPanel = document.getElementById('conv-panel');
+var statusDot = document.getElementById('status-dot');
+var voiceStatusEl = document.getElementById('voice-status');
+
+function setStatus(state) {
+  statusDot.className = 'status-dot ' + state;
+  voiceStatusEl.className = state;
+  var labels = {idle:'STANDBY',listening:'LISTENING',thinking:'THINKING...',speaking:'SPEAKING'};
+  voiceStatusEl.textContent = labels[state] || 'STANDBY';
+}
+
+function showToast(msg) {
+  var el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(function(){el.classList.remove('show');}, 2500);
+}
+
+function addConvMsg(role, text) {
+  var div = document.createElement('div');
+  div.className = 'conv-msg ' + role;
+  var label = document.createElement('div');
+  label.className = 'conv-label';
+  label.textContent = role === 'user' ? 'YOU' : 'ULTRON';
+  div.appendChild(label);
+  var body = document.createElement('div');
+  body.textContent = text.length > 150 ? text.slice(0, 150) + '...' : text;
+  div.appendChild(body);
+  convPanel.appendChild(div);
+  convPanel.scrollTop = convPanel.scrollHeight;
+  while (convPanel.children.length > 5) convPanel.removeChild(convPanel.firstChild);
+}
+
+/* ==================== INTRO ==================== */
+var introOverlay = document.getElementById('intro-overlay');
+var introBtn = document.getElementById('intro-enter-btn');
+
+function dismissIntro() {
+  if (introDismissed) return;
+  introDismissed = true;
+  introOverlay.classList.add('hidden');
+  document.getElementById('hud-data').style.opacity = '1';
+  initVoiceSystem();
+  initHandTracking();
+  greet();
+}
+
+var ULTRON_GREETINGS = [
+  'ULTRON online. All systems nominal. I have been watching, Boss.',
+  'ULTRON awake. The orb is yours to command. What is your directive, Boss?',
+  'Systems online. ULTRON at your service. Speak, and I will act.'
+];
+
+function greet() {
+  var g = ULTRON_GREETINGS[Math.floor(Math.random() * ULTRON_GREETINGS.length)];
+  aiResponse.textContent = g;
+  aiResponse.classList.add('show');
+  addConvMsg('ai', g);
+  speakResponse(g);
+}
+
+/* ==================== MODE SWITCH ==================== */
+document.querySelectorAll('.ms-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var mode = btn.getAttribute('data-mode');
+    if (mode === 'ultron') return;
+    fetch('/api/mode', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({mode: mode})
+    }).then(function() {
+      showToast('Switching to ' + mode.toUpperCase() + '...');
+      setTimeout(function() { window.location.href = '/'; }, 500);
+    });
+  });
+});
+
+/* ==================== TEXT CHAT ==================== */
+var chatInput = document.getElementById('chat-input');
+var chatSend = document.getElementById('chat-send');
+var chatMic = document.getElementById('chat-mic');
+
+function sendTextChat() {
+  var text = chatInput.value.trim();
+  if (!text) return;
+  chatInput.value = '';
+  addConvMsg('user', text);
+  sendToAI(text);
+}
+chatSend.addEventListener('click', sendTextChat);
+chatInput.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); sendTextChat(); }
+});
+document.querySelectorAll('.qd-chip').forEach(function(chip) {
+  chip.addEventListener('click', function() {
+    var cmd = chip.getAttribute('data-cmd');
+    addConvMsg('user', cmd);
+    sendToAI(cmd);
+  });
+});
+window.addEventListener('keydown', function(e) { if (e.key === '/') { e.preventDefault(); chatInput.focus(); } });
+
+
+introBtn.addEventListener('click', dismissIntro);
+document.addEventListener('keydown', function(e) {
+  if (!introDismissed && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); dismissIntro(); }
+});
+
+/* ==================== THREE.JS ORB ==================== */
+var scene = new V.Scene();
+var cam3d = new V.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+cam3d.position.set(0, 0, 5);
+
+var renderer = new V.WebGLRenderer({canvas: document.getElementById('orb-canvas'), antialias: true, alpha: true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x050508, 1);
+
+scene.add(new V.AmbientLight(0x111111));
+var pointLight = new V.PointLight(0xff3e3e, 2, 20);
+pointLight.position.set(0, 2, 4);
+scene.add(pointLight);
+
+var coreMat = new V.MeshBasicMaterial({color: 0xff1744, transparent: true, opacity: 0.25});
+var coreMesh = new V.Mesh(new V.SphereGeometry(0.6, 32, 32), coreMat);
+scene.add(coreMesh);
+
+var coreGlowMat = new V.MeshBasicMaterial({color: 0xff3e3e, transparent: true, opacity: 0.08});
+var coreGlow = new V.Mesh(new V.SphereGeometry(0.9, 32, 32), coreGlowMat);
+scene.add(coreGlow);
+
+var wireMat1 = new V.MeshBasicMaterial({color: 0xff3e3e, wireframe: true, transparent: true, opacity: 0.18});
+var wireframeMesh1 = new V.Mesh(new V.SphereGeometry(1.2, 24, 24), wireMat1);
+scene.add(wireframeMesh1);
+
+var wireMat2 = new V.MeshBasicMaterial({color: 0xff6b35, wireframe: true, transparent: true, opacity: 0.08});
+var wireframeMesh2 = new V.Mesh(new V.SphereGeometry(1.5, 18, 18), wireMat2);
+scene.add(wireframeMesh2);
+
+var ringMesh1 = new V.Mesh(new V.TorusGeometry(1.0, 0.005, 8, 128), new V.MeshBasicMaterial({color: 0xff3e3e, transparent: true, opacity: 0.25}));
+ringMesh1.rotation.x = Math.PI * 0.35;
+scene.add(ringMesh1);
+
+var ringMesh2 = new V.Mesh(new V.TorusGeometry(1.3, 0.004, 8, 128), new V.MeshBasicMaterial({color: 0xff6b35, transparent: true, opacity: 0.12}));
+ringMesh2.rotation.x = Math.PI * 0.55;
+ringMesh2.rotation.y = Math.PI * 0.2;
+scene.add(ringMesh2);
+
+var ringMesh3 = new V.Mesh(new V.TorusGeometry(1.6, 0.003, 8, 128), new V.MeshBasicMaterial({color: 0xff1744, transparent: true, opacity: 0.06}));
+ringMesh3.rotation.x = Math.PI * 0.15;
+ringMesh3.rotation.z = Math.PI * 0.4;
+scene.add(ringMesh3);
+
+var pCount = 2000;
+var pGeo = new V.BufferGeometry();
+var pPos = new Float32Array(pCount * 3);
+var pVel = new Float32Array(pCount * 3);
+for (var i = 0; i < pCount; i++) {
+  var theta = Math.random() * Math.PI * 2;
+  var phi = Math.acos(2 * Math.random() - 1);
+  var r = 1.8 + Math.random() * 2.5;
+  pPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+  pPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+  pPos[i * 3 + 2] = r * Math.cos(phi);
+  pVel[i * 3] = (Math.random() - 0.5) * 0.002;
+  pVel[i * 3 + 1] = (Math.random() - 0.5) * 0.002;
+  pVel[i * 3 + 2] = (Math.random() - 0.5) * 0.002;
+}
+pGeo.setAttribute('position', new V.BufferAttribute(pPos, 3));
+var particles = new V.Points(pGeo, new V.PointsMaterial({color: 0xff3e3e, size: 0.015, transparent: true, opacity: 0.5, sizeAttenuation: true}));
+scene.add(particles);
+
+var lineGroup = new V.Group();
+for (var j = 0; j < 30; j++) {
+  var pts = [new V.Vector3(0, 0, 0), new V.Vector3((Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.6)];
+  var geo = new V.BufferGeometry().setFromPoints(pts);
+  lineGroup.add(new V.Line(geo, new V.LineBasicMaterial({color: 0xff3e3e, transparent: true, opacity: 0.06})));
+}
+scene.add(lineGroup);
+
+function animate() {
+  requestAnimationFrame(animate);
+  var t = Date.now() * 0.001;
+  var now = performance.now();
+  fps = Math.round(1000 / (now - lastFrameTime + 0.001));
+  lastFrameTime = now;
+
+  orbCurrent.rx += (orbTarget.rx - orbCurrent.rx) * 0.08;
+  orbCurrent.ry += (orbTarget.ry - orbCurrent.ry) * 0.08;
+  orbCurrent.scale += (orbTarget.scale - orbCurrent.scale) * 0.06;
+
+  coreMesh.rotation.y = orbCurrent.ry * 0.5 + t * 0.2;
+  coreMesh.rotation.x = orbCurrent.rx * 0.3;
+  coreGlow.rotation.y = -t * 0.1;
+  wireframeMesh1.rotation.y = orbCurrent.ry * 0.3 + t * 0.15;
+  wireframeMesh1.rotation.x = orbCurrent.rx * 0.2 + t * 0.08;
+  wireframeMesh2.rotation.y = -t * 0.08 + orbCurrent.ry * 0.1;
+  wireframeMesh2.rotation.z = t * 0.05;
+  ringMesh1.rotation.z = t * 0.3;
+  ringMesh2.rotation.z = -t * 0.2;
+  ringMesh3.rotation.y = t * 0.15;
+
+  var s = orbCurrent.scale;
+  coreMesh.scale.setScalar(s);
+  coreGlow.scale.setScalar(s * (1 + Math.sin(t * 2) * 0.05));
+  wireframeMesh1.scale.setScalar(s);
+  wireframeMesh2.scale.setScalar(s);
+
+  var positions = particles.geometry.attributes.position.array;
+  for (var k = 0; k < pCount; k++) {
+    positions[k * 3] += pVel[k * 3];
+    positions[k * 3 + 1] += pVel[k * 3 + 1];
+    positions[k * 3 + 2] += pVel[k * 3 + 2];
+    var d = Math.sqrt(positions[k * 3] * positions[k * 3] + positions[k * 3 + 1] * positions[k * 3 + 1] + positions[k * 3 + 2] * positions[k * 3 + 2]);
+    if (d > 4.5 || d < 1.5) { pVel[k * 3] *= -1; pVel[k * 3 + 1] *= -1; pVel[k * 3 + 2] *= -1; }
+  }
+  particles.geometry.attributes.position.needsUpdate = true;
+  particles.rotation.y = t * 0.02;
+  lineGroup.rotation.y = t * 0.1;
+  lineGroup.rotation.x = Math.sin(t * 0.3) * 0.2;
+  pointLight.intensity = 0.8 + Math.sin(t * 3) * 0.15;
+  renderer.render(scene, cam3d);
+}
+animate();
+
+window.addEventListener('resize', function() {
+  cam3d.aspect = window.innerWidth / window.innerHeight;
+  cam3d.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* ==================== MOUSE CONTROL ==================== */
+var mouseDown = false;
+var mouseStartX = 0, mouseStartY = 0;
+
+document.addEventListener('mousemove', function(e) {
+  if (mouseDown) {
+    var dx = (e.clientX - mouseStartX) * 0.005;
+    var dy = (e.clientY - mouseStartY) * 0.005;
+    orbTarget.ry += dx;
+    orbTarget.rx += dy;
+    mouseStartX = e.clientX;
+    mouseStartY = e.clientY;
+  } else {
+    orbTarget.ry = (e.clientX / window.innerWidth - 0.5) * 1.5;
+    orbTarget.rx = (e.clientY / window.innerHeight - 0.5) * 1.0;
+  }
+});
+
+document.addEventListener('mousedown', function(e) {
+  if (e.target.closest('button') || e.target.closest('#gesture-cam-wrap') || e.target.closest('#conv-panel')) return;
+  mouseDown = true;
+  mouseStartX = e.clientX;
+  mouseStartY = e.clientY;
+});
+
+document.addEventListener('mouseup', function() { mouseDown = false; });
+
+document.addEventListener('wheel', function(e) {
+  e.preventDefault();
+  orbTarget.scale = Math.max(0.3, Math.min(2.5, orbTarget.scale - e.deltaY * 0.001));
+}, {passive: false});
+
+/* ==================== KEYBOARD CONTROL ==================== */
+var keysDown = {};
+function isTyping(e) {
+  var t = e.target;
+  return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+}
+document.addEventListener('keydown', function(e) {
+  if (!introDismissed) return;
+  if (isTyping(e)) return;
+  keysDown[e.key.toLowerCase()] = true;
+  if (e.key === ' ' || e.key === 'Spacebar') {
+    e.preventDefault();
+    toggleVoiceConversation();
+  }
+  if (e.key === 'Escape') window.location.href = '/modes.html';
+  if (e.key === '+' || e.key === '=') orbTarget.scale = Math.min(2.5, orbTarget.scale + 0.1);
+  if (e.key === '-' || e.key === '_') orbTarget.scale = Math.max(0.3, orbTarget.scale - 0.1);
+});
+
+document.addEventListener('keyup', function(e) {
+  if (isTyping(e)) return;
+  keysDown[e.key.toLowerCase()] = false;
+});
+
+function processKeyboard() {
+  if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) return;
+  var speed = 0.04;
+  if (keysDown['arrowleft'] || keysDown['a']) orbTarget.ry -= speed;
+  if (keysDown['arrowright'] || keysDown['d']) orbTarget.ry += speed;
+  if (keysDown['arrowup'] || keysDown['w']) orbTarget.rx -= speed;
+  if (keysDown['arrowdown'] || keysDown['s']) orbTarget.rx += speed;
+}
+setInterval(processKeyboard, 16);
+
+/* ==================== HAND TRACKING ==================== */
+function initHandTracking() {
+  if (typeof Hands === 'undefined') {
+    handTrackingFailed = true;
+    document.getElementById('hand-fail-msg').style.display = 'block';
+    document.getElementById('cam-label').textContent = 'NO MEDIAPIPE';
+    showToast('Hand tracking unavailable — use mouse/keyboard');
+    return;
+  }
+
+  var video = document.getElementById('gesture-cam');
+  var handCanvas = document.getElementById('hand-canvas');
+  var handCtx = handCanvas.getContext('2d');
+
+  navigator.mediaDevices.getUserMedia({video: {width: 320, height: 240, facingMode: 'user'}})
+    .then(function(stream) {
+      camStream = stream;
+      video.srcObject = stream;
+      video.play().then(function() {
+        handCanvas.width = video.videoWidth || 320;
+        handCanvas.height = video.videoHeight || 240;
+        showToast('Gesture tracking active');
+        handTrackingAvailable = true;
+        startHandDetection(video, handCanvas, handCtx);
+      });
+    })
+    .catch(function() {
+      handTrackingFailed = true;
+      document.getElementById('hand-fail-msg').style.display = 'block';
+      document.getElementById('cam-label').textContent = 'CAM DISABLED';
+      showToast('Camera access denied');
+    });
+}
+
+function startHandDetection(video, handCanvas, handCtx) {
+  handsModel = new Hands({locateFile: function(f) { return 'https://cdn.jsdelivr.net/npm/@mediapipe/hands/' + f; }});
+  handsModel.setOptions({maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5});
+  handsModel.onResults(function(results) {
+    handCtx.clearRect(0, 0, handCanvas.width, handCanvas.height);
+
+    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+      var lm = results.multiHandLandmarks[0];
+      if (typeof drawConnectors === 'function') drawConnectors(handCtx, lm, HAND_CONNECTIONS, {color: 'rgba(255,62,62,0.4)', lineWidth: 1});
+      if (typeof drawLandmarks === 'function') drawLandmarks(handCtx, lm, {color: '#ff3e3e', lineWidth: 1, radius: 2});
+
+      gestureName = classifyGesture(lm);
+      document.getElementById('gesture-label').textContent = gestureName;
+      document.getElementById('d-gesture').textContent = gestureName;
+      document.getElementById('d-hand').textContent = '1';
+
+      var palmX = (lm[0].x + lm[5].x + lm[17].x) / 3;
+      var palmY = (lm[0].y + lm[5].y + lm[17].y) / 3;
+      smoothX += (palmX - smoothX) * 0.3;
+      smoothY += (palmY - smoothY) * 0.3;
+      orbTarget.ry = (smoothX - 0.5) * 3;
+      orbTarget.rx = (smoothY - 0.5) * 2;
+
+      if (gestureName === 'PINCH') orbTarget.scale = Math.min(2.5, orbTarget.scale + 0.02);
+      else if (gestureName === 'OPEN_PALM') orbTarget.scale = Math.max(0.3, orbTarget.scale - 0.02);
+      else if (gestureName === 'FIST') { orbTarget.scale = 1.0; orbTarget.rx = 0; orbTarget.ry = 0; }
+      else if (gestureName === 'PEACE') orbTarget.scale = Math.min(2.5, orbTarget.scale + 0.015);
+      else orbTarget.scale += (1.0 - orbTarget.scale) * 0.05;
+    } else {
+      gestureName = 'NONE';
+      document.getElementById('gesture-label').textContent = 'NO HAND';
+      document.getElementById('d-gesture').textContent = 'NONE';
+      document.getElementById('d-hand').textContent = '0';
+    }
+  });
+
+  function detect() {
+    if (video.readyState >= 2 && handTrackingAvailable) {
+      handsModel.send({image: video}).catch(function() {});
+    }
+    requestAnimationFrame(detect);
+  }
+  detect();
+}
+
+function classifyGesture(lm) {
+  var index = lm[8].y < lm[6].y;
+  var middle = lm[12].y < lm[10].y;
+  var ring = lm[16].y < lm[14].y;
+  var pinky = lm[20].y < lm[18].y;
+  var pinch = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y) < 0.06;
+  if (pinch) return 'PINCH';
+  if (index && middle && !ring && !pinky) return 'PEACE';
+  if (index && !middle && !ring && !pinky) return 'POINT';
+  if (index && middle && ring && pinky) return 'OPEN_PALM';
+  if (!index && !middle && !ring && !pinky) return 'FIST';
+  if (lm[4].y < lm[3].y && !index && !middle) return 'THUMBS_UP';
+  return 'UNKNOWN';
+}
+
+/* ==================== VOICE CONVERSATION ==================== */
+var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+function initVoiceSystem() {
+  if (typeof speechSynthesis !== 'undefined') {
+    speechSynthesis.onvoiceschanged = function() { voicesReady = true; };
+    if (speechSynthesis.getVoices().length > 0) voicesReady = true;
+  }
+  if (SR) {
+    recognition = new SR();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognition.maxAlternatives = 1;
+  }
+}
+
+function getDeepVoice() {
+  if (!voicesReady || typeof speechSynthesis === 'undefined') return null;
+  var voices = speechSynthesis.getVoices();
+  for (var i = 0; i < voices.length; i++) {
+    if (/david/i.test(voices[i].name)) return voices[i];
+  }
+  for (var i = 0; i < voices.length; i++) {
+    if (/daniel/i.test(voices[i].name)) return voices[i];
+  }
+  for (var i = 0; i < voices.length; i++) {
+    if (/mark|james|george|richard|google.*male|google.*uk male/i.test(voices[i].name)) return voices[i];
+  }
+  for (var i = 0; i < voices.length; i++) {
+    if (voices[i].lang.indexOf('en') === 0 && voices[i].name.indexOf('female') === -1 && voices[i].name.indexOf('zira') === -1) return voices[i];
+  }
+  return null;
+}
+
+function speakResponse(text) {
+  return new Promise(function(resolve) {
+    if (typeof speechSynthesis === 'undefined') { resolve(); return; }
+    speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(text.slice(0, 500));
+    u.rate = 0.85;
+    u.pitch = 0.5;
+    u.volume = 1.0;
+    var v = getDeepVoice();
+    if (v) u.voice = v;
+    u.onend = function() { isSpeaking = false; setStatus('idle'); resolve(); };
+    u.onerror = function() { isSpeaking = false; setStatus('idle'); resolve(); };
+    isSpeaking = true;
+    setStatus('speaking');
+    speechSynthesis.speak(u);
+  });
+}
+
+async function sendToAI(text) {
+  isThinking = true;
+  setStatus('thinking');
+  var startT = performance.now();
+  try {
+    var r = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: text})
+    });
+    var elapsed = Math.round(performance.now() - startT);
+    var d = await r.json();
+    isThinking = false;
+    if (d.success && d.reply) {
+      var replyText = d.reply.speech || d.reply.text || 'No response.';
+      document.getElementById('d-latency').textContent = elapsed + 'ms';
+      aiResponse.textContent = replyText;
+      aiResponse.classList.add('show');
+      addConvMsg('ai', replyText);
+      await speakResponse(replyText);
+      if (conversationMode) {
+        startListening();
+      }
+    } else {
+      setStatus('idle');
+      if (conversationMode) startListening();
+    }
+  } catch (e) {
+    isThinking = false;
+    setStatus('idle');
+    showToast('Connection error');
+    if (conversationMode) startListening();
+  }
+}
+
+function setMicActive(on) {
+  if (chatMic) chatMic.classList.toggle('active', !!on);
+}
+
+function startListening() {
+  if (!recognition || isListening || isSpeaking) return;
+  isListening = true;
+  setStatus('listening');
+  setMicActive(true);
+
+  recognition.onresult = function(e) {
+    var interimText = '';
+    var finalText = '';
+    for (var i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) {
+        finalText += e.results[i][0].transcript;
+      } else {
+        interimText += e.results[i][0].transcript;
+      }
+    }
+    if (finalText && finalText.trim()) {
+      document.getElementById('voice-status').textContent = finalText.trim();
+      isListening = false;
+      recognition.abort();
+      addConvMsg('user', finalText.trim());
+      sendToAI(finalText.trim());
+    }
+  };
+
+  recognition.onend = function() {
+    if (isListening) {
+      isListening = false;
+      if (conversationMode && !isSpeaking && !isThinking) {
+        setTimeout(function() { startListening(); }, 300);
+      } else {
+        setMicActive(false);
+        setStatus('idle');
+      }
+    }
+  };
+
+  recognition.onerror = function(e) {
+    isListening = false;
+    if (e.error === 'no-speech' && conversationMode && !isSpeaking && !isThinking) {
+      setTimeout(function() { startListening(); }, 500);
+      return;
+    }
+    setMicActive(false);
+    setStatus('idle');
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      showToast('Mic not available - type in the box below instead, Boss');
+    }
+  };
+
+  try {
+    recognition.start();
+  } catch (e) {
+    isListening = false;
+    setMicActive(false);
+    showToast('Voice not available - type instead, Boss');
+  }
+}
+
+function stopListening() {
+  if (recognition && isListening) {
+    try { recognition.abort(); } catch(e) {}
+  }
+  isListening = false;
+  setMicActive(false);
+  setStatus('idle');
+}
+
+function toggleVoiceConversation() {
+  if (!SR && typeof SR === 'undefined') {
+    showToast('Voice recognition not supported - type in the box below, Boss');
+    return;
+  }
+  if (conversationMode) {
+    conversationMode = false;
+    speechSynthesis.cancel();
+    isSpeaking = false;
+    stopListening();
+    setMicActive(false);
+    showToast('Voice conversation stopped');
+  } else {
+    conversationMode = true;
+    setMicActive(true);
+    showToast('Voice conversation started');
+    startListening();
+  }
+}
+
+if (chatMic) chatMic.addEventListener('click', function() {
+  toggleVoiceConversation();
+});
+
+/* ==================== SYSTEM POLLING ==================== */
+function pollSys() {
+  fetch('/api/system-status?t=' + Date.now())
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.success) return;
+      var cpu = d.cpu ? (d.cpu.usage || 0) : 0;
+      var ram = d.ram ? (d.ram.usage || 0) : 0;
+      var disk = d.disk ? (d.disk.usage || 0) : 0;
+      var bat = d.battery && d.battery.level != null ? Math.round(d.battery.level) : 0;
+
+      document.getElementById('p-cpu-v').textContent = cpu + '%';
+      document.getElementById('p-cpu-b').style.width = cpu + '%';
+      document.getElementById('p-ram-v').textContent = ram + '%';
+      document.getElementById('p-ram-b').style.width = ram + '%';
+      document.getElementById('p-disk-v').textContent = disk + '%';
+      document.getElementById('p-disk-b').style.width = disk + '%';
+      document.getElementById('p-net-v').textContent = d.net ? d.net.speed : '--';
+      document.getElementById('p-net-b').style.width = Math.min((d.net ? d.net.bytes || 0 : 0) / (1024 * 1024) * 100, 100) + '%';
+      document.getElementById('p-bat-v').textContent = bat + '%';
+      document.getElementById('p-bat-b').style.width = bat + '%';
+      document.getElementById('p-up-v').textContent = d.uptime ? Math.floor(d.uptime / 3600) + 'h ' + Math.floor((d.uptime % 3600) / 60) + 'm' : '--';
+      coreMat.opacity = 0.15 + (cpu / 100) * 0.2;
+      wireMat1.opacity = 0.1 + (cpu / 100) * 0.15;
+
+      var el = document.getElementById('sys-lines');
+      if (el) {
+        el.innerHTML = [
+          'CPU ' + cpu + '% | ' + (d.cpu ? d.cpu.cores : '--') + ' cores',
+          'RAM ' + ram + '% | ' + (d.ram ? d.ram.usedMB : '--') + '/' + (d.ram ? d.ram.totalMB : '--') + ' MB',
+          'DISK ' + disk + '% | ' + (d.disk ? d.disk.free : '--') + ' free',
+          'NET ' + (d.net ? d.net.speed : '--'),
+          'BAT ' + bat + '% ' + (d.battery && d.battery.charging ? 'CHARGING' : ''),
+          'HOST ' + (d.hostname || '--'),
+          'OS ' + (d.platform || '--'),
+        ].map(function(l) {
+          var parts = l.split('|');
+          return '<div class="sys-line"><span>' + parts[0] + '</span><span>' + (parts[1] || '') + '</span></div>';
+        }).join('');
+      }
+    })
+    .catch(function() {});
+}
+setInterval(pollSys, 2000);
+pollSys();
+
+/* ==================== STATS UPDATE ==================== */
+setInterval(function() {
+  document.getElementById('d-fps').textContent = fps;
+}, 500);
+
+})();
+</script>
+</body>
+</html>
