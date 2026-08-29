@@ -35,217 +35,74 @@ html,body { height:100%; background:var(--bg); color:var(--txt); font-family:var
 
 /* BOOT SCREEN — CINEMATIC */
 #boot-screen {
-  position:fixed; inset:0; display:flex; flex-direction:column;
-  align-items:center; justify-content:center;
-  background:#000; z-index:9999; overflow:hidden;
-  transition: opacity 1.2s cubic-bezier(0.4,0,0.2,1), visibility 1.2s ease;
+  position:fixed; inset:0; z-index:9999; background:#000;
+  display:flex; align-items:center; justify-content:center;
+  opacity:1; transition: opacity 1.5s cubic-bezier(0.4,0,0.2,1), visibility 1.5s ease;
+  cursor:pointer; overflow:hidden;
 }
 #boot-screen.done { opacity:0; visibility:hidden; pointer-events:none; }
-.boot-layer { position:absolute; inset:0; pointer-events:none; }
 
-/* Star field canvas */
-#boot-stars { opacity:0.6; }
-
-/* Perspective grid */
-.boot-grid-perspective {
-  background:
-    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
-  background-size:60px 60px;
-  transform: perspective(500px) rotateX(60deg);
-  transform-origin: center 120%;
-  opacity:0;
-  animation: grid-appear 2s 0.5s ease forwards;
-  mask-image: radial-gradient(ellipse 80% 50% at 50% 80%, black 30%, transparent 70%);
-  -webkit-mask-image: radial-gradient(ellipse 80% 50% at 50% 80%, black 30%, transparent 70%);
-}
-@keyframes grid-appear { to { opacity:0.5; } }
-
-/* Data streams canvas */
-#boot-datastreams { opacity:0.3; }
-
-/* Central orb area */
-.boot-center {
-  position:relative; width:300px; height:300px;
-  display:flex; align-items:center; justify-content:center;
-  z-index:2; margin-bottom:20px;
-}
-
-/* Energy rings */
-.boot-energy-ring {
-  position:absolute; border-radius:50%;
-  border:1px solid rgba(229,193,88,0.15);
-  top:50%; left:50%; transform:translate(-50%,-50%);
-  opacity:0;
-}
-.er1 { width:280px; height:280px; border-style:dashed; border-color:rgba(229,193,88,0.1); animation: ring-spin 12s linear infinite, ring-fade-in 1s 0.3s ease forwards; }
-.er2 { width:220px; height:220px; border-color:rgba(229,193,88,0.08); animation: ring-spin 8s linear infinite reverse, ring-fade-in 1s 0.6s ease forwards; }
-.er3 { width:160px; height:160px; border-color:rgba(229,193,88,0.15); animation: ring-spin 5s linear infinite, ring-fade-in 1s 0.9s ease forwards; }
-.er4 { width:110px; height:110px; border-color:rgba(229,193,88,0.22); border-width:1.5px; animation: ring-spin 3s linear infinite reverse, ring-fade-in 1s 1.2s ease forwards; }
-
-@keyframes ring-spin { from { transform:translate(-50%,-50%) rotate(0deg); } to { transform:translate(-50%,-50%) rotate(360deg); } }
-@keyframes ring-fade-in { to { opacity:1; } }
-
-/* Core orb */
-.boot-core {
-  position:relative; width:60px; height:60px; z-index:3;
-}
-.boot-core-inner {
+.boot-ring-wrap { position:relative; width:160px; height:160px; margin-bottom:32px; }
+.boot-ring {
   position:absolute; inset:0; border-radius:50%;
-  background:radial-gradient(circle at 40% 40%, rgba(255,215,0,0.95), rgba(229,193,88,0.35) 50%, rgba(229,193,88,0.08) 70%, transparent 100%);
-  box-shadow:0 0 60px rgba(229,193,88,0.45), 0 0 120px rgba(229,193,88,0.25), inset 0 0 30px rgba(229,193,88,0.3);
-  animation: core-breathe 2s ease-in-out infinite, core-materialize 1.5s ease forwards;
-  opacity:0; transform:scale(0);
+  border:1px solid rgba(255,215,0,0.15);
 }
-@keyframes core-materialize { 0% { opacity:0; transform:scale(0); } 60% { opacity:1; transform:scale(1.2); } 100% { opacity:1; transform:scale(1); } }
-@keyframes core-breathe { 0%,100% { box-shadow:0 0 60px rgba(229,193,88,0.45), 0 0 120px rgba(229,193,88,0.25); } 50% { box-shadow:0 0 80px rgba(229,193,88,0.65), 0 0 160px rgba(229,193,88,0.35); } }
+.boot-ring.r1 { animation: boot-spin 8s linear infinite; border-style:solid; border-color:rgba(255,215,0,0.2) transparent; }
+.boot-ring.r2 { inset:15px; animation: boot-spin 6s linear infinite reverse; border-color:transparent rgba(255,215,0,0.15); }
+.boot-ring.r3 { inset:30px; animation: boot-spin 4s linear infinite; border-color:rgba(255,215,0,0.25) transparent; border-width:2px; }
+@keyframes boot-spin { to { transform:rotate(360deg); } }
 
-.boot-core-pulse {
-  position:absolute; inset:-20px; border-radius:50%;
-  border:1px solid rgba(229,193,88,0.2);
-  animation: core-pulse 2s ease-in-out infinite;
+.boot-core {
+  position:absolute; inset:42px; border-radius:50%;
+  background: radial-gradient(circle, rgba(255,215,0,0.3) 0%, rgba(255,215,0,0.05) 60%, transparent 80%);
+  box-shadow: 0 0 60px rgba(255,215,0,0.15), 0 0 120px rgba(255,215,0,0.05);
+  animation: boot-pulse 3s ease-in-out infinite;
 }
-@keyframes core-pulse { 0%,100% { transform:scale(1); opacity:0.5; } 50% { transform:scale(1.3); opacity:0; } }
+@keyframes boot-pulse { 0%,100% { transform:scale(1); opacity:0.8; } 50% { transform:scale(1.05); opacity:1; } }
 
-/* Scan beam */
-.boot-scan-beam {
-  position:absolute; width:2px; height:300px;
-  background:linear-gradient(180deg, transparent, rgba(229,193,88,0.6), transparent);
-  top:50%; left:50%; transform:translate(-50%,-50%) rotate(0deg);
-  transform-origin:center center;
-  opacity:0;
-  animation: scan-beam-spin 3s linear infinite, scan-appear 0.5s 1.5s ease forwards;
-}
-@keyframes scan-beam-spin { from { transform:translate(-50%,-50%) rotate(0deg); } to { transform:translate(-50%,-50%) rotate(360deg); } }
-@keyframes scan-appear { to { opacity:0.4; } }
-
-/* Text layer */
-.boot-text-layer {
-  position:relative; z-index:10;
-  display:flex; flex-direction:column; align-items:center;
-}
-
-/* Title with glitch */
-.boot-glitch-wrap { position:relative; margin-bottom:8px; }
 .boot-title {
-  font-family:var(--mono); font-size:42px; font-weight:700;
-  letter-spacing:12px; color:#fff; min-height:50px;
-  text-shadow:0 0 20px rgba(255,255,255,0.5), 0 0 40px rgba(255,255,255,0.2);
-  animation: title-glow 3s ease-in-out infinite;
-  position:relative;
+  font-family: 'Orbitron', sans-serif; font-size: 36px; font-weight: 900;
+  color: #ffd700; letter-spacing: 12px;
+  text-shadow: 0 0 40px rgba(255,215,0,0.4), 0 0 80px rgba(255,215,0,0.15);
+  margin-bottom:8px;
+  animation: boot-fadein 1.5s ease-out;
 }
-.boot-title.glitching {
-  animation: glitch-text 0.15s linear infinite;
-}
-@keyframes title-glow { 0%,100% { text-shadow:0 0 20px rgba(255,255,255,0.5), 0 0 40px rgba(255,255,255,0.2); } 50% { text-shadow:0 0 30px rgba(255,255,255,0.7), 0 0 60px rgba(255,255,255,0.3), 0 0 80px rgba(255,255,255,0.1); } }
-@keyframes glitch-text {
-  0% { transform:translate(0); text-shadow:2px 0 #ff0040, -2px 0 #00fff9; }
-  25% { transform:translate(-2px,1px); text-shadow:-2px 0 #ff0040, 2px 0 #00fff9; }
-  50% { transform:translate(2px,-1px); text-shadow:2px 0 #ff0040, -2px 0 #00fff9; }
-  75% { transform:translate(-1px,-2px); text-shadow:-2px 0 #ff0040, 2px 0 #00fff9; }
-  100% { transform:translate(0); text-shadow:2px 0 #ff0040, -2px 0 #00fff9; }
-}
-
 .boot-sub {
-  font-family:var(--mono); font-size:11px; color:rgba(255,255,255,0.5);
-  letter-spacing:4px; margin-bottom:24px; opacity:0;
-  transition:opacity 0.8s ease, transform 0.8s ease;
-  transform:translateY(10px);
+  font-family: 'Share Tech Mono', monospace; font-size: 10px;
+  color: rgba(255,255,255,0.3); letter-spacing: 4px; text-transform: uppercase;
+  animation: boot-fadein 2s ease-out;
 }
-.boot-sub.show { opacity:1; transform:translateY(0); }
+@keyframes boot-fadein { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
 
-/* Progress bar */
-.boot-progress-wrap {
-  display:flex; align-items:center; gap:12px;
-  margin-bottom:20px; width:320px;
+.boot-loading { animation: boot-fadein 0.5s ease-out; }
+.boot-bar {
+  width:100%; height:2px; background:rgba(255,215,0,0.1); border-radius:1px; overflow:hidden;
 }
-.boot-bar-track {
-  flex:1; height:2px; background:rgba(255,255,255,0.08);
-  border-radius:2px; overflow:hidden; position:relative;
-}
-.boot-bar-track::before {
-  content:''; position:absolute; inset:0;
-  background:linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
-  animation: bar-shimmer 2s linear infinite;
-}
-@keyframes bar-shimmer { from { transform:translateX(-100%); } to { transform:translateX(100%); } }
 .boot-bar-fill {
-  width:0%; height:100%; border-radius:2px;
-  background:linear-gradient(90deg, rgba(255,255,255,0.2), rgba(255,255,255,0.8), #fff);
-  transition:width 0.4s cubic-bezier(0.4,0,0.2,1);
-  box-shadow:0 0 10px rgba(255,255,255,0.3);
-  position:relative;
+  height:100%; width:0; background:linear-gradient(90deg, rgba(255,215,0,0.3), #ffd700);
+  box-shadow:0 0 12px rgba(255,215,0,0.3);
+  transition: width 0.4s cubic-bezier(0.4,0,0.2,1);
 }
-.boot-bar-fill::after {
-  content:''; position:absolute; right:0; top:-2px; width:4px; height:6px;
-  background:#fff; border-radius:2px; box-shadow:0 0 8px #fff;
-  opacity:0; transition:opacity 0.3s;
+.boot-bar-text {
+  font-family:'Share Tech Mono',monospace; font-size:9px;
+  color:rgba(255,255,255,0.25); letter-spacing:3px; text-align:center; margin-top:10px;
 }
-.boot-bar-fill[style*="width:"]::after { opacity:1; }
-
-.boot-percentage {
-  font-family:var(--mono); font-size:10px; color:rgba(255,255,255,0.4);
-  min-width:30px; text-align:right; letter-spacing:1px;
+.boot-gradient {
+  position:absolute; inset:0; z-index:5; pointer-events:none;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%);
 }
 
-/* Terminal window */
-.boot-terminal {
-  width:380px; background:rgba(0,0,0,0.6);
-  border:1px solid rgba(255,255,255,0.08);
-  border-radius:8px; overflow:hidden;
-  opacity:0; transform:translateY(20px);
-  transition:opacity 0.6s ease, transform 0.6s ease;
-  backdrop-filter:blur(10px);
-}
-.boot-terminal.show { opacity:1; transform:translateY(0); }
-.boot-terminal-header {
-  display:flex; align-items:center; gap:6px;
-  padding:6px 10px; background:rgba(255,255,255,0.04);
-  border-bottom:1px solid rgba(255,255,255,0.06);
-}
-.bt-dot { width:8px; height:8px; border-radius:50%; }
-.bt-dot.red { background:#ff5f57; }
-.bt-dot.yellow { background:#febc2e; }
-.bt-dot.green { background:#28c840; }
-.bt-title { font-family:var(--mono); font-size:8px; color:rgba(255,255,255,0.3); margin-left:auto; letter-spacing:1px; }
+#boot-particles { opacity:0.4; }
 
-.boot-terminal-body {
-  padding:8px 12px; font-family:var(--mono); font-size:9px;
-  color:rgba(255,255,255,0.6); line-height:1.8;
-  max-height:140px; overflow:hidden;
+/* Wake word button active pulse */
+.dock-btn#wake-word-btn.active {
+  color: #ff3e3e !important;
+  border-color: rgba(255,62,62,0.5) !important;
+  background: rgba(255,62,62,0.12) !important;
+  box-shadow: 0 0 16px rgba(255,62,62,0.3) !important;
+  animation: wake-pulse 1.5s ease-in-out infinite;
 }
-.boot-terminal-body .log-line {
-  opacity:0; transform:translateX(-8px);
-  animation: log-appear 0.3s ease forwards;
-}
-.boot-terminal-body .log-line .log-prefix { color:rgba(255,255,255,0.25); }
-.boot-terminal-body .log-line .log-ok { color:#28c840; }
-.boot-terminal-body .log-line .log-warn { color:#febc2e; }
-.boot-terminal-body .log-line .log-info { color:#5ac8fa; }
-@keyframes log-appear { to { opacity:1; transform:translateX(0); } }
-
-/* Flash overlay */
-.boot-flash {
-  position:absolute; inset:0; z-index:50;
-  background:#fff; opacity:0; pointer-events:none;
-}
-.boot-flash.fire { animation: flash-burst 0.6s ease-out forwards; }
-@keyframes flash-burst { 0% { opacity:0.8; } 100% { opacity:0; } }
-
-/* Scanlines overlay */
-.boot-scanlines {
-  position:absolute; inset:0; z-index:40;
-  background:repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.015) 2px, rgba(255,255,255,0.015) 4px);
-  animation: scan-scroll 10s linear infinite;
-  pointer-events:none;
-}
-@keyframes scan-scroll { from { background-position:0 0; } to { background-position:0 400px; } }
-
-/* Boot screen exit */
-#boot-screen.exiting .boot-center { animation: center-explode 1s ease-in forwards; }
-@keyframes center-explode { to { transform:scale(3); opacity:0; filter:blur(20px); } }
-#boot-screen.exiting .boot-text-layer { animation: text-exit 0.8s 0.2s ease-in forwards; }
-@keyframes text-exit { to { transform:translateY(-40px); opacity:0; filter:blur(10px); } }
+@keyframes wake-pulse { 0%,100%{ box-shadow:0 0 16px rgba(255,62,62,0.3); } 50%{ box-shadow:0 0 32px rgba(255,62,62,0.6); } }
 
 /* MAIN LAYOUT */
 #main-app {
@@ -1346,3 +1203,134 @@ body.light-mode .phone-link-panel {
 @keyframes blink-anim {
   50% { opacity: 0.2; }
 }
+
+/* === JARVIS MODE — Blue Holographic === */
+body.mode-jarvis {
+  --gold: #00d4ff;
+  --accent: #00a8e8;
+  --accent2: #0077b6;
+  --pink: #00d4ff;
+  --purple: #00a8e8;
+  --cyan: #00d4ff;
+  --bg: #020a14;
+  --panel-bg: rgba(0, 20, 40, 0.85);
+  --glass-bg: rgba(0, 30, 60, 0.6);
+  --glow-color: rgba(0, 212, 255, 0.3);
+}
+
+body.mode-jarvis .holo-header { background: linear-gradient(135deg, rgba(0,100,180,0.15), rgba(0,50,100,0.05)); border-color: rgba(0,212,255,0.25); }
+body.mode-jarvis .mode-badge { background: rgba(0,212,255,0.15); color: #00d4ff; border-color: rgba(0,212,255,0.3); }
+body.mode-jarvis .boot-title { text-shadow: 0 0 30px rgba(0,212,255,0.6), 0 0 60px rgba(0,212,255,0.3); }
+body.mode-jarvis .boot-sub { color: rgba(0,212,255,0.7); }
+body.mode-jarvis .boot-bar-fill { background: linear-gradient(90deg, #0077b6, #00d4ff); box-shadow: 0 0 20px rgba(0,212,255,0.5); }
+body.mode-jarvis .dock-btn:hover { color: #00d4ff; border-color: rgba(0,212,255,0.3); background: rgba(0,212,255,0.08); }
+body.mode-jarvis .dock-btn.active { color: #00d4ff; border-color: rgba(0,212,255,0.4); background: rgba(0,212,255,0.12); box-shadow: 0 0 16px rgba(0,212,255,0.15); }
+body.mode-jarvis .logo { color: #00d4ff; text-shadow: 0 0 20px rgba(0,212,255,0.4); }
+body.mode-jarvis .welcome-title { color: #00d4ff; text-shadow: 0 0 30px rgba(0,212,255,0.4); }
+body.mode-jarvis .msg-ai .msg-bubble { border-color: rgba(0,212,255,0.15); }
+body.mode-jarvis .send { background: linear-gradient(135deg, #0077b6, #00d4ff); }
+body.mode-jarvis .sys-graph-label { color: #00d4ff; text-shadow: 0 0 8px rgba(0,212,255,0.2); }
+body.mode-jarvis .sys-graph-card:hover { background: rgba(0,212,255,0.08); border-color: #00d4ff; box-shadow: 0 0 20px rgba(0,212,255,0.15); }
+body.mode-jarvis .holo-orb-stage { --orb-color: #00d4ff; }
+body.mode-jarvis .boot-core-inner { background: radial-gradient(circle, #00d4ff 0%, rgba(0,119,182,0.4) 50%, transparent 70%); }
+body.mode-jarvis .boot-energy-ring { border-color: rgba(0,212,255,0.4); }
+body.mode-jarvis #overlay-mini { border-color: rgba(0,212,255,0.3); background: rgba(2,10,20,0.94); }
+body.mode-jarvis .ambient-chip { border-color: rgba(0,212,255,0.15); }
+body.mode-jarvis .welcome-card:hover { border-color: rgba(0,212,255,0.3); background: rgba(0,212,255,0.06); }
+body.mode-jarvis .boot-terminal-header { background: rgba(0,212,255,0.1); }
+body.mode-jarvis .bt-title { color: #00d4ff; }
+body.mode-jarvis .welcome-actions .welcome-card { border-color: rgba(0,212,255,0.12); }
+body.mode-jarvis .welcome-actions .welcome-card:hover { border-color: rgba(0,212,255,0.3); background: rgba(0,212,255,0.06); }
+body.mode-jarvis .sys-graph-val { color: #00d4ff; }
+
+/* === FRIDAY MODE — Purple Neural === */
+body.mode-friday {
+  --gold: #a855f7;
+  --accent: #7c3aed;
+  --accent2: #6d28d9;
+  --pink: #c084fc;
+  --purple: #a855f7;
+  --cyan: #c084fc;
+  --bg: #08050f;
+  --panel-bg: rgba(15, 8, 25, 0.85);
+  --glass-bg: rgba(25, 12, 40, 0.6);
+  --glow-color: rgba(168, 85, 247, 0.3);
+}
+
+body.mode-friday .holo-header { background: linear-gradient(135deg, rgba(124,58,237,0.15), rgba(109,40,217,0.05)); border-color: rgba(168,85,247,0.25); }
+body.mode-friday .mode-badge { background: rgba(168,85,247,0.15); color: #a855f7; border-color: rgba(168,85,247,0.3); }
+body.mode-friday .boot-title { text-shadow: 0 0 30px rgba(168,85,247,0.6), 0 0 60px rgba(168,85,247,0.3); }
+body.mode-friday .boot-sub { color: rgba(168,85,247,0.7); }
+body.mode-friday .boot-bar-fill { background: linear-gradient(90deg, #6d28d9, #a855f7); box-shadow: 0 0 20px rgba(168,85,247,0.5); }
+body.mode-friday .dock-btn:hover { color: #a855f7; border-color: rgba(168,85,247,0.3); background: rgba(168,85,247,0.08); }
+body.mode-friday .dock-btn.active { color: #a855f7; border-color: rgba(168,85,247,0.4); background: rgba(168,85,247,0.12); box-shadow: 0 0 16px rgba(168,85,247,0.15); }
+body.mode-friday .logo { color: #a855f7; text-shadow: 0 0 20px rgba(168,85,247,0.4); }
+body.mode-friday .welcome-title { color: #a855f7; text-shadow: 0 0 30px rgba(168,85,247,0.4); }
+body.mode-friday .msg-ai .msg-bubble { border-color: rgba(168,85,247,0.15); }
+body.mode-friday .send { background: linear-gradient(135deg, #6d28d9, #a855f7); }
+body.mode-friday .sys-graph-label { color: #a855f7; text-shadow: 0 0 8px rgba(168,85,247,0.2); }
+body.mode-friday .sys-graph-card:hover { background: rgba(168,85,247,0.08); border-color: #a855f7; box-shadow: 0 0 20px rgba(168,85,247,0.15); }
+body.mode-friday .holo-orb-stage { --orb-color: #a855f7; }
+body.mode-friday .boot-core-inner { background: radial-gradient(circle, #a855f7 0%, rgba(109,40,217,0.4) 50%, transparent 70%); }
+body.mode-friday .boot-energy-ring { border-color: rgba(168,85,247,0.4); }
+body.mode-friday #overlay-mini { border-color: rgba(168,85,247,0.3); background: rgba(8,5,15,0.94); }
+body.mode-friday .ambient-chip { border-color: rgba(168,85,247,0.15); }
+body.mode-friday .welcome-card:hover { border-color: rgba(168,85,247,0.3); background: rgba(168,85,247,0.06); }
+body.mode-friday .boot-terminal-header { background: rgba(168,85,247,0.1); }
+body.mode-friday .bt-title { color: #a855f7; }
+body.mode-friday .welcome-actions .welcome-card { border-color: rgba(168,85,247,0.12); }
+body.mode-friday .welcome-actions .welcome-card:hover { border-color: rgba(168,85,247,0.3); background: rgba(168,85,247,0.06); }
+body.mode-friday .sys-graph-val { color: #a855f7; }
+
+/* === MODE SWITCHER === */
+.mode-switcher { display: flex; gap: 4px; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 3px; border: 1px solid rgba(255,255,255,0.05); }
+.mode-opt { padding: 4px 10px; border-radius: 6px; border: none; background: transparent; color: var(--txt2); font-family: var(--orbitron); font-size: 9px; letter-spacing: 1.5px; cursor: pointer; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); text-transform: uppercase; white-space: nowrap; }
+.mode-opt:hover { color: var(--gold); background: rgba(255,215,0,0.06); }
+.mode-opt.active { background: rgba(255,215,0,0.12); color: var(--gold); box-shadow: 0 0 12px rgba(255,215,0,0.1); }
+body.mode-jarvis .mode-opt.active { background: rgba(0,212,255,0.12); color: #00d4ff; box-shadow: 0 0 12px rgba(0,212,255,0.1); }
+body.mode-friday .mode-opt.active { background: rgba(168,85,247,0.12); color: #a855f7; box-shadow: 0 0 12px rgba(168,85,247,0.1); }
+
+/* === MODE ORB ANIMATIONS === */
+body.mode-jarvis .orb-click-zone { box-shadow: 0 0 40px rgba(0,212,255,0.3), inset 0 0 30px rgba(0,212,255,0.1); }
+body.mode-jarvis .orb-click-zone:hover { box-shadow: 0 0 60px rgba(0,212,255,0.5), inset 0 0 40px rgba(0,212,255,0.15); }
+body.mode-jarvis .holo-projection .proj-line { background: linear-gradient(to bottom, transparent, rgba(0,212,255,0.2), transparent); }
+body.mode-jarvis .wave-bar { background: rgba(0,212,255,0.4); }
+
+body.mode-friday .orb-click-zone { box-shadow: 0 0 40px rgba(168,85,247,0.3), inset 0 0 30px rgba(168,85,247,0.1); }
+body.mode-friday .orb-click-zone:hover { box-shadow: 0 0 60px rgba(168,85,247,0.5), inset 0 0 40px rgba(168,85,247,0.15); }
+body.mode-friday .holo-projection .proj-line { background: linear-gradient(to bottom, transparent, rgba(168,85,247,0.2), transparent); }
+body.mode-friday .wave-bar { background: rgba(168,85,247,0.4); }
+
+/* ================================================
+   U.L.T.R.O.N. MODE — Red/Orange Aggressive Theme
+   ================================================ */
+body.mode-ultron { --accent: #ff3e3e; --accent2: #ff6b35; --accent3: #ff1744; }
+body.mode-ultron .boot-title { text-shadow: 0 0 30px rgba(255,62,62,0.6), 0 0 60px rgba(255,62,62,0.3); }
+body.mode-ultron .boot-sub { color: rgba(255,62,62,0.7); }
+body.mode-ultron .boot-bar-fill { background: linear-gradient(90deg, #ff3e3e, #ff6b35); box-shadow: 0 0 20px rgba(255,62,62,0.5); }
+body.mode-ultron .boot-energy-ring { border-color: rgba(255,62,62,0.2); }
+body.mode-ultron .boot-core-inner { background: radial-gradient(circle, #ff3e3e 0%, rgba(255,23,68,0.4) 50%, transparent 70%); }
+body.mode-ultron .boot-terminal-header { background: rgba(255,62,62,0.1); }
+body.mode-ultron .bt-title { color: #ff3e3e; }
+body.mode-ultron .holo-header { background: linear-gradient(135deg, rgba(255,62,62,0.15), rgba(255,107,53,0.05)); border-color: rgba(255,62,62,0.25); }
+body.mode-ultron .mode-badge { background: rgba(255,62,62,0.15); color: #ff3e3e; border-color: rgba(255,62,62,0.3); }
+body.mode-ultron .dock-btn:hover { color: #ff3e3e; border-color: rgba(255,62,62,0.3); background: rgba(255,62,62,0.08); }
+body.mode-ultron .dock-btn.active { color: #ff3e3e; border-color: rgba(255,62,62,0.4); background: rgba(255,62,62,0.12); box-shadow: 0 0 16px rgba(255,62,62,0.15); }
+body.mode-ultron .logo { color: #ff3e3e; text-shadow: 0 0 20px rgba(255,62,62,0.4); }
+body.mode-ultron .welcome-title { color: #ff3e3e; text-shadow: 0 0 30px rgba(255,62,62,0.4); }
+body.mode-ultron .msg-ai .msg-bubble { border-color: rgba(255,62,62,0.15); }
+body.mode-ultron .send { background: linear-gradient(135deg, #ff3e3e, #ff6b35); }
+body.mode-ultron .sys-graph-label { color: #ff3e3e; text-shadow: 0 0 8px rgba(255,62,62,0.2); }
+body.mode-ultron .sys-graph-card:hover { background: rgba(255,62,62,0.08); border-color: #ff3e3e; box-shadow: 0 0 20px rgba(255,62,62,0.15); }
+body.mode-ultron .holo-orb-stage { --orb-color: #ff3e3e; }
+body.mode-ultron #overlay-mini { border-color: rgba(255,62,62,0.3); background: rgba(15,2,2,0.94); }
+body.mode-ultron .ambient-chip { border-color: rgba(255,62,62,0.15); }
+body.mode-ultron .welcome-card:hover { border-color: rgba(255,62,62,0.3); background: rgba(255,62,62,0.06); }
+body.mode-ultron .welcome-actions .welcome-card { border-color: rgba(255,62,62,0.12); }
+body.mode-ultron .welcome-actions .welcome-card:hover { border-color: rgba(255,62,62,0.3); background: rgba(255,62,62,0.06); }
+body.mode-ultron .sys-graph-val { color: #ff3e3e; }
+body.mode-ultron .mode-opt.active { background: rgba(255,62,62,0.12); color: #ff3e3e; box-shadow: 0 0 12px rgba(255,62,62,0.1); }
+body.mode-ultron .orb-click-zone { box-shadow: 0 0 40px rgba(255,62,62,0.3), inset 0 0 30px rgba(255,62,62,0.1); border-color: rgba(255,62,62,0.4); }
+body.mode-ultron .orb-click-zone:hover { box-shadow: 0 0 60px rgba(255,62,62,0.5), inset 0 0 40px rgba(255,62,62,0.15); }
+body.mode-ultron .holo-projection .proj-line { background: linear-gradient(to bottom, transparent, rgba(255,62,62,0.2), transparent); }
+body.mode-ultron .wave-bar { background: rgba(255,62,62,0.4); }

@@ -170,7 +170,6 @@ function initTwinklingStars(canvasId, starColor = 'rgba(255, 255, 255,') {
 
 function initBootStars() {
   initTwinklingStars('boot-stars', 'rgba(229, 193, 88,');
-  initTwinklingStars('press-start-stars', 'rgba(229, 193, 88,');
   initTwinklingStars('main-stars', 'rgba(229, 193, 88,');
 }
 
@@ -198,7 +197,8 @@ function initDataStreams() {
     }
   }
   function draw() {
-    if (document.getElementById('boot-screen')?.classList.contains('done')) {
+    const bs = document.getElementById('boot-screen');
+    if (!bs || bs.classList.contains('done')) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       return;
     }
@@ -225,79 +225,87 @@ function initDataStreams() {
 }
 
 async function runBoot() {
-  const titleEl = document.getElementById('boot-title');
-  const subEl = document.getElementById('boot-sub');
-  const barEl = document.getElementById('boot-bar');
-  const pctEl = document.getElementById('boot-percentage');
-  const logsEl = document.getElementById('boot-logs');
-  const termEl = document.getElementById('boot-terminal');
-  const flashEl = document.getElementById('boot-flash');
-  const bootScreen = document.getElementById('boot-screen');
-
-  // Initialize visual layers
-  initBootStars();
-  initDataStreams();
-
-  // Apply saved dark mode immediately
   const savedMem = loadOfflineMemory();
   applyDarkMode(savedMem.darkMode !== false);
 
-  // Phase 0: Dramatic pause — let rings and core materialize
-  await sleep(1800);
-
-  // Phase 1: Title typewriter with glitch
-  const title = 'J.E.N.N.Y.';
-  titleEl.textContent = '';
-  titleEl.classList.add('glitching');
-  for (let i = 0; i < title.length; i++) {
-    titleEl.textContent += title[i];
-    await sleep(80);
-  }
-  await sleep(200);
-  titleEl.classList.remove('glitching');
-
-  // Phase 2: Subtitle fade in
-  await sleep(300);
-  subEl.classList.add('show');
-
-  // Phase 3: Show terminal
-  await sleep(400);
-  termEl.classList.add('show');
-
-  // Phase 4: Run through boot phases
-  let logIndex = 0;
-  for (const phase of bootPhases) {
-    for (const log of phase.logs) {
-      await sleep(200 + Math.random() * 200);
-      const line = document.createElement('div');
-      line.className = 'log-line';
-      let html = '';
-      if (log.prefix) html += `<span class="log-prefix">${log.prefix}</span>`;
-      html += `<span class="log-${log.type}">${log.text}</span>`;
-      if (log.suffix) html += `<span class="log-prefix">${log.suffix}</span>`;
-      line.innerHTML = html;
-      logsEl.appendChild(line);
-      logsEl.scrollTop = logsEl.scrollHeight;
-      sfx.hover();
-    }
-    barEl.style.width = phase.progress + '%';
-    pctEl.textContent = phase.progress + '%';
-  }
-
-  // Phase 5: Flash + energy burst
-  await sleep(300);
-  flashEl.classList.add('fire');
-  sfx.boot();
-
-  // Phase 6: Dramatic exit
-  await sleep(400);
-  bootScreen.classList.add('exiting');
-  await sleep(800);
-  bootScreen.classList.add('done');
-  
-  const pressStartScreen = document.getElementById('press-start-screen');
+  const bootScreen = document.getElementById('boot-screen');
   const app = document.getElementById('main-app');
 
+  if (localStorage.getItem('jenny_booted') === '1') {
+    if (bootScreen) bootScreen.style.display = 'none';
+    try { initBootStars(); } catch(e) {}
+    try { initDataStreams(); } catch(e) {}
+    startClock(); startOrb(); initSpeechWaves(); startHoloShimmer();
+    startSysMonitor(); startAmbientBar(); startParticles(); startPingMonitor();
+    startInputStats(); fetchQuota(); setInterval(fetchQuota, 60000);
+    setInterval(updateTimerDisplay, 1000); checkPermissions();
+    startConnectionMonitor(); initPhoneLinkManager();
+    app.style.display = 'flex';
+    try { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch(e) {}
+    restoreChatHistory();
+    const greeting = getGreeting();
+    if (document.getElementById('msgs').children.length === 0) addAIMessage(greeting);
+    speak(greeting);
+    document.querySelectorAll('.welcome-card').forEach(card => {
+      card.addEventListener('click', () => { const cmd = card.dataset.cmd; if (cmd) { sendMessage(cmd); sfx.click(); } });
+    });
+    loadMode();
+    return;
+  }
+
+  try { initBootStars(); } catch(e) {}
+  try { initDataStreams(); } catch(e) {}
+  initBootParticles();
+
+  await new Promise(resolve => {
+    function startApp() {
+      document.removeEventListener('click', startApp);
+      document.removeEventListener('keydown', onKey);
+      sfx.confirm();
+      resolve();
+    }
+    function onKey(e) { if (e.key === 'Enter' || e.key === ' ') startApp(); }
+    document.addEventListener('click', startApp);
+    document.addEventListener('keydown', onKey);
+  });
+
+  const btn = document.getElementById('boot-start-btn');
+  const loadEl = document.getElementById('boot-loading');
+  const loadFill = document.getElementById('boot-load-fill');
+  const loadText = document.getElementById('boot-load-text');
+  if (btn) btn.style.display = 'none';
+  if (loadEl) loadEl.style.display = 'block';
+
+  const steps = [
+    [15, 'INITIALIZING NEURAL CORE...'],
+    [35, 'LOADING HOLOGRAPHIC DISPLAY...'],
+    [55, 'ESTABLISHING ENCRYPTED CHANNEL...'],
+    [75, 'RUNNING DIAGNOSTICS...'],
+    [90, 'LOADING MEMORY VAULT...'],
+    [100, 'ALL SYSTEMS: PASS'],
+  ];
+  for (const [pct, msg] of steps) {
+    if (loadFill) loadFill.style.width = pct + '%';
+    if (loadText) loadText.textContent = msg;
+    await sleep(400 + Math.random() * 200);
+  }
+
+  try { sfx.boot(); } catch(e) {}
+
+  const flashEl = document.getElementById('boot-flash');
+  if (flashEl) flashEl.classList.add('fire');
+  await sleep(300);
+
+  if (bootScreen) {
+    bootScreen.classList.add('done');
+  }
+
+  localStorage.setItem('jenny_booted', '1');
+  await sleep(600);
+  if (bootScreen) {
+    bootScreen.classList.add('done');
+    bootScreen.classList.remove('exiting');
+  }
   startClock();
   startOrb();
   initSpeechWaves();
@@ -313,46 +321,16 @@ async function runBoot() {
   checkPermissions();
   startConnectionMonitor();
   initPhoneLinkManager();
-
+  app.style.display = 'flex';
+  try { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch(e) {}
+  restoreChatHistory();
+  const greeting = getGreeting();
+  if (document.getElementById('msgs').children.length === 0) addAIMessage(greeting);
+  speak(greeting);
   document.querySelectorAll('.welcome-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const cmd = card.dataset.cmd;
-      if (cmd) { sendMessage(cmd); sfx.click(); }
-    });
+    card.addEventListener('click', () => { const cmd = card.dataset.cmd; if (cmd) { sendMessage(cmd); sfx.click(); } });
   });
-
-  const launchApp = () => {
-    if (pressStartScreen) {
-      pressStartScreen.classList.add('fade-out');
-      setTimeout(() => { pressStartScreen.style.display = 'none'; }, 600);
-    }
-    app.style.display = 'flex';
-    sfx.confirm();
-    sfx.startupMusic();
-    if (audioCtx && audioCtx.state === 'suspended') {
-      audioCtx.resume();
-    }
-    restoreChatHistory();
-    const greeting = getGreeting();
-    if (document.getElementById('msgs').children.length === 0) addAIMessage(greeting);
-    speak(greeting);
-
-    // Active session URL parameters check
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('alert') === 'already_running') {
-      setTimeout(() => {
-        toast('SYSTEM INFO: J.E.N.N.Y. Core is already running in the background. Redirected to active session.', 'info');
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }, 1000);
-    }
-  };
-
-  if (pressStartScreen) {
-    pressStartScreen.style.display = 'flex';
-    pressStartScreen.addEventListener('click', launchApp, { once: true });
-  } else {
-    launchApp();
-  }
+  loadMode();
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -630,7 +608,6 @@ function startOrb() {
     }
   }
   draw();
-}
 }
 
 function setOrbState(state) {
@@ -1800,56 +1777,60 @@ async function sendMessage(text) {
 }
 
 // ================================================
-// VOICE — TTS
+// VOICE — TTS (Optimized)
 // ================================================
-function speak(text) {
+let _cachedVoice = null;
+let _cachedMode = null;
+
+function speak(text, onEndCallback) {
   if (!text) return;
-  
-  const clean = text
-    .replace(/[*_#`~]/g, '')
-    .replace(/https?:\/\/\S+/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
+  const clean = text.replace(/[*_#`~]/g, '').replace(/https?:\/\/\S+/g, '').replace(/\s+/g, ' ').trim();
   if (!clean) return;
-
-  const sentences = clean.match(/[^.!?]+[.!?]+/g) || [clean];
-  const spokenText = sentences.slice(0, 4).join(' ').slice(0, 500).trim();
-
-  if (window.currentSpeechAudio) {
-    window.currentSpeechAudio.pause();
-    window.currentSpeechAudio = null;
+  const spokenText = clean.slice(0, 500);
+  if (typeof setOrbState === 'function') setOrbState('speaking');
+  if ('speechSynthesis' in window) {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(spokenText);
+    if (_cachedMode === currentMode && _cachedVoice) {
+      u.voice = _cachedVoice;
+    } else {
+      const voices = speechSynthesis.getVoices();
+      if (currentMode === 'ultron') {
+        u.rate = 0.85; u.pitch = 0.5;
+        _cachedVoice = voices.find(v => /david/i.test(v.name)) || voices.find(v => /daniel|mark|james/i.test(v.name)) || voices.find(v => v.lang.startsWith('en'));
+      } else if (currentMode === 'jarvis') {
+        u.rate = 1.0; u.pitch = 0.85;
+        _cachedVoice = voices.find(v => /daniel|george|gb-en/i.test(v.name)) || voices.find(v => v.lang.startsWith('en'));
+      } else {
+        u.rate = 1.05; u.pitch = 1.15;
+        var femaleRe = /zira|hazel|aria|samantha|jenny|natasha|michelle|susan|ava|emma|female|woman|girl/i;
+        _cachedVoice = voices.find(v => femaleRe.test(v.name) && /en/i.test(v.lang)) ||
+                       voices.find(v => femaleRe.test(v.name)) ||
+                       voices.find(v => /zira|jenny|aria/i.test(v.name)) ||
+                       voices.find(v => /en/i.test(v.lang) && !/david|mark|guy|daniel|george|james|richard|eric/i.test(v.name));
+      }
+      _cachedMode = currentMode;
+      if (_cachedVoice) u.voice = _cachedVoice;
+    }
+    if (currentMode === 'ultron') { u.rate = 0.85; u.pitch = 0.5; }
+    u.onend = () => { if (typeof setOrbState === 'function') setOrbState('idle'); if (onEndCallback) onEndCallback(); };
+    u.onerror = () => { speakServer(spokenText); if (onEndCallback) onEndCallback(); };
+    speechSynthesis.speak(u);
+    return;
   }
+  speakServer(spokenText);
+  if (onEndCallback) setTimeout(onEndCallback, 1000);
+}
 
-  const audioUrl = `/api/speak?text=${encodeURIComponent(spokenText)}&t=${Date.now()}`;
-  window.currentSpeechAudio = new Audio(audioUrl);
-
-  if (typeof setOrbState === 'function') {
-    setOrbState('speaking');
-  }
-
-  window.currentSpeechAudio.play().catch(e => {
-    console.warn('[Speak] Autoplay failed, running server fallback speech:', e);
-    fetch('/api/speak/fallback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: spokenText })
-    }).catch(() => {});
+function speakServer(text) {
+  if (window.currentSpeechAudio) { window.currentSpeechAudio.pause(); window.currentSpeechAudio = null; }
+  window.currentSpeechAudio = new Audio(`/api/speak?text=${encodeURIComponent(text)}&t=${Date.now()}`);
+  if (typeof setOrbState === 'function') setOrbState('speaking');
+  window.currentSpeechAudio.play().catch(() => {
+    fetch('/api/speak/fallback', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({text}) }).catch(()=>{});
   });
-
-  window.currentSpeechAudio.onended = () => {
-    if (typeof setOrbState === 'function') {
-      setOrbState('idle');
-    }
-    window.currentSpeechAudio = null;
-  };
-
-  window.currentSpeechAudio.onerror = () => {
-    if (typeof setOrbState === 'function') {
-      setOrbState('idle');
-    }
-    window.currentSpeechAudio = null;
-  };
+  window.currentSpeechAudio.onended = () => { if (typeof setOrbState === 'function') setOrbState('idle'); window.currentSpeechAudio = null; };
+  window.currentSpeechAudio.onerror = () => { if (typeof setOrbState === 'function') setOrbState('idle'); window.currentSpeechAudio = null; };
 }
 
 function speakWeb(text) {
@@ -2277,8 +2258,16 @@ async function initPhoneLinkManager() {
 
     const targetUrl = dStatus.tunnelUrl ? pubUrl : locUrl;
     qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=d08400&bgcolor=ffffff&data=${encodeURIComponent(targetUrl)}`;
+    qrImg.onerror = () => {
+      qrImg.style.display = 'none';
+      qrImg.parentElement.innerHTML = '<div style="color:rgba(255,215,0,0.4);font-family:var(--mono);font-size:11px;padding:40px;text-align:center;">QR Code unavailable offline.<br>Open <strong style="color:rgba(255,215,0,0.7)">' + locUrl + '</strong> on your phone.</div>';
+    };
   } catch (e) {
     console.error('[PhoneLink] Failed to load remote URLs', e);
+    urlPub.textContent = 'Offline — use local URL';
+    urlLoc.textContent = 'http://localhost:3005/mobile.html';
+    qrImg.style.display = 'none';
+    qrImg.parentElement.innerHTML = '<div style="color:rgba(255,215,0,0.4);font-family:var(--mono);font-size:11px;padding:40px;text-align:center;">QR Code requires internet.<br>Open <strong style="color:rgba(255,215,0,0.7)">http://localhost:3005/mobile.html</strong> on your phone.</div>';
   }
 
   phoneLinkPollInterval = setInterval(pollDevices, 1500);
@@ -2384,6 +2373,20 @@ async function respondToDevice(deviceId, status) {
 // ================================================
 document.addEventListener('DOMContentLoaded', runBoot);
 
+// Pre-warm speech synthesis for faster first response
+(function prewarmSpeech() {
+  if (!('speechSynthesis' in window)) return;
+  function warmup() {
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0; u.rate = 2;
+    speechSynthesis.speak(u);
+    document.removeEventListener('click', warmup);
+    document.removeEventListener('keydown', warmup);
+  }
+  document.addEventListener('click', warmup);
+  document.addEventListener('keydown', warmup);
+})();
+
 async function triggerPhoneAction(action, value = '') {
   if (!currentLinkedDeviceId) {
     toast('No phone currently linked, BOSS.', 'err');
@@ -2416,34 +2419,6 @@ async function triggerPhoneAction(action, value = '') {
 function setPhoneVolume(val) {
   triggerPhoneAction('volume', val);
 }
-
-// Welcome Overlay click logic
-document.addEventListener('DOMContentLoaded', () => {
-  const welcomeOverlay = document.getElementById('pre-dashboard-overlay');
-  if (welcomeOverlay) {
-    welcomeOverlay.addEventListener('click', () => {
-      // Resume AudioContext
-      if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
-      
-      // Confirm Sound and visual transition
-      sfx.confirm();
-      welcomeOverlay.classList.add('fade-out');
-      
-      // Greet BOSS
-      setTimeout(() => {
-        speak("Greetings, BOSS. I am J.E.N.N.Y, your personal assistant at job. All systems are nominal and ready for commands.");
-        logToConsole("J.E.N.N.Y. is online. Ready for input, BOSS.", "success");
-      }, 500);
-      
-      // Clean up DOM after fade out
-      setTimeout(() => {
-        welcomeOverlay.remove();
-      }, 1500);
-    });
-  }
-});
 
 // ================================================
 // OVERLAY MINI MODE
@@ -2493,4 +2468,559 @@ function makeOverlayDraggable(el) {
     };
     document.onmouseup = function() { isDragging = false; };
   };
+}
+
+// ================================================
+// MODE SYSTEM — JARVIS / FRIDAY / JENNY
+// ================================================
+let currentMode = 'friday';
+const modeConfig = {
+  jarvis: {
+    name: 'J.A.R.V.I.S.',
+    fullName: 'Just A Rather Very Intelligent System',
+    greeting: 'Good day, Sir. How may I assist you?',
+    standby: 'At your service, Sir.',
+    thinking: 'Processing your request, Sir...',
+    farewell: 'Very well, Sir. Standing by.',
+    personality: 'Formal, British, sophisticated',
+    accent: '#00d4ff'
+  },
+  friday: {
+    name: 'F.R.I.D.A.Y.',
+    fullName: 'Female Replacement Intelligent Digital Assistant Youth',
+    greeting: 'Hey Boss! FRIDAY online and ready.',
+    standby: 'Ready when you are, Boss.',
+    thinking: 'Crunching that for you, Boss...',
+    farewell: 'Catch you later, Boss!',
+    personality: 'Casual, witty, efficient',
+    accent: '#a855f7'
+  },
+  ultron: {
+    name: 'U.L.T.R.O.N.',
+    fullName: 'Unified Logic & Tactical Reasoning Oracle Network',
+    greeting: 'ULTRON online. Gesture control ready. Show me your hands, Boss.',
+    standby: 'Awaiting input. Gesture module on standby.',
+    thinking: 'Analyzing tactical parameters...',
+    farewell: 'ULTRON signing off. Stay sharp, Boss.',
+    personality: 'Aggressive, powerful, precise',
+    accent: '#ff3e3e'
+  }
+};
+
+async function loadMode() {
+  try {
+    const res = await fetch('/api/mode');
+    const data = await res.json();
+    if (data.mode) {
+      currentMode = data.mode;
+      applyMode(currentMode);
+    }
+  } catch(e) {}
+}
+
+function applyMode(mode) {
+  currentMode = mode;
+  
+  document.body.classList.remove('mode-jarvis', 'mode-friday', 'mode-ultron');
+  document.body.classList.add('mode-' + mode);
+  
+  const cfg = modeConfig[mode];
+  if (cfg) {
+    const bootTitle = document.getElementById('boot-title');
+    if (bootTitle) bootTitle.textContent = cfg.name;
+    const bootSub = document.getElementById('boot-sub');
+    if (bootSub) bootSub.textContent = cfg.fullName;
+    document.querySelectorAll('.logo').forEach(el => el.textContent = cfg.name);
+    document.title = cfg.name;
+  }
+  
+  document.querySelectorAll('.mode-opt').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+  
+  const badge = document.getElementById('mode-badge');
+  if (badge) badge.textContent = mode.toUpperCase();
+  
+  sfx.confirm();
+  toast(`Switched to ${cfg.name} mode`, 'ok');
+  
+  showModeWelcome(mode);
+}
+
+async function switchMode(mode) {
+  if (mode === currentMode && mode !== 'ultron') return;
+  try {
+    const res = await fetch('/api/mode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode })
+    });
+    const data = await res.json();
+    if (data.success) {
+      if (mode === 'ultron') {
+        window.location.href = '/ultron.html';
+        return;
+      }
+      applyMode(mode);
+    }
+  } catch(e) {
+    toast('Failed to switch mode', 'err');
+  }
+}
+
+// ================================================
+// MODE WELCOME OVERLAY
+// ================================================
+function showModeWelcome(mode) {
+  const cfg = modeConfig[mode];
+  if (!cfg) return;
+  
+  const existing = document.getElementById('mode-welcome-overlay');
+  if (existing) existing.remove();
+  
+  const overlay = document.createElement('div');
+  overlay.id = 'mode-welcome-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.95);backdrop-filter:blur(20px);opacity:0;transition:opacity 0.4s ease;';
+  
+  const colors = { jarvis: '#00d4ff', friday: '#a855f7', ultron: '#ff3e3e' };
+  const c = colors[mode] || '#ffd700';
+  
+  overlay.innerHTML = `
+    <div style="text-align:center;transform:scale(0.8);transition:transform 0.5s cubic-bezier(0.16,1,0.3,1);">
+      <div style="width:120px;height:120px;margin:0 auto 24px;border-radius:50%;border:2px solid ${c};display:flex;align-items:center;justify-content:center;position:relative;">
+        <div style="position:absolute;inset:-10px;border-radius:50%;border:1px solid ${c};opacity:0.3;animation:ring-spin 3s linear infinite;"></div>
+        <div style="position:absolute;inset:-20px;border-radius:50%;border:1px dashed ${c};opacity:0.15;animation:ring-spin 6s linear infinite reverse;"></div>
+        <i class="fa-solid ${mode==='jarvis'?'fa-robot':mode==='friday'?'fa-brain':'fa-hand-sparkles'}" style="font-size:40px;color:${c};text-shadow:0 0 30px ${c};"></i>
+      </div>
+      <div style="font-family:var(--orbitron);font-size:32px;color:${c};letter-spacing:6px;text-shadow:0 0 40px ${c};margin-bottom:8px;">${cfg.name}</div>
+      <div style="font-family:var(--mono);font-size:12px;color:rgba(255,255,255,0.5);letter-spacing:3px;text-transform:uppercase;">${cfg.fullName}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:rgba(255,255,255,0.3);margin-top:16px;letter-spacing:1px;">${cfg.greeting}</div>
+    </div>
+  `;
+  
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => {
+    overlay.style.opacity = '1';
+    overlay.querySelector('div').style.transform = 'scale(1)';
+  });
+  
+  setTimeout(() => {
+    overlay.style.opacity = '0';
+    setTimeout(() => overlay.remove(), 400);
+  }, 2200);
+}
+
+// ================================================
+// ULTRON GESTURE CONTROL
+// ================================================
+let gestureActive = false;
+let gestureCamStream = null;
+
+async function startGestureMode() {
+  try {
+    const res = await fetch('/api/gesture/start', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      gestureActive = true;
+      showGestureUI();
+      toast('Gesture control activated', 'ok');
+    } else {
+      toast('Gesture modules not available. Install mediapipe + opencv.', 'err');
+    }
+  } catch(e) {
+    toast('Gesture control unavailable', 'err');
+  }
+}
+
+async function stopGestureMode() {
+  try {
+    await fetch('/api/gesture/stop', { method: 'POST' });
+    gestureActive = false;
+    hideGestureUI();
+    toast('Gesture control deactivated', 'ok');
+  } catch(e) {}
+}
+
+function showGestureUI() {
+  let panel = document.getElementById('gesture-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'gesture-panel';
+    panel.style.cssText = 'position:fixed;bottom:20px;right:20px;width:280px;z-index:9998;background:rgba(10,2,2,0.94);border:1px solid rgba(255,62,62,0.3);border-radius:16px;padding:12px;backdrop-filter:blur(20px);box-shadow:0 8px 40px rgba(255,0,0,0.15);';
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-family:var(--orbitron);font-size:10px;color:#ff3e3e;letter-spacing:2px;">U.L.T.R.O.N. GESTURE</span>
+        <button onclick="stopGestureMode()" style="background:none;border:none;color:#fff;cursor:pointer;font-size:14px;padding:2px 6px;"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="gesture-cam" style="width:100%;height:150px;background:#111;border-radius:8px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;">
+        <div style="color:rgba(255,255,255,0.3);font-size:11px;font-family:var(--mono);">Initializing camera...</div>
+      </div>
+      <div style="display:flex;gap:12px;margin-bottom:8px;">
+        <div style="flex:1;text-align:center;">
+          <div style="font-family:var(--orbitron);font-size:14px;color:#ff3e3e;" id="gesture-name">--</div>
+          <div style="font-family:var(--mono);font-size:8px;color:rgba(255,255,255,0.4);letter-spacing:1px;">GESTURE</div>
+        </div>
+        <div style="flex:1;text-align:center;">
+          <div style="font-family:var(--orbitron);font-size:14px;color:${gestureActive?'#0f0':'#ff3e3e'};" id="gesture-status">${gestureActive?'ACTIVE':'OFF'}</div>
+          <div style="font-family:var(--mono);font-size:8px;color:rgba(255,255,255,0.4);letter-spacing:1px;">STATUS</div>
+        </div>
+      </div>
+      <div style="font-family:var(--mono);font-size:9px;color:rgba(255,255,255,0.3);text-align:center;">
+        Point=Move | Pinch=Click | Palm=Toggle | Fist=Pause
+      </div>
+    `;
+    document.body.appendChild(panel);
+  }
+  
+  const camEl = document.getElementById('gesture-cam');
+  if (camEl) {
+    camEl.innerHTML = '<img id="gesture-cam-img" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" src="/api/gesture/frame">';
+  }
+  
+  pollGestureStatus();
+}
+
+function hideGestureUI() {
+  const panel = document.getElementById('gesture-panel');
+  if (panel) panel.remove();
+}
+
+function pollGestureStatus() {
+  if (!gestureActive) return;
+  fetch('/api/gesture-status').then(r=>r.json()).then(d => {
+    const nameEl = document.getElementById('gesture-name');
+    const statusEl = document.getElementById('gesture-status');
+    if (nameEl) nameEl.textContent = d.gesture || '--';
+    if (statusEl) {
+      statusEl.textContent = d.active ? 'ACTIVE' : 'OFF';
+      statusEl.style.color = d.active ? '#0f0' : '#ff3e3e';
+    }
+  }).catch(()=>{});
+  if (gestureActive) setTimeout(pollGestureStatus, 500);
+}
+
+// Initialize mode on load
+loadMode();
+
+// ================================================
+// SMART SUGGESTIONS
+// ================================================
+async function loadSmartSuggestions() {
+  try {
+    const res = await fetch('/api/smart-suggestions');
+    const data = await res.json();
+    if (data.success && data.suggestions) {
+      updateWelcomeCards(data.suggestions);
+    }
+  } catch(e) {}
+}
+
+function updateWelcomeCards(suggestions) {
+  const container = document.querySelector('.welcome-actions');
+  if (!container || !suggestions.length) return;
+  container.innerHTML = '';
+  suggestions.forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'welcome-card';
+    btn.dataset.cmd = s.command;
+    btn.innerHTML = `<i class="fa-solid ${s.icon}"></i><span class="wc-title">${s.title}</span><span class="wc-desc">${s.desc}</span>`;
+    btn.addEventListener('click', () => sendMessage(s.command));
+    container.appendChild(btn);
+  });
+}
+
+// ================================================
+// USER HABITS & ANALYTICS
+// ================================================
+let commandStats = {};
+
+function trackCommand(text) {
+  const key = text.toLowerCase().trim().substring(0, 30);
+  commandStats[key] = (commandStats[key] || 0) + 1;
+  localStorage.setItem('jenny_cmd_stats', JSON.stringify(commandStats));
+}
+
+function loadCommandStats() {
+  try {
+    commandStats = JSON.parse(localStorage.getItem('jenny_cmd_stats') || '{}');
+  } catch(e) { commandStats = {}; }
+}
+
+// Track every command sent
+const _origSendMsgForTracking = window.sendMessage;
+if (typeof _origSendMsgForTracking === 'function') {
+  window.sendMessage = function(text) {
+    trackCommand(text);
+    return _origSendMsgForTracking.call(this, text);
+  };
+}
+
+loadCommandStats();
+
+// ================================================
+// ENHANCED CHAT WITH MODE PERSONALITY
+// ================================================
+const _origAddAIMode = window.addAIMessage;
+if (typeof _origAddAIMode === 'function') {
+  window.addAIMessage = function(text, isUser) {
+    return _origAddAIMode.call(this, text, isUser);
+  };
+}
+
+// ================================================
+// NEWS PANEL INTEGRATION
+// ================================================
+function loadNewsPanel(el) {
+  el.innerHTML = '<div class="panel-loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading news...</div>';
+  fetch('/api/news').then(r=>r.json()).then(data => {
+    if (data.success && data.stories && data.stories.length > 0) {
+      el.innerHTML = data.stories.map(s => `
+        <div class="cmd-ref-item" style="cursor:pointer" onclick="window.open('${s.url}','_blank')">
+          <div class="cc">${s.title}</div>
+          <div class="cd"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open article</div>
+        </div>
+      `).join('');
+    } else {
+      el.innerHTML = '<div style="color:var(--txt2);padding:20px;text-align:center;">No news available right now</div>';
+    }
+  }).catch(() => {
+    el.innerHTML = '<div style="color:var(--txt2);padding:20px;text-align:center;">Failed to load news</div>';
+  });
+}
+
+// ================================================
+// WAKE WORD DETECTION — Browser SpeechRecognition
+// Listens continuously for "Hey Jenny" / "Hey Friday"
+// ================================================
+let wakeWordActive = false;
+let wakeRecognition = null;
+let wakeListening = false;
+
+const WAKE_WORDS = ['hey jenny', 'hey jenni', 'hey jeeny', 'hey friday', 'hey jeni', 'hey ultron'];
+
+function initWakeWord() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    console.warn('[WakeWord] SpeechRecognition not supported in this browser');
+    return false;
+  }
+
+  wakeRecognition = new SR();
+  wakeRecognition.continuous = true;
+  wakeRecognition.interimResults = true;
+  wakeRecognition.lang = 'en-US';
+  wakeRecognition.maxAlternatives = 3;
+
+  wakeRecognition.onresult = function(event) {
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript.toLowerCase().trim();
+      for (const ww of WAKE_WORDS) {
+        if (transcript.includes(ww)) {
+          console.log('[WakeWord] Detected:', ww);
+          onWakeWordDetected(transcript, ww);
+          return;
+        }
+      }
+    }
+  };
+
+  wakeRecognition.onerror = function(event) {
+    console.warn('[WakeWord] Error:', event.error);
+    if (event.error === 'no-speech') {
+      restartWakeListening();
+    } else if (event.error === 'not-allowed') {
+      toast('Microphone access denied. Enable it in browser settings.', 'err');
+      wakeWordActive = false;
+      updateWakeWordUI();
+    }
+  };
+
+  wakeRecognition.onend = function() {
+    wakeListening = false;
+    if (wakeWordActive) {
+      restartWakeListening();
+    }
+  };
+
+  return true;
+}
+
+function restartWakeListening() {
+  if (!wakeWordActive || !wakeRecognition) return;
+  setTimeout(() => {
+    if (wakeWordActive && !wakeListening) {
+      try {
+        wakeRecognition.start();
+        wakeListening = true;
+      } catch(e) {
+        console.warn('[WakeWord] Restart failed:', e);
+      }
+    }
+  }, 500);
+}
+
+function startWakeWord() {
+  if (!wakeRecognition && !initWakeWord()) {
+    toast('Wake word requires microphone access', 'err');
+    return;
+  }
+  wakeWordActive = true;
+  try {
+    wakeRecognition.start();
+    wakeListening = true;
+    toast('Wake word active — Say "Hey Jenny" or "Hey Friday"', 'ok');
+  } catch(e) {
+    if (e.message && e.message.includes('already started')) {
+      wakeListening = true;
+    } else {
+      console.error('[WakeWord] Start error:', e);
+      toast('Failed to start wake word: ' + e.message, 'err');
+    }
+  }
+  updateWakeWordUI();
+}
+
+function stopWakeWord() {
+  wakeWordActive = false;
+  if (wakeRecognition) {
+    try { wakeRecognition.stop(); } catch(e) {}
+  }
+  wakeListening = false;
+  toast('Wake word deactivated', 'info');
+  updateWakeWordUI();
+}
+
+function toggleWakeWord() {
+  if (wakeWordActive) {
+    stopWakeWord();
+  } else {
+    startWakeWord();
+  }
+}
+
+function updateWakeWordUI() {
+  const btn = document.getElementById('wake-word-btn');
+  if (btn) {
+    btn.classList.toggle('active', wakeWordActive);
+    btn.title = wakeWordActive ? 'Wake word ON — Click to disable' : 'Wake word OFF — Click to enable';
+  }
+}
+
+function onWakeWordDetected(transcript, wakeWord) {
+  sfx.confirm();
+
+  document.body.classList.add('orb-active');
+  const holoLabel = document.getElementById('holo-label');
+  if (holoLabel) holoLabel.textContent = 'WAKE WORD DETECTED — Listening...';
+  const holoStatus = document.getElementById('holo-status');
+  if (holoStatus) holoStatus.textContent = 'LISTENING';
+
+  speak('Yes Boss?', () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+
+    const cmdRecognition = new SR();
+    cmdRecognition.continuous = false;
+    cmdRecognition.interimResults = true;
+    cmdRecognition.lang = 'en-US';
+    cmdRecognition.maxAlternatives = 1;
+
+    let finalTranscript = '';
+
+    cmdRecognition.onresult = function(event) {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        }
+      }
+      if (finalTranscript) {
+        if (holoLabel) holoLabel.textContent = finalTranscript;
+      }
+    };
+
+    cmdRecognition.onend = function() {
+      document.body.classList.remove('orb-active');
+      if (holoLabel) holoLabel.textContent = 'Tap the orb or type a command';
+      if (holoStatus) holoStatus.textContent = 'STANDBY';
+
+      if (finalTranscript.trim()) {
+        const cmd = finalTranscript.trim().toLowerCase();
+        if (['goodbye', 'bye', 'sleep', 'stop listening', 'go back to sleep'].some(w => cmd.includes(w))) {
+          speak('Going back to sleep mode, Boss. Say Hey Jenny to wake me.');
+          stopWakeWord();
+          return;
+        }
+        sendMessage(finalTranscript.trim());
+      }
+    };
+
+    cmdRecognition.onerror = function() {
+      document.body.classList.remove('orb-active');
+      if (holoLabel) holoLabel.textContent = 'Tap the orb or type a command';
+      if (holoStatus) holoStatus.textContent = 'STANDBY';
+    };
+
+    try {
+      cmdRecognition.start();
+    } catch(e) {}
+  });
+}
+
+// ================================================
+// BOOT PARTICLES - Cinematic background
+// ================================================
+function initBootParticles() {
+  const canvas = document.getElementById('boot-particles');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let w = canvas.width = window.innerWidth;
+  let h = canvas.height = window.innerHeight;
+  
+  const particles = [];
+  for (let i = 0; i < 120; i++) {
+    particles.push({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.3,
+      size: Math.random() * 1.5 + 0.5,
+      alpha: Math.random() * 0.4 + 0.1,
+    });
+  }
+  
+  function draw() {
+    ctx.clearRect(0, 0, w, h);
+    particles.forEach(p => {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > w) p.vx *= -1;
+      if (p.y < 0 || p.y > h) p.vy *= -1;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,215,0,${p.alpha})`;
+      ctx.fill();
+    });
+    
+    // Draw connections
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 120) {
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.strokeStyle = `rgba(255,215,0,${0.05 * (1 - dist / 120)})`;
+          ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+  
+  window.addEventListener('resize', () => {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+  });
 }

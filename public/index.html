@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>J.E.N.N.Y.</title>
   <link rel="icon" href="logo.png">
   <link rel="apple-touch-icon" href="logo.png">
@@ -11,92 +14,34 @@
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <!-- Pre-dashboard Welcome Screen Overlay -->
-  <div id="pre-dashboard-overlay" class="pre-dashboard-overlay">
-    <div class="welcome-content">
-      <div class="welcome-glitch-container">
-        <h1 class="welcome-title text-glow">HI I AM YOUR ASSISTANT AT JOB F.R.I.D.A.Y</h1>
-      </div>
-      <p class="welcome-instruction">CLICK ANYWHERE TO START</p>
-      <div class="welcome-rings">
-        <div class="wring wring1"></div>
-        <div class="wring wring2"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- BOOT SCREEN — CINEMATIC -->
+  <!-- BOOT SCREEN — SPLASH -->
   <div id="boot-screen">
-    <!-- Layer 1: Star field -->
-    <canvas id="boot-stars" class="boot-layer"></canvas>
-    <!-- Layer 2: Grid with perspective -->
-    <div class="boot-layer boot-grid-perspective"></div>
-    <!-- Layer 3: Data streams -->
-    <canvas id="boot-datastreams" class="boot-layer"></canvas>
-    <!-- Layer 4: Central orb + rings -->
-    <div class="boot-center">
-      <div class="boot-energy-ring er1"></div>
-      <div class="boot-energy-ring er2"></div>
-      <div class="boot-energy-ring er3"></div>
-      <div class="boot-energy-ring er4"></div>
-      <!-- Hypermaximalist HUD brackets & ticks -->
-      <div class="hud-bracket hb-left"></div>
-      <div class="hud-bracket hb-right"></div>
-      <div class="hud-circle-ticks"></div>
-      <div class="hud-coordinates">
-        <div class="hud-coord-item">[ SYS_LOC: 84.992.11A ]</div>
-        <div class="hud-coord-item">[ DECK_LNK: ACTIVE ]</div>
-      </div>
-      <div class="boot-core">
-        <div class="boot-core-inner"></div>
-        <div class="boot-core-pulse"></div>
-      </div>
-      <div class="boot-scan-beam"></div>
+  <!-- Full-screen cinematic background -->
+  <canvas id="boot-particles" style="position:absolute;inset:0;z-index:1"></canvas>
+  
+  <!-- Center content -->
+  <div style="position:relative;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;text-align:center">
+    <!-- Glowing ring animation -->
+    <div class="boot-ring-wrap">
+      <div class="boot-ring r1"></div>
+      <div class="boot-ring r2"></div>
+      <div class="boot-ring r3"></div>
+      <div class="boot-core"></div>
     </div>
-    <!-- Layer 5: Title + text -->
-    <div class="boot-text-layer">
-      <div class="boot-glitch-wrap">
-        <h1 class="boot-title" id="boot-title" data-text="J.E.N.N.Y.">J.E.N.N.Y.</h1>
-      </div>
-      <p class="boot-sub" id="boot-sub">JUST ENHANCED NEURAL NETWORK YIELDING</p>
-      <div class="boot-progress-wrap">
-        <div class="boot-bar-track"><div class="boot-bar-fill" id="boot-bar"></div></div>
-        <div class="boot-percentage" id="boot-percentage">0%</div>
-      </div>
-      <div class="boot-terminal" id="boot-terminal">
-        <div class="boot-terminal-header">
-          <span class="bt-dot red"></span><span class="bt-dot yellow"></span><span class="bt-dot green"></span>
-          <span class="bt-title">FRIDAY CORE v3.7.1</span>
-        </div>
-        <div class="boot-terminal-body" id="boot-logs"></div>
-      </div>
-    </div>
-    <!-- Layer 6: Flash overlay -->
-    <div class="boot-flash" id="boot-flash"></div>
-    <!-- Layer 7: Scanlines -->
-  </div>
-
-  <div id="press-start-screen" class="press-start-overlay" style="display:none">
-    <!-- Starfield canvas -->
-    <canvas id="press-start-stars" style="position:absolute; inset:0; pointer-events:none; z-index:1; opacity:0.6;"></canvas>
-    <div class="hologram-grid" style="z-index:2"></div>
-    <div class="press-start-content" style="position:relative; z-index:3">
-      <div class="press-start-orb-container">
-        <div class="press-start-ring ring-1"></div>
-        <div class="press-start-ring ring-2"></div>
-        <div class="press-start-ring ring-3"></div>
-        <div class="press-start-core">
-          <i class="fa-solid fa-power-off"></i>
-        </div>
-      </div>
-      <h1 class="press-start-title">J.E.N.N.Y. AI</h1>
-      <div class="press-start-subtitle">NEURAL MATRIX READY & LOCKED</div>
-      <div class="press-start-anywhere">
-        [ CLICK ANYWHERE TO INITIALIZE NEURAL INTERFACE ]
-      </div>
-      <div class="press-start-hint">Unlocks Audio, Voice Dictation & Personal User Memory Profile</div>
+    
+    <div class="boot-title" id="boot-title">J.E.N.N.Y.</div>
+    <div class="boot-sub" id="boot-sub">JUST A NEURAL NETWORK YIELDING INTELLIGENCE</div>
+    
+    <!-- Loading bar -->
+    <div class="boot-loading" id="boot-loading" style="display:none;width:320px;margin-top:40px">
+      <div class="boot-bar"><div class="boot-bar-fill" id="boot-load-fill"></div></div>
+      <div class="boot-bar-text" id="boot-load-text">INITIALIZING...</div>
     </div>
   </div>
+  
+  <!-- Gradient overlay that fades to black -->
+  <div class="boot-gradient"></div>
+</div>
 
   <div id="main-app" style="display:none">
     <!-- Twinkling stars background -->
@@ -145,6 +90,11 @@
 
       <div class="holo-header">
         <span class="mode-badge" id="mode-badge">OFFLINE</span>
+        <div class="mode-switcher">
+          <button class="mode-opt" data-mode="friday" onclick="switchMode('friday')" title="FRIDAY — Casual, witty assistant. System control, emails, timers, jokes, weather, browser. Voice: Female (Zira).">F.R.I.D.A.Y</button>
+          <button class="mode-opt" data-mode="jarvis" onclick="switchMode('jarvis')" title="JARVIS — Formal, British AI. System control, briefings, diagnostics, process management. Voice: British Male (Daniel).">J.A.R.V.I.S</button>
+          <button class="mode-opt" data-mode="ultron" onclick="switchMode('ultron')" title="ULTRON — Gesture-controlled combat mode. Hand tracking via webcam, 3D orb, voice commands. Replaces dashboard with full-screen HUD.">U.L.T.R.O.N</button>
+        </div>
         <span class="quota-pill" id="quota-pill">
           <i class="fa-solid fa-bolt"></i>
           <span id="quota-rpm">--/--</span> RPM
@@ -251,6 +201,8 @@
           <button class="dock-btn" data-panel="training" title="AI Training Hub"><i class="fa-solid fa-brain"></i></button>
           <button class="dock-btn" data-panel="settings" title="Settings"><i class="fa-solid fa-gear"></i></button>
           <button class="dock-btn" data-panel="commands" title="Commands"><i class="fa-solid fa-terminal"></i></button>
+          <button class="dock-btn" id="wake-word-btn" onclick="toggleWakeWord()" title="Wake Word — Say 'Hey Jenny' to activate"><i class="fa-solid fa-head-side-voice"></i></button>
+          <button class="dock-btn" onclick="window.location.href='/modes.html'" title="Switch Mode — JARVIS / FRIDAY / ULTRON"><i class="fa-solid fa-shield-halved"></i></button>
           <button class="dock-btn" onclick="toggleOverlay()" title="Mini Overlay Mode"><i class="fa-solid fa-window-restore"></i></button>
         </nav>
       </div>
