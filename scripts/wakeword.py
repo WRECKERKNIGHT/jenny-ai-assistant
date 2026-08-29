@@ -16,7 +16,7 @@ except ImportError:
     print("Install SpeechRecognition: pip install SpeechRecognition")
     sys.exit(1)
 
-SERVER_URL = "http://localhost:5000"
+SERVER_URL = "http://localhost:3005"
 WAKE_WORDS = ["hey jenny", "hey jenni", "hey jeeny", "hey friday", "hey jeni"]
 LISTEN_TIMEOUT = 7
 PHRASE_LIMIT = 10
@@ -45,7 +45,7 @@ def send_to_jenny(text):
         import urllib.parse
         req = urllib.request.Request(
             f"{SERVER_URL}/api/chat",
-            data=json.dumps({"input": text}).encode(),
+            data=json.dumps({"message": text}).encode(),
             headers={"Content-Type": "application/json"},
             method="POST"
         )
