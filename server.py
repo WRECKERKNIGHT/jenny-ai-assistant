@@ -3,6 +3,7 @@ import psutil
 from pathlib import Path
 from flask import Flask, request, jsonify, send_from_directory, Response
 from flask_cors import CORS
+import agency_client
 
 BASE_DIR = Path(__file__).parent
 PUBLIC_DIR = BASE_DIR / "public"
@@ -218,10 +219,31 @@ def grok_chat(message, history=None):
         mode = get_mode(); mp = MODE_PROFILES[mode]
         vault_data = load_json(DATA_DIR / "vault.json", {"entries": []})
         vault_text = "\n".join(e.get("text","") for e in vault_data.get("entries", [])[-5:])
+        agency_ctx = ""
+        if mode == "jarvis":
+            try:
+                st = agency_client.agency_state()
+                if st:
+                    s = agency_client.summarize_state(st)
+                    agency_ctx = (
+                        f"AGENCY OS (your business automation) LIVE STATUS: "
+                        f"agents_online={s['agents_online']}, agents_working={s['agents_working']}, "
+                        f"agents_error={s['agents_error']}, total_leads={s['total_leads']}, leads_today={s['leads_today']}, "
+                        f"interested={s['interested']}, curious={s['curious']}, not_interested={s['not_interested']}, "
+                        f"meetings={s['meetings']}, replies={s['replies']}, pending_approval={s['pending_approval']}, "
+                        f"sent_outreach={s['sent_outreach']}, missions_running={s['missions_running']}, "
+                        f"institution_count={s['institution_count']}, by_stage={s['by_stage']}, "
+                        f"error_agents={s['error_agents']}. "
+                        f"You are the owner's business partner (Agency OS). You can answer questions about leads, "
+                        f"missions, outreach and agents from this live data. "
+                    )
+            except Exception:
+                agency_ctx = ""
         system_msg = (
             f"You are {mp['name']}, an AI assistant for {OWNER} (referred to as '{mp['boss']}'). "
             f"Current mode: {mode}. Personality: {mp['personality']}. Clock: {now}. "
             f"User vault (recent notes): {vault_text or '(empty)'}. "
+            f"{agency_ctx}"
             f"Reply naturally and helpfully. "
             f"You MUST return valid JSON with keys \"text\" (the response) and \"speech\" (a TTS-friendly version without markdown). "
             f"Do not wrap the JSON in markdown code fences — return raw JSON only."
@@ -964,6 +986,45 @@ def gesture_watchdog():
 def api_gesture_watchdog():
     return jsonify({"success": True, "log": gesture_watchdog_log[-10:]})
 
+@app.route("/api/agency")
+def api_agency():
+    state = agency_client.agency_state()
+    if not state:
+        return jsonify({"success": False, "online": False, "message": "Agency OS is offline on localhost:3200"})
+    return jsonify({"success": True, "online": True, "state": state, "summary": agency_client.summarize_state(state)})
+
+@app.route("/api/agency/mission", methods=["POST"])
+def api_agency_mission():
+    d = request.get_json(force=True, silent=True) or {}
+    city = (d.get("city") or "Patna").strip()
+    category = (d.get("category") or "School").strip()
+    limit = int(d.get("limit") or 10)
+    res = agency_client.agency_launch_mission(city, category, limit)
+    if res is None:
+        return jsonify({"success": False, "online": False, "message": "Agency OS is offline"})
+    return jsonify({"success": True, "online": True, "result": res})
+
+@app.route("/api/agency/outreach", methods=["POST"])
+def api_agency_outreach():
+    d = request.get_json(force=True, silent=True) or {}
+    item_id = d.get("id")
+    action = (d.get("action") or "").strip()
+    if item_id is None or action not in ("approve", "reject", "edit", "send"):
+        return jsonify({"success": False, "error": "id and action (approve/reject/edit/send) required"})
+    res = agency_client.agency_outreach_action(item_id, action, d.get("body"), d.get("subject"))
+    if res is None:
+        return jsonify({"success": False, "online": False, "message": "Agency OS is offline"})
+    return jsonify({"success": True, "online": True, "result": res})
+
+@app.route("/api/agency/response", methods=["POST"])
+def api_agency_response():
+    d = request.get_json(force=True, silent=True) or {}
+    from agency_client import _post as _ac_post
+    res = _ac_post("/api/response", d)
+    if res is None:
+        return jsonify({"success": False, "online": False, "message": "Agency OS is offline"})
+    return jsonify({"success": True, "online": True, "result": res})
+
 @app.route("/api/chat", methods=["POST"])
 def api_chat():
     d = request.get_json(force=True, silent=True) or {}
@@ -1144,7 +1205,28 @@ def api_briefing():
     greet = "Good night" if h < 6 else "Good morning" if h < 12 else "Good afternoon" if h < 17 else "Good evening" if h < 21 else "Good night"
     vault = load_json(DATA_DIR / "vault.json", {"entries": []})
     m = get_mode(); mp = MODE_PROFILES[m]
-    return jsonify({"success": True, "briefing": {"greeting": f"{greet}, {mp['boss']}", "date": now.strftime("%A, %B %d, %Y"), "time": now.strftime("%I:%M %p"), "system": f"CPU {system_cache['cpu']}%, RAM {system_cache['ram']}%", "battery": f"{system_cache['battery']}%", "vaultCount": len(vault.get("entries", [])), "mode": m, "modeName": mp["name"]}})
+    briefing = {"greeting": f"{greet}, {mp['boss']}", "date": now.strftime("%A, %B %d, %Y"), "time": now.strftime("%I:%M %p"), "system": f"CPU {system_cache['cpu']}%, RAM {system_cache['ram']}%", "battery": f"{system_cache['battery']}%", "vaultCount": len(vault.get("entries", [])), "mode": m, "modeName": mp["name"]}
+    if m == "jarvis":
+        try:
+            st = agency_client.agency_state()
+            if st:
+                s = agency_client.summarize_state(st)
+                briefing["agency"] = {
+                    "online": True,
+                    "agents_online": s["agents_online"],
+                    "agents_working": s["agents_working"],
+                    "leads_today": s["leads_today"],
+                    "total_leads": s["total_leads"],
+                    "pending_approval": s["pending_approval"],
+                    "sent_outreach": s["sent_outreach"],
+                    "missions_running": s["missions_running"],
+                    "interested": s["interested"],
+                    "meetings": s["meetings"],
+                    "brief": f"Your Agency OS has {s['agents_online']} agents online, {s['agents_working']} working, {s['leads_today']} leads today ({s['total_leads']} total), {s['pending_approval']} pending outreach approval, {s['sent_outreach']} sent.",
+                }
+        except Exception:
+            briefing.setdefault("agency", {"online": False})
+    return jsonify({"success": True, "briefing": briefing})
 
 @app.route("/api/vault", methods=["GET", "POST", "DELETE"])
 def api_vault():
