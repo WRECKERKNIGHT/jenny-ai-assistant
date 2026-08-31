@@ -392,7 +392,7 @@ ringMesh3.rotation.x = Math.PI * 0.15;
 ringMesh3.rotation.z = Math.PI * 0.4;
 scene.add(ringMesh3);
 
-var pCount = 2000;
+var pCount = 700;
 var pGeo = new V.BufferGeometry();
 var pPos = new Float32Array(pCount * 3);
 var pVel = new Float32Array(pCount * 3);
@@ -419,8 +419,15 @@ for (var j = 0; j < 30; j++) {
 }
 scene.add(lineGroup);
 
-function animate() {
+var RENDER_FPS = 30;
+var RENDER_INTERVAL = 1000 / RENDER_FPS;
+var orbLastRender = 0;
+var orbFrame = 0;
+function animate(ts) {
   requestAnimationFrame(animate);
+  if (document.hidden) return;                     // save CPU/GPU when tab hidden
+  if (ts - orbLastRender < RENDER_INTERVAL) return; // FPS cap
+  orbLastRender = ts;
   var t = Date.now() * 0.001;
   var now = performance.now();
   fps = Math.round(1000 / (now - lastFrameTime + 0.001));
@@ -462,7 +469,7 @@ function animate() {
   pointLight.intensity = 0.8 + Math.sin(t * 3) * 0.15;
   renderer.render(scene, cam3d);
 }
-animate();
+requestAnimationFrame(animate);
 
 window.addEventListener('resize', function() {
   cam3d.aspect = window.innerWidth / window.innerHeight;
@@ -606,13 +613,19 @@ function startHandDetection(video, handCanvas, handCtx) {
     }
   });
 
-  function detect() {
-    if (video.readyState >= 2 && handTrackingAvailable) {
+  var HAND_FPS = 12;
+  var HAND_INTERVAL = 1000 / HAND_FPS;
+  var handLastTs = 0;
+  function detect(ts) {
+    requestAnimationFrame(detect);
+    if (document.hidden || !handTrackingAvailable) return;   // pause when hidden
+    if (ts - handLastTs < HAND_INTERVAL) return;              // cap hand inference fps
+    handLastTs = ts;
+    if (video.readyState >= 2) {
       handsModel.send({image: video}).catch(function() {});
     }
-    requestAnimationFrame(detect);
   }
-  detect();
+  requestAnimationFrame(detect);
 }
 
 function classifyGesture(lm) {
