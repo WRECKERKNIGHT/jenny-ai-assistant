@@ -34,6 +34,60 @@ activeDevices = {}
 pendingDeviceCommands = {}
 system_cache = {"cpu": 0, "ram": 0, "battery": 100, "charging": False, "disk": 0, "disk_free": "0", "disk_total": "0", "ram_used": "0", "ram_total": "0", "net_speed": "0 KB/s", "uptime": 0, "hostname": platform.node(), "platform": sys.platform}
 
+# Groq API usage/limit tracking (shared by the usage bars in every mode).
+GROQ_LIMITS = {"rpm_max": 30, "tpm_max": 6000}
+GROQ_USAGE = {
+    "requests": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "total_tokens": 0,
+    "session_started": None,
+    "minute": {"ts": None, "requests": 0, "tokens": 0},
+    "model": "llama-3.3-70b-versatile",
+}
+_usage_lock = threading.Lock()
+
+def track_grok_usage(usage):
+    """Accumulate token/request usage from a Groq response and a per-minute window."""
+    with _usage_lock:
+        now = datetime.datetime.now()
+        w = GROQ_USAGE["minute"]
+        if w["ts"] is None or (now - w["ts"]).total_seconds() >= 60:
+            w["ts"] = now; w["requests"] = 0; w["tokens"] = 0
+        w["requests"] += 1
+        pt = int((usage or {}).get("prompt_tokens", 0))
+        ct = int((usage or {}).get("completion_tokens", 0))
+        tt = pt + ct
+        w["tokens"] += tt
+        if GROQ_USAGE["session_started"] is None:
+            GROQ_USAGE["session_started"] = now.isoformat()
+        GROQ_USAGE["requests"] += 1
+        GROQ_USAGE["prompt_tokens"] += pt
+        GROQ_USAGE["completion_tokens"] += ct
+        GROQ_USAGE["total_tokens"] += tt
+
+def groq_usage_snapshot():
+    """Return the current Groq usage + limit bar values for the frontend."""
+    with _usage_lock:
+        w = GROQ_USAGE["minute"]
+        rpm = w["requests"]; tpm = w["tokens"]
+        return {
+            "success": True,
+            "provider": "groq",
+            "key_set": bool(GROK_API_KEY),
+            "model": GROQ_USAGE["model"],
+            "rpm": {"current": rpm, "max": GROQ_LIMITS["rpm_max"]},
+            "tpm": {"current": tpm, "max": GROQ_LIMITS["tpm_max"]},
+            "session": {
+                "requests": GROQ_USAGE["requests"],
+                "prompt_tokens": GROQ_USAGE["prompt_tokens"],
+                "completion_tokens": GROQ_USAGE["completion_tokens"],
+                "total_tokens": GROQ_USAGE["total_tokens"],
+                "started": GROQ_USAGE["session_started"],
+            },
+            "bar": max(0.0, min(1.0, max(rpm / max(GROQ_LIMITS["rpm_max"], 1), tpm / max(GROQ_LIMITS["tpm_max"], 1)))),
+        }
+
 import win32com.client
 import pythoncom
 
@@ -195,6 +249,7 @@ def grok_chat(message, history=None):
         )
         resp = urllib.request.urlopen(req, timeout=10)
         body = json.loads(resp.read().decode("utf-8"))
+        track_grok_usage(body.get("usage"))
         t = body.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
         if t.startswith("```"):
             t = t.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
@@ -1118,7 +1173,12 @@ def api_gemini_keys():
 @app.route("/api/gemini-quota")
 def api_gemini_quota():
     key = get_gemini_key(); masked = f"{key[:6]}...{key[-4:]}" if len(key) > 10 else "No key"
-    return jsonify({"success": True, "isKeyPresent": bool(key), "keysCount": 1 if key else 0, "currentKey": masked, "model": "gemini-2.0-flash", "rpm": {"current": 0, "max": 15}, "tpm": {"current": 0, "max": 1000000}, "rpd": {"current": 0, "max": 1500}, "status": "HEALTHY & ACTIVE" if key else "MISSING_API_KEY", "keys": []})
+    g = groq_usage_snapshot()
+    return jsonify({"success": True, "isKeyPresent": bool(key), "keysCount": 1 if key else 0, "currentKey": masked, "model": "gemini-2.0-flash", "rpm": {"current": 0, "max": 15}, "tpm": {"current": 0, "max": 1000000}, "rpd": {"current": 0, "max": 1500}, "status": "HEALTHY & ACTIVE" if key else "MISSING_API_KEY", "keys": [], "groq": g})
+
+@app.route("/api/groq-usage")
+def api_groq_usage():
+    return jsonify(groq_usage_snapshot())
 
 @app.route("/api/training", methods=["GET", "POST", "DELETE"])
 def api_training():
