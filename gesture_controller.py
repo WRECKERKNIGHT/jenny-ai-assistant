@@ -59,6 +59,12 @@ last_gesture_name = None
 gesture_hold_start = 0
 prev_index_y = None
 
+# CPU/GPU budget caps to stop ULTRON from freezing a low-end machine.
+GESTURE_FPS = 12           # target hand-tracking frame rate
+FRAME_INTERVAL = 1.0 / GESTURE_FPS
+ENCODE_EVERY = 3           # only JPEG-encode every Nth frame (frame feed is a preview)
+last_heartbeat = time.time()
+
 
 def dist(a, b):
     return math.hypot(a.x - b.x, a.y - b.y)
@@ -159,16 +165,20 @@ def run_gesture_loop():
         print("[ULTRON] MediaPipe not available")
         return
 
+    global last_heartbeat
     cap = cv2.VideoCapture(0)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
     gesture_state["active"] = True
 
+    frame_idx = 0
     try:
         while gesture_state["active"]:
+            iter_start = time.time()
+
             success, frame = cap.read()
             if not success:
-                time.sleep(0.1)
+                time.sleep(0.05)
                 continue
 
             frame = cv2.flip(frame, 1)
@@ -189,9 +199,19 @@ def run_gesture_loop():
                 prev_index_y_val = None
 
             gesture_state["gesture"] = gesture_state.get("gesture", gesture)
+            last_heartbeat = time.time()
 
-            _, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
-            gesture_state["frame"] = jpeg.tobytes()
+            # Only encode/preview a subset of frames to save CPU.
+            frame_idx += 1
+            if frame_idx % ENCODE_EVERY == 0:
+                _, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
+                gesture_state["frame"] = jpeg.tobytes()
+
+            # Throttle to a low target FPS instead of spinning at webcam rate.
+            elapsed = time.time() - iter_start
+            sleep_for = FRAME_INTERVAL - elapsed
+            if sleep_for > 0:
+                time.sleep(sleep_for)
 
     except Exception as e:
         print(f"[ULTRON] Gesture error: {e}")
@@ -218,4 +238,6 @@ def get_gesture_status():
         "mouse_y": gesture_state.get("mouse_y", 0),
         "has_mediapipe": HAS_MEDIAPIPE,
         "has_pyautogui": HAS_PYAUTOGUI,
+        "last_heartbeat": round(last_heartbeat, 3),
+        "heartbeat_age": round(time.time() - last_heartbeat, 3),
     }
