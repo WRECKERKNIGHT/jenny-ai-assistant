@@ -2525,6 +2525,56 @@ async function loadMode() {
   } catch(e) {}
 }
 
+const MODE_WELCOME_CARDS = {
+  friday: [
+    { cmd: "briefing", icon: "fa-clipboard-list", title: "Briefing", desc: "Full system overview" },
+    { cmd: "what's the weather", icon: "fa-cloud-sun", title: "Weather", desc: "Current conditions" },
+    { cmd: "set a timer for 5 minutes", icon: "fa-stopwatch", title: "Timer", desc: "Set a countdown" },
+    { cmd: "check emails", icon: "fa-envelope", title: "Emails", desc: "Check inbox" },
+    { cmd: "tell me a joke", icon: "fa-face-laugh", title: "Entertain", desc: "Jokes & facts" },
+    { cmd: "open safari", icon: "fa-globe", title: "Browser", desc: "Open the browser" },
+    { cmd: "what can you do", icon: "fa-terminal", title: "Commands", desc: "All capabilities" },
+    { cmd: "lock screen", icon: "fa-lock", title: "Lock", desc: "Lock the screen" },
+  ],
+  jarvis: [
+    { cmd: "agency status", icon: "fa-building", title: "Agency Status", desc: "Live ops dashboard" },
+    { cmd: "agency new mission", icon: "fa-bullseye", title: "New Mission", desc: "Launch a lead mission" },
+    { cmd: "agency outreach", icon: "fa-envelope-open-text", title: "Outreach", desc: "Review pending outreach" },
+    { cmd: "agency briefing", icon: "fa-gauge-high", title: "Agency Briefing", desc: "Full business briefing" },
+    { cmd: "what can you do", icon: "fa-terminal", title: "Commands", desc: "All capabilities" },
+    { cmd: "system brief", icon: "fa-microchip", title: "Diagnostics", desc: "System health" },
+  ],
+  ultron: [
+    { cmd: "Run a full system diagnostic", icon: "fa-microchip", title: "Diagnose", desc: "Full diagnostic" },
+    { cmd: "agency status", icon: "fa-building", title: "Agency", desc: "Ops overview" },
+  ],
+};
+
+function renderModeWelcome(mode) {
+  const cfg = modeConfig[mode];
+  const ws = document.getElementById('welcome-screen');
+  if (!ws || !cfg) return;
+  const title = ws.querySelector('.welcome-title');
+  const sub = ws.querySelector('.welcome-sub');
+  if (title) title.textContent = cfg.name;
+  if (sub) sub.textContent = mode === 'jarvis'
+    ? "Agency OS is online. What shall we do today, boss?"
+    : "What can I help you with, BOSS?";
+
+  const container = ws.querySelector('.welcome-actions');
+  if (!container) return;
+  const cards = MODE_WELCOME_CARDS[mode] || MODE_WELCOME_CARDS.friday;
+  container.innerHTML = '';
+  cards.forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'welcome-card';
+    btn.dataset.cmd = s.cmd;
+    btn.innerHTML = `<i class="fa-solid ${s.icon}"></i><span class="wc-title">${s.title}</span><span class="wc-desc">${s.desc}</span>`;
+    btn.addEventListener('click', () => sendMessage(s.cmd));
+    container.appendChild(btn);
+  });
+}
+
 function applyMode(mode) {
   currentMode = mode;
   
@@ -2552,6 +2602,7 @@ function applyMode(mode) {
   toast(`Switched to ${cfg.name} mode`, 'ok');
   
   showModeWelcome(mode);
+  renderModeWelcome(mode);
 }
 
 async function switchMode(mode) {
