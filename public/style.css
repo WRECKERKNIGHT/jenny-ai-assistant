@@ -133,8 +133,12 @@ html,body { height:100%; background:var(--bg); color:var(--txt); font-family:var
 .holo-header { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; width:100%; padding:12px 18px; border-bottom: 1px solid rgba(229,193,88,0.15); }
 .mode-badge { font-family:var(--mono); font-size:9px; letter-spacing:1.5px; padding:4px 10px; border-radius:6px; background:rgba(229,193,88,0.1); border:1px solid rgba(229,193,88,0.3); color:var(--gold); font-weight:700; transition:all 0.3s ease; }
 .mode-badge.active { background:linear-gradient(135deg, rgba(229,193,88,0.2), rgba(192,192,192,0.15)); border-color:var(--gold); color:#ffffff; box-shadow:0 0 15px rgba(229,193,88,0.2); }
-.quota-pill { display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:9px; color:var(--txt2); background:rgba(255,255,255,0.04); border:1px solid rgba(229,193,88,0.2); border-radius:20px; padding:4px 12px; }
+.quota-pill { display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:9px; color:var(--txt2); background:rgba(255,255,255,0.04); border:1px solid rgba(229,193,88,0.2); border-radius:20px; padding:4px 10px; }
 .quota-pill i { font-size:9px; color:var(--gold); }
+.quota-bar { position:relative; width:52px; height:6px; border-radius:3px; background:rgba(255,255,255,0.08); border:1px solid rgba(229,193,88,0.15); overflow:hidden; }
+.quota-fill { position:absolute; inset:0; width:0%; background:linear-gradient(90deg, #3ecf8e, var(--gold)); border-radius:3px; transition:width 0.4s cubic-bezier(0.16,1,0.3,1); }
+.quota-pill.warn .quota-fill { background:linear-gradient(90deg, #f59e0b, #ef4444); }
+#quota-provider { color:var(--gold); letter-spacing:1px; font-weight:700; }
 
 /* SYSTEM MONITOR */
 .sys-monitor { flex:0 0 auto; padding:18px 24px; display:flex; flex-direction:column; gap:16px; border-bottom:1px solid rgba(229,193,88,0.15); overflow-y:auto; min-height:0; }

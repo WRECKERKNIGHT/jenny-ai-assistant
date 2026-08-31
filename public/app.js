@@ -765,30 +765,37 @@ let quotaData = null;
 
 async function fetchQuota() {
   try {
-    const res = await fetch('/api/gemini-quota');
+    const res = await fetch('/api/groq-usage');
     const d = await res.json();
     if (!d.success) return;
     quotaData = d;
     const badge = document.getElementById('mode-badge');
     const rpmEl = document.getElementById('quota-rpm');
+    const rpmMaxEl = document.getElementById('quota-rpm-max');
+    const fill = document.getElementById('quota-fill');
+    const pill = document.getElementById('quota-pill');
+    const provEl = document.getElementById('quota-provider');
     const dot = document.getElementById('status-dot');
     const stext = document.getElementById('status-text');
-    if (d.isKeyPresent) {
-      const keyInfo = d.keysCount > 1 ? ` [${d.activeKeys}/${d.keysCount}]` : '';
-      badge.textContent = `${d.model.toUpperCase()}${keyInfo}`;
+
+    if (provEl) provEl.textContent = (d.provider || 'groq').toUpperCase();
+
+    if (d.key_set) {
+      badge.textContent = (d.model || 'groq').toUpperCase();
       badge.classList.add('active');
-      if (rpmEl) rpmEl.textContent = `${d.rpm.current}/${d.rpm.max}`;
-      if (d.activeKeys > 0) {
-        if (dot) dot.style.background = 'rgba(52,211,153,0.7)';
-        if (stext) stext.textContent = 'online';
-      } else {
-        if (dot) dot.style.background = 'rgba(251,191,36,0.7)';
-        if (stext) stext.textContent = 'quota cooldown';
-      }
+      if (rpmEl) rpmEl.textContent = d.rpm.current;
+      if (rpmMaxEl) rpmMaxEl.textContent = d.rpm.max;
+      if (fill) fill.style.width = Math.round((d.bar || 0) * 100) + '%';
+      if (pill) pill.classList.toggle('warn', (d.bar || 0) > 0.8);
+      if (dot) dot.style.background = 'rgba(52,211,153,0.7)';
+      if (stext) stext.textContent = 'online';
     } else {
       badge.textContent = 'OFFLINE';
       badge.classList.remove('active');
-      if (rpmEl) rpmEl.textContent = '--/--';
+      if (rpmEl) rpmEl.textContent = '--';
+      if (rpmMaxEl) rpmMaxEl.textContent = '--';
+      if (fill) fill.style.width = '0%';
+      if (pill) pill.classList.remove('warn');
       if (dot) dot.style.background = 'rgba(255,45,135,0.7)';
       if (stext) stext.textContent = 'no api key';
     }

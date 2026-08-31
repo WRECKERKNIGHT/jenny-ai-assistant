@@ -95,9 +95,11 @@
           <button class="mode-opt" data-mode="jarvis" onclick="switchMode('jarvis')" title="JARVIS — Formal, British AI. System control, briefings, diagnostics, process management. Voice: British Male (Daniel).">J.A.R.V.I.S</button>
           <button class="mode-opt" data-mode="ultron" onclick="switchMode('ultron')" title="ULTRON — Gesture-controlled combat mode. Hand tracking via webcam, 3D orb, voice commands. Replaces dashboard with full-screen HUD.">U.L.T.R.O.N</button>
         </div>
-        <span class="quota-pill" id="quota-pill">
+        <span class="quota-pill" id="quota-pill" title="AI API usage / limit (Groq)">
           <i class="fa-solid fa-bolt"></i>
-          <span id="quota-rpm">--/--</span> RPM
+          <span id="quota-provider">GROQ</span>
+          <span class="quota-bar"><span class="quota-fill" id="quota-fill"></span></span>
+          <span id="quota-rpm">--</span>/<span id="quota-rpm-max">--</span>
         </span>
       </div>
 
