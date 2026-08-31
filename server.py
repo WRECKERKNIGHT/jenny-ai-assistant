@@ -879,6 +879,36 @@ def api_gesture_frame():
     from flask import Response as R
     return R(b'', mimetype="image/jpeg")
 
+GESTURE_FREEZE_SECONDS = 60
+gesture_watchdog_log = []
+
+def gesture_watchdog():
+    """Auto-recover ULTRON if the system freezes: if the gesture loop stops
+    sending heartbeats for > 60s (or overall CPU is pinned), force-stop it."""
+    while True:
+        time.sleep(5)
+        try:
+            gc = gesture_controller
+            if gc and gc.get_gesture_status().get("active"):
+                status = gc.get_gesture_status()
+                age = status.get("heartbeat_age", 0)
+                cpu = system_cache.get("cpu", 0)
+                if age > GESTURE_FREEZE_SECONDS:
+                    gc.stop_gesture_control()
+                    gesture_watchdog_log.append("gesture auto-stopped: frozen heartbeat %.0fs" % age)
+                    print("[JENNY] Watchdog: gesture control stopped (frozen %.0fs)" % age)
+                elif cpu > 95:
+                    # extremely high sustained CPU with active gestures -> shed load
+                    gc.stop_gesture_control()
+                    gesture_watchdog_log.append("gesture auto-stopped: CPU at %d%%" % cpu)
+                    print("[JENNY] Watchdog: gesture control stopped (CPU %d%%)" % cpu)
+        except Exception:
+            pass
+
+@app.route("/api/gesture/watchdog")
+def api_gesture_watchdog():
+    return jsonify({"success": True, "log": gesture_watchdog_log[-10:]})
+
 @app.route("/api/chat", methods=["POST"])
 def api_chat():
     d = request.get_json(force=True, silent=True) or {}
@@ -1353,5 +1383,6 @@ def api_execute_shell():
 if __name__ == "__main__":
     from waitress import serve
     threading.Thread(target=update_telemetry, daemon=True).start()
+    threading.Thread(target=gesture_watchdog, daemon=True).start()
     print(f"[JENNY] Server running on http://localhost:3005")
     serve(app, host="0.0.0.0", port=3005, threads=8)
