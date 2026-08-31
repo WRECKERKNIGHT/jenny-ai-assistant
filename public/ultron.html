@@ -168,6 +168,7 @@ canvas#orb-canvas{position:fixed;inset:0;z-index:1}
   <div class="perf-row"><div class="perf-label"><span>NET</span><span id="p-net-v">--</span></div><div class="perf-bar-bg"><div class="perf-bar" id="p-net-b"></div></div></div>
   <div class="perf-row" style="margin-top:16px"><div class="perf-label"><span>BATTERY</span><span id="p-bat-v">--%</span></div><div class="perf-bar-bg"><div class="perf-bar" id="p-bat-b" style="background:#22c55e"></div></div></div>
   <div class="perf-row"><div class="perf-label"><span>UPTIME</span><span id="p-up-v">--</span></div></div>
+  <div class="perf-row" style="margin-top:16px"><div class="perf-label"><span>GROQ API</span><span id="p-groq-v">--/--</span></div><div class="perf-bar-bg"><div class="perf-bar" id="p-groq-b" style="background:#a855f7"></div></div></div>
 </div>
 <div id="sys-lines"></div>
 <div id="gesture-cam-wrap">
@@ -872,6 +873,22 @@ function pollSys() {
 }
 setInterval(pollSys, 2000);
 pollSys();
+
+/* ==================== GROQ API USAGE ==================== */
+function pollGroq() {
+  fetch('/api/groq-usage?t=' + Date.now())
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.success) return;
+      var pct = Math.round((d.bar || 0) * 100);
+      document.getElementById('p-groq-v').textContent = d.rpm.current + '/' + d.rpm.max;
+      var b = document.getElementById('p-groq-b');
+      if (b) b.style.width = Math.min(pct, 100) + '%';
+    })
+    .catch(function() {});
+}
+setInterval(pollGroq, 5000);
+pollGroq();
 
 /* ==================== STATS UPDATE ==================== */
 setInterval(function() {
