@@ -957,6 +957,18 @@ function parseCommand(text) {
     'files': 'files', 'file explorer': 'files', 'files explorer': 'files', 'finder': 'files',
     'notes': 'notes', 'todo': 'notes', 'todos': 'notes', 'task': 'notes', 'tasks': 'notes'
   };
+  if (/^agency(?:\s+(?:status|dashboard|overview|brief|briefing|report|monitor))?$/i.test(t) || /^(?:business|leads?|outreach|missions?)\s+(?:status|overview|report|dashboard|briefing)$/i.test(t)) {
+    openPanel('agency');
+    return { handled: true, response: 'Agency OS dashboard open. Monitoring your agents and leads live, boss.' };
+  }
+  if (/^agency\s+(?:new\s+)?mission$/i.test(t) || /^launch\s+(?:a\s+)?(?:new\s+)?mission$/i.test(t)) {
+    openPanel('agency');
+    return { handled: true, response: 'Use the NEW MISSION form in the Agency OS panel — set city, category and lead limit, boss.' };
+  }
+  if (/^agency\s+outreach$/i.test(t) || /^(?:review|pending|send)\s+(?:outreach|leads)$/i.test(t)) {
+    openPanel('agency');
+    return { handled: true, response: 'Outreach queue is in the Agency OS panel under PIPELINE and AGENT ROSTER, boss.' };
+  }
   const summonMatch = t.match(/^(?:summon|open|show|launch|display)\s+(.+)$/i);
   if (summonMatch) {
     const panel = summonMatch[1].trim();
@@ -1045,7 +1057,8 @@ function openPanel(name) {
     'training': 'fa-brain AI TRAINING HUB',
     'commands': 'fa-terminal COMMANDS',
     'files': 'fa-folder-tree FILE EXPLORER',
-    'notes': 'fa-note-sticky NOTES'
+    'notes': 'fa-note-sticky NOTES',
+    'agency': 'fa-building AGENCY OS'
   };
   const titleStr = titles[name] || `fa-circle ${name.toUpperCase()}`;
   const parts = titleStr.split(' ');
@@ -1146,7 +1159,163 @@ async function loadPanelContent(name) {
     case 'commands': return loadCommandsPanel(body);
     case 'files': return loadFilesPanel(body);
     case 'notes': return loadNotesPanel(body);
+    case 'agency': return loadAgencyPanel(body);
   }
+}
+
+// ================================================
+// AGENCY OS PANEL (Jarvis business monitoring)
+// ================================================
+let agencyPollTimer = null;
+
+function toggleAgencyPanel(show) {
+  if (show) {
+    if (!openPanels.has('agency')) openPanel('agency');
+  } else {
+    if (openPanels.has('agency')) closePanel('agency');
+  }
+}
+
+async function loadAgencyPanel(el) {
+  el.innerHTML = '<div class="panel-empty">Connecting to Agency OS...</div>';
+  if (agencyPollTimer) clearInterval(agencyPollTimer);
+  await pollAgency();
+  agencyPollTimer = setInterval(pollAgency, 4000);
+}
+
+async function pollAgency() {
+  const el = document.getElementById('panel-body-agency');
+  if (!el) { if (agencyPollTimer) clearInterval(agencyPollTimer); return; }
+  try {
+    const res = await fetch('/api/agency');
+    const d = await res.json();
+    if (!d.success || !d.state) {
+      el.innerHTML = `<div class="panel-empty">Agency OS is offline.<br><span style="font-size:9px;color:var(--txt3);margin-top:6px;display:inline-block;">Start the agency-os server (localhost:3200) to resume monitoring.</span></div>`;
+      return;
+    }
+    renderAgencyPanel(el, d.state);
+  } catch(e) {
+    el.innerHTML = '<div class="panel-empty">Agency OS unreachable.</div>';
+  }
+}
+
+function renderAgencyPanel(el, state) {
+  const stats = state.stats || {};
+  const missions = state.missions || [];
+  const logs = state.logs || [];
+  const runs = state.agentRuns || [];
+  const byStage = stats.byStage || {};
+
+  const stat = (label, val, icon, color) => `
+    <div style="flex:1;min-width:84px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(229,193,88,0.18);text-align:center;">
+      <div style="font-family:var(--orbitron);font-size:16px;color:${color};text-shadow:0 0 14px ${color};">${val}</div>
+      <div style="font-family:var(--mono);font-size:7px;color:var(--txt3);letter-spacing:1px;margin-top:2px;"><i class="fa-solid ${icon}"></i> ${label}</div>
+    </div>`;
+
+  const stageNames = { 'lead_finder':'LEAD FINDER','outreach_writer':'OUTREACH WRITER','contact_builder':'CONTACT BUILDER','response_manager':'RESPONSE MGR','app_checker':'APP CHECKER','researcher':'RESEARCHER' };
+  const stageRows = Object.keys(byStage).map(k => {
+    const v = byStage[k] || 0;
+    const tot = Object.values(byStage).reduce((a,b)=>a+(b||0),0) || 1;
+    const pct = Math.round((v/tot)*100);
+    return `<div style="margin-bottom:5px;">
+      <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:8px;color:var(--txt2);"><span>${stageNames[k]||k.toUpperCase()}</span><span style="color:var(--gold);">${v}</span></div>
+      <div style="height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;margin-top:2px;"><div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--gold),#ffe9a3);border-radius:3px;box-shadow:0 0 8px rgba(229,193,88,0.6);"></div></div>
+    </div>`;
+  }).join('');
+
+  const agentRows = runs.slice(0, 12).map(r => {
+    const st = (r.status || 'idle').toLowerCase();
+    const color = st === 'working' ? 'var(--gold)' : st === 'error' ? '#ff5f56' : st === 'done' ? '#4ade80' : 'var(--txt3)';
+    const name = (r.agent_id || 'agent').split('_').map(w=>w[0].toUpperCase()+w.slice(1)).join(' ');
+    const stage = stageNames[r.stage] || (r.stage||'').toUpperCase();
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border-radius:6px;background:rgba(255,255,255,0.02);margin-bottom:4px;">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--txt2);">${name} ${stage?`<span style="color:var(--txt3);font-size:7px;">· ${stage}</span>`:''}</div>
+      <span style="font-family:var(--mono);font-size:7px;letter-spacing:1px;color:${color};"><i class="fa-solid fa-circle" style="font-size:5px;vertical-align:middle;"></i> ${st.toUpperCase()}</span>
+    </div>`;
+  }).join('') || '<div style="font-size:9px;color:var(--txt3);padding:4px 0;">No agent runs recorded yet.</div>';
+
+  const missionRows = missions.slice(0, 6).map(m => {
+    const st = (m.status || '').toLowerCase();
+    const color = st === 'running' ? 'var(--gold)' : st === 'done' ? '#4ade80' : st === 'error' ? '#ff5f56' : 'var(--txt3)';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-radius:6px;background:rgba(255,255,255,0.02);margin-bottom:3px;">
+      <div style="font-family:var(--mono);font-size:8px;color:var(--txt2);">#${m.id} ${m.city||'—'} <span style="color:var(--txt3);">· ${m.category||''} · n=${m.limit_n||0}</span></div>
+      <span style="font-family:var(--mono);font-size:7px;color:${color};">${st.toUpperCase()}</span>
+    </div>`;
+  }).join('') || '<div style="font-size:9px;color:var(--txt3);padding:4px 0;">No missions yet.</div>';
+
+  const logRows = logs.slice(0, 7).map(l => {
+    const txt = l.message || l.log || l.text || JSON.stringify(l).slice(0, 90) || '';
+    const time = l.timestamp || l.time || '';
+    return `<div style="font-family:var(--mono);font-size:8px;color:var(--txt2);padding:3px 0;border-bottom:1px dashed rgba(255,255,255,0.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+      ${time?`<span style="color:var(--txt3);">${String(time).slice(11,19)||time}</span> `:''}${txt}
+    </div>`;
+  }).join('') || '<div style="font-size:9px;color:var(--txt3);padding:4px 0;">No recent activity.</div>';
+
+  const errorAgents = runs.filter(r => (r.status||'').toLowerCase() === 'error').map(r=>r.agent_id).join(', ');
+
+  el.innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      ${stat('AGENTS', stats.agentsOnline ?? '—', 'fa-microchip', 'var(--gold)')}
+      ${stat('WORKING', stats.agentsWorking ?? '—', 'fa-sync fa-spin', 'var(--gold)')}
+      ${stat('LEADS TODAY', stats.leadsToday ?? '—', 'fa-bullseye', '#4ade80')}
+      ${stat('TOTAL LEADS', stats.totalLeads ?? '—', 'fa-database', '#4ade80')}
+      ${stat('PENDING', stats.pendingApproval ?? '—', 'fa-clock', '#fbbf24')}
+      ${stat('SENT', stats.sentOutreach ?? '—', 'fa-paper-plane', 'var(--silver)')}
+      ${stat('MISSIONS', missions.filter(m=>(m.status||'').toLowerCase()==='running').length, 'fa-route', '#38bdf8')}
+      ${stat('MEETINGS', stats.meetings ?? '—', 'fa-handshake', '#c084fc')}
+    </div>
+    ${errorAgents ? `<div style="margin-bottom:8px;padding:6px 8px;border-radius:6px;background:rgba(255,95,86,0.08);border:1px solid rgba(255,95,86,0.3);font-family:var(--mono);font-size:8px;color:#ff5f56;"><i class="fa-solid fa-triangle-exclamation"></i> AGENTS ERRORING: ${errorAgents}</div>` : ''}
+
+    <div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:1px;font-weight:700;margin-bottom:6px;"><i class="fa-solid fa-chart-simple"></i> PIPELINE BY STAGE</div>
+    <div style="margin-bottom:12px;">${stageRows}</div>
+
+    <div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:1px;font-weight:700;margin-bottom:6px;"><i class="fa-solid fa-robot"></i> AGENT ROSTER</div>
+    <div style="margin-bottom:12px;">${agentRows}</div>
+
+    <div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:1px;font-weight:700;margin-bottom:6px;"><i class="fa-solid fa-route"></i> ACTIVE MISSIONS</div>
+    <div style="margin-bottom:12px;">${missionRows}</div>
+
+    <div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:1px;font-weight:700;margin-bottom:6px;"><i class="fa-solid fa-wave-square"></i> LIVE ACTIVITY</div>
+    <div style="margin-bottom:12px;">${logRows}</div>
+
+    <div style="display:flex;gap:8px;">
+      <button onclick="agencyRefresh()" style="flex:1;padding:7px;background:rgba(229,193,88,0.14);border:1px solid rgba(229,193,88,0.3);border-radius:6px;color:var(--gold);font-family:var(--mono);font-size:8px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-rotate"></i> REFRESH</button>
+      <button onclick="document.getElementById('agency-mission-form').style.display = document.getElementById('agency-mission-form').style.display==='none'?'block':'none'" style="flex:1;padding:7px;background:rgba(56,189,248,0.14);border:1px solid rgba(56,189,248,0.3);border-radius:6px;color:#38bdf8;font-family:var(--mono);font-size:8px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-bullseye"></i> NEW MISSION</button>
+    </div>
+    <div id="agency-mission-form" style="display:none;margin-top:10px;padding:10px;border:1px solid rgba(56,189,248,0.3);border-radius:8px;background:rgba(56,189,248,0.06);">
+      <div style="display:flex;gap:6px;margin-bottom:6px;">
+        <input id="ag-city" placeholder="City" value="Patna" style="flex:1;padding:5px 7px;background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.12);color:#fff;font-family:var(--mono);font-size:9px;border-radius:6px;">
+        <input id="ag-cat" placeholder="Category" value="School" style="flex:1;padding:5px 7px;background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.12);color:#fff;font-family:var(--mono);font-size:9px;border-radius:6px;">
+        <input id="ag-limit" type="number" placeholder="Limit" value="10" style="width:60px;padding:5px 7px;background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.12);color:#fff;font-family:var(--mono);font-size:9px;border-radius:6px;">
+      </div>
+      <button onclick="agencySubmitMission()" style="width:100%;padding:6px;background:rgba(56,189,248,0.85);border:none;border-radius:6px;color:#04141f;font-family:var(--mono);font-size:9px;font-weight:800;cursor:pointer;">LAUNCH MISSION</button>
+    </div>
+  `;
+}
+
+function agencyRefresh() {
+  pollAgency();
+  sfx?.click && sfx.click();
+}
+
+async function agencySubmitMission() {
+  const city = document.getElementById('ag-city')?.value.trim() || 'Patna';
+  const category = document.getElementById('ag-cat')?.value.trim() || 'School';
+  const limit = parseInt(document.getElementById('ag-limit')?.value, 10) || 10;
+  try {
+    const res = await fetch('/api/agency/mission', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ city, category, limit })
+    });
+    const d = await res.json();
+    if (d.success) {
+      toast(`Mission launched in ${city}`, 'ok');
+      const f = document.getElementById('agency-mission-form'); if (f) f.style.display = 'none';
+      pollAgency();
+    } else {
+      toast(d.message || 'Failed to launch mission', 'err');
+    }
+  } catch(e) { toast('Agency offline', 'err'); }
 }
 
 async function loadTrainingPanel(el) {
@@ -2603,6 +2772,7 @@ function applyMode(mode) {
   
   showModeWelcome(mode);
   renderModeWelcome(mode);
+  toggleAgencyPanel(mode === 'jarvis');
 }
 
 async function switchMode(mode) {
