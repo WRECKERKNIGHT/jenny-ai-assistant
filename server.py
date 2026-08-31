@@ -94,22 +94,52 @@ import pythoncom
 
 _tts_lock = threading.Lock()
 _tts_voice = None
+_tts_voices = {}
 
-def _get_tts_voice():
-    """Return a persistent SAPI SpVoice (init once, reused — low latency)."""
-    global _tts_voice
-    if _tts_voice is None:
-        pythoncom.CoInitialize()
-        voice = win32com.client.Dispatch("SAPI.SpVoice")
+def _mode_tts_profile(mode):
+    """Return (voice_keyword_priority, rate) for a given assistant mode.
+    Friday = female, Jarvis = British male, ULTROM = deep male."""
+    if mode == "jarvis":
+        return (["george", "david", "mark", "male"], -1)
+    if mode == "ultron":
+        return (["david", "mark", "michael", "male"], -3)
+    return (["zira", "hazel", "aria", "jenny", "susan", "cortana", "female"], 0)
+
+def _get_tts_voice(mode=None):
+    """Return a persistent SAPI SpVoice for the current mode (init once per mode — low latency)."""
+    global _tts_voice, _tts_voices
+    if mode is None:
         try:
-            for v in voice.GetVoices():
-                if any(k in v.GetDescription().lower() for k in ["zira", "hazel", "aria", "jenny", "susan", "cortana", "female"]):
-                    voice.Voice = v
-                    break
+            mode = get_mode()
         except Exception:
-            pass
+            mode = "friday"
+    if mode in _tts_voices:
+        return _tts_voices[mode]
+    pythoncom.CoInitialize()
+    voice = win32com.client.Dispatch("SAPI.SpVoice")
+    keywords, rate = _mode_tts_profile(mode)
+    picked = None
+    try:
+        voices = voice.GetVoices()
+        for kw in keywords:
+            for v in voices:
+                if kw in v.GetDescription().lower():
+                    picked = v
+                    break
+            if picked is not None:
+                break
+        if picked is not None:
+            voice.Voice = picked
+    except Exception:
+        pass
+    try:
+        voice.Rate = rate
+    except Exception:
+        pass
+    _tts_voices[mode] = voice
+    if _tts_voice is None:
         _tts_voice = voice
-    return _tts_voice
+    return _tts_voices[mode]
 
 def tts_speak(text):
     """Speak text aloud using the persistent SAPI voice (async, low latency)."""
@@ -117,7 +147,8 @@ def tts_speak(text):
         return
     with _tts_lock:
         try:
-            voice = _get_tts_voice()
+            mode = get_mode()
+            voice = _get_tts_voice(mode)
             voice.AudioOutputStream = None
             voice.Speak(text, 1)
         except Exception:
@@ -128,7 +159,8 @@ def tts_synthesize(text, wav_path):
     with _tts_lock:
         fs = None
         try:
-            voice = _get_tts_voice()
+            mode = get_mode()
+            voice = _get_tts_voice(mode)
             fs = win32com.client.Dispatch("SAPI.SpFileStream")
             fs.Format.Type = 22
             fs.Open(str(wav_path), 3)
