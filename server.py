@@ -34,6 +34,69 @@ activeDevices = {}
 pendingDeviceCommands = {}
 system_cache = {"cpu": 0, "ram": 0, "battery": 100, "charging": False, "disk": 0, "disk_free": "0", "disk_total": "0", "ram_used": "0", "ram_total": "0", "net_speed": "0 KB/s", "uptime": 0, "hostname": platform.node(), "platform": sys.platform}
 
+import win32com.client
+import pythoncom
+
+_tts_lock = threading.Lock()
+_tts_voice = None
+
+def _get_tts_voice():
+    """Return a persistent SAPI SpVoice (init once, reused — low latency)."""
+    global _tts_voice
+    if _tts_voice is None:
+        pythoncom.CoInitialize()
+        voice = win32com.client.Dispatch("SAPI.SpVoice")
+        try:
+            for v in voice.GetVoices():
+                if any(k in v.GetDescription().lower() for k in ["zira", "hazel", "aria", "jenny", "susan", "cortana", "female"]):
+                    voice.Voice = v
+                    break
+        except Exception:
+            pass
+        _tts_voice = voice
+    return _tts_voice
+
+def tts_speak(text):
+    """Speak text aloud using the persistent SAPI voice (async, low latency)."""
+    if not text:
+        return
+    with _tts_lock:
+        try:
+            voice = _get_tts_voice()
+            voice.AudioOutputStream = None
+            voice.Speak(text, 1)
+        except Exception:
+            pass
+
+def tts_synthesize(text, wav_path):
+    """Synthesize text to a WAV file with the persistent SAPI voice."""
+    with _tts_lock:
+        fs = None
+        try:
+            voice = _get_tts_voice()
+            fs = win32com.client.Dispatch("SAPI.SpFileStream")
+            fs.Format.Type = 22
+            fs.Open(str(wav_path), 3)
+            voice.AudioOutputStream = fs
+            voice.Speak(text)
+        except Exception:
+            return False
+        finally:
+            try:
+                if fs is not None:
+                    fs.Close()
+            except Exception:
+                pass
+            try:
+                voice.AudioOutputStream = None
+            except Exception:
+                pass
+        try:
+            with open(wav_path, "rb") as f:
+                return os.fstat(f.fileno()).st_size > 0
+        except Exception:
+            return False
+
 def load_json(p, d=None):
     try:
         if Path(p).exists(): return json.loads(Path(p).read_text(encoding="utf-8"))
@@ -953,28 +1016,25 @@ def api_speak():
     cache_dir = DATA_DIR / "speak_cache"; cache_dir.mkdir(exist_ok=True)
     h = hashlib.md5(clean.encode()).hexdigest(); wav_path = cache_dir / f"{h}.wav"
     if wav_path.exists(): return send_from_directory(str(cache_dir), f"{h}.wav", mimetype="audio/wav")
-    try:
-        import pyttsx3; engine = pyttsx3.init()
-        for v in engine.getProperty("voices"):
-            if any(k in v.name.lower() for k in ["zira", "hazel", "aria", "female"]): engine.setProperty("voice", v.id); break
-        engine.setProperty("rate", 180); engine.setProperty("volume", 1.0)
-        engine.save_to_file(clean, str(wav_path)); engine.runAndWait(); time.sleep(0.5)
-        if wav_path.exists(): return send_from_directory(str(cache_dir), f"{h}.wav", mimetype="audio/wav")
-    except: pass
+    if tts_synthesize(clean, wav_path) and wav_path.exists():
+        return send_from_directory(str(cache_dir), f"{h}.wav", mimetype="audio/wav")
     return jsonify({"success": False, "message": "Speech failed"})
 
 @app.route("/api/speak/fallback", methods=["POST"])
 def api_speak_fallback():
     d = request.get_json(force=True, silent=True) or {}; text = d.get("text", "")
     if text:
-        def _s():
-            try: import pyttsx3; e = pyttsx3.init(); e.say(text); e.runAndWait()
-            except: pass
-        threading.Thread(target=_s, daemon=True).start()
+        threading.Thread(target=tts_speak, args=(text,), daemon=True).start()
     return jsonify({"success": True})
 
 @app.route("/api/speak/stop", methods=["POST"])
-def api_speak_stop(): return jsonify({"success": True})
+def api_speak_stop():
+    with _tts_lock:
+        try:
+            if _tts_voice: _tts_voice.Speak("", 1 + 2)
+        except Exception:
+            pass
+    return jsonify({"success": True})
 
 @app.route("/api/weather")
 def api_weather():
@@ -1174,10 +1234,7 @@ def api_system(): return jsonify({"success": True, "data": {"battery": {"percent
 def api_tts():
     d = request.get_json(force=True, silent=True) or {}; text = d.get("text", "")
     if text:
-        def _s():
-            try: import pyttsx3; e = pyttsx3.init(); e.say(text); e.runAndWait()
-            except: pass
-        threading.Thread(target=_s, daemon=True).start()
+        threading.Thread(target=tts_speak, args=(text,), daemon=True).start()
     return jsonify({"success": True})
 
 @app.route("/api/chrome-bookmarks")
