@@ -512,6 +512,34 @@ def get_time_period():
     else: return "night"
 
 def get_smart_suggestions():
+    mode = get_mode()
+    if mode == "jarvis":
+        try:
+            st = agency_client.agency_state()
+            if st:
+                s = agency_client.summarize_state(st)
+                return [
+                    {"command": "agency status", "icon": "fa-building", "title": "Agency Status", "desc": f"{s['agents_online']} agents · {s['leads_today']} leads today"},
+                    {"command": "agency new mission", "icon": "fa-bullseye", "title": "New Mission", "desc": "Launch a lead mission"},
+                    {"command": "agency outreach", "icon": "fa-envelope-open-text", "title": "Review Outreach", "desc": f"{s['pending_approval']} pending approval"},
+                    {"command": "agency briefing", "icon": "fa-gauge-high", "title": "Agency Briefing", "desc": "Full business briefing"},
+                    {"command": "system brief", "icon": "fa-microchip", "title": "Diagnostics", "desc": "System health"},
+                ]
+        except Exception:
+            pass
+        return [
+            {"command": "agency status", "icon": "fa-building", "title": "Agency Status", "desc": "Agency OS offline on :3200"},
+            {"command": "agency briefing", "icon": "fa-gauge-high", "title": "Agency Briefing", "desc": "Business overview"},
+            {"command": "system brief", "icon": "fa-microchip", "title": "Diagnostics", "desc": "System health"},
+            {"command": "what can you do", "icon": "fa-terminal", "title": "Commands", "desc": "All capabilities"},
+        ]
+    if mode == "ultron":
+        return [
+            {"command": "Run a full system diagnostic", "icon": "fa-microchip", "title": "Diagnose", "desc": "Full tactical diagnostic"},
+            {"command": "agency status", "icon": "fa-building", "title": "Agency", "desc": "Ops overview"},
+            {"command": "briefing", "icon": "fa-clipboard-list", "title": "Briefing", "desc": "System overview"},
+            {"command": "cpu usage", "icon": "fa-gauge-high", "title": "Performance", "desc": "CPU & RAM status"},
+        ]
     period = get_time_period()
     suggestions = SMART_SUGGESTIONS_BY_HOUR.get(period, SMART_SUGGESTIONS_BY_HOUR["morning"])
     return random.sample(suggestions, min(5, len(suggestions)))
