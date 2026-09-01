@@ -1253,6 +1253,24 @@ function renderAgencyPanel(el, state) {
 
   const errorAgents = runs.filter(r => (r.status||'').toLowerCase() === 'error').map(r=>r.agent_id).join(', ');
 
+  const pendingOutreach = (state.outreach || []).filter(o => (o.status||'').toLowerCase() === 'pending_approval');
+  const outreachRows = pendingOutreach.slice(0, 4).map(o => {
+    const channelIcon = o.channel === 'whatsapp' ? 'fa-comment-dots' : o.channel === 'linkedin' ? 'fa-linkedin' : 'fa-envelope';
+    const preview = o.subject ? `${o.subject} — ` : '';
+    return `<div style="padding:6px 8px;border-radius:6px;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.25);margin-bottom:5px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+        <span style="font-family:var(--mono);font-size:8px;color:var(--gold);"><i class="fa-solid ${channelIcon}"></i> #${o.id} · ${(o.channel||'').toUpperCase()} · inst #${o.institution_id}</span>
+        <span style="font-family:var(--mono);font-size:7px;color:var(--txt3);">${String(o.created_at||'').slice(0,10)}</span>
+      </div>
+      <div style="font-family:var(--mono);font-size:8px;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(preview)}${escHtml((o.body||'').slice(0,110))}</div>
+      <div style="display:flex;gap:6px;margin-top:5px;">
+        <button onclick="agencyOutreachAction(${o.id},'approve')" style="flex:1;padding:3px 0;background:rgba(74,222,128,0.15);border:1px solid rgba(74,222,128,0.3);border-radius:4px;color:#4ade80;font-family:var(--mono);font-size:7px;font-weight:700;cursor:pointer;">APPROVE</button>
+        <button onclick="agencyOutreachAction(${o.id},'reject')" style="flex:1;padding:3px 0;background:rgba(255,95,86,0.15);border:1px solid rgba(255,95,86,0.3);border-radius:4px;color:#ff5f56;font-family:var(--mono);font-size:7px;font-weight:700;cursor:pointer;">REJECT</button>
+        <button onclick="agencyOutreachAction(${o.id},'send')" style="flex:1;padding:3px 0;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.3);border-radius:4px;color:#38bdf8;font-family:var(--mono);font-size:7px;font-weight:700;cursor:pointer;">SEND</button>
+      </div>
+    </div>`;
+  }).join('') || '<div style="font-size:9px;color:var(--txt3);padding:4px 0;">Queue clear — nothing awaiting approval.</div>';
+
   el.innerHTML = `
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
       ${stat('AGENTS', stats.agentsOnline ?? '—', 'fa-microchip', 'var(--gold)')}
@@ -1274,6 +1292,9 @@ function renderAgencyPanel(el, state) {
 
     <div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:1px;font-weight:700;margin-bottom:6px;"><i class="fa-solid fa-route"></i> ACTIVE MISSIONS</div>
     <div style="margin-bottom:12px;">${missionRows}</div>
+
+    <div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:1px;font-weight:700;margin-bottom:6px;"><i class="fa-solid fa-envelope-open-text"></i> OUTREACH REVIEW (${pendingOutreach.length})</div>
+    <div style="margin-bottom:12px;">${outreachRows}</div>
 
     <div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:1px;font-weight:700;margin-bottom:6px;"><i class="fa-solid fa-wave-square"></i> LIVE ACTIVITY</div>
     <div style="margin-bottom:12px;">${logRows}</div>
@@ -1314,6 +1335,22 @@ async function agencySubmitMission() {
       pollAgency();
     } else {
       toast(d.message || 'Failed to launch mission', 'err');
+    }
+  } catch(e) { toast('Agency offline', 'err'); }
+}
+
+async function agencyOutreachAction(id, action) {
+  try {
+    const res = await fetch('/api/agency/outreach', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, action })
+    });
+    const d = await res.json();
+    if (d.success) {
+      toast(`Outreach #${id} ${action}d`, 'ok');
+      pollAgency();
+    } else {
+      toast(d.message || 'Action failed', 'err');
     }
   } catch(e) { toast('Agency offline', 'err'); }
 }
