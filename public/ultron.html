@@ -169,6 +169,7 @@ canvas#orb-canvas{position:fixed;inset:0;z-index:1}
   <div class="perf-row" style="margin-top:16px"><div class="perf-label"><span>BATTERY</span><span id="p-bat-v">--%</span></div><div class="perf-bar-bg"><div class="perf-bar" id="p-bat-b" style="background:#22c55e"></div></div></div>
   <div class="perf-row"><div class="perf-label"><span>UPTIME</span><span id="p-up-v">--</span></div></div>
   <div class="perf-row" style="margin-top:16px"><div class="perf-label"><span>GROQ API</span><span id="p-groq-v">--/--</span></div><div class="perf-bar-bg"><div class="perf-bar" id="p-groq-b" style="background:#a855f7"></div></div></div>
+  <div class="perf-row" style="margin-top:8px"><div class="perf-label"><span>AGENCY OS</span><span id="p-agency-v">OFFLINE</span></div><div class="perf-bar-bg"><div class="perf-bar" id="p-agency-b" style="background:#38bdf8"></div></div></div>
 </div>
 <div id="sys-lines"></div>
 <div id="gesture-cam-wrap">
@@ -889,6 +890,29 @@ function pollGroq() {
 }
 setInterval(pollGroq, 5000);
 pollGroq();
+
+/* ==================== AGENCY OS OPS ==================== */
+function pollAgencyUltron() {
+  fetch('/api/agency?t=' + Date.now())
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var v = document.getElementById('p-agency-v');
+      var b = document.getElementById('p-agency-b');
+      if (!v) return;
+      if (!d.success || !d.state) {
+        v.textContent = 'OFFLINE';
+        if (b) b.style.width = '0%';
+        return;
+      }
+      var s = d.state.stats || {};
+      var a = s.agentsOnline || 0, l = s.leadsToday || 0, p = s.pendingApproval || 0;
+      v.textContent = a + 'A · ' + l + 'L · ' + p + 'P';
+      if (b) b.style.width = Math.min(100, Math.max(5, a * 18)) + '%';
+    })
+    .catch(function() {});
+}
+setInterval(pollAgencyUltron, 6000);
+pollAgencyUltron();
 
 /* ==================== STATS UPDATE ==================== */
 setInterval(function() {
