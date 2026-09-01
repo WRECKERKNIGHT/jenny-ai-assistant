@@ -1085,12 +1085,39 @@ def api_agency_response():
         return jsonify({"success": False, "online": False, "message": "Agency OS is offline"})
     return jsonify({"success": True, "online": True, "result": res})
 
+def parse_agency_mission_intent(text):
+    """Detect a mission-launch request like 'launch a mission for schools in Patna'.
+    Returns dict(city, category, limit) or None."""
+    t = text.lower()
+    if "mission" not in t:
+        return None
+    launched = bool(re.search(r"(?:launch|start|run|begin|kick off)\s+(?:a\s+|a new\s+)?(?:new\s+)?mission", t)) or bool(re.search(r"new\s+mission", t))
+    if not launched:
+        return None
+    city_match = re.search(r"\bin\s+([a-zA-Z][a-zA-Z \-]{1,28}[a-zA-Z])", t)
+    cat_match = re.search(r"(?:for|targeting|on)\s+([a-z][a-z \-]{1,28})", t)
+    limit_match = re.search(r"(\d+)\s*leads?", t)
+    limit = int(limit_match.group(1)) if limit_match else 10
+    if city_match and cat_match:
+        return {"city": city_match.group(1).strip().title(), "category": cat_match.group(1).strip().title(), "limit": limit}
+    if city_match:
+        return {"city": city_match.group(1).strip().title(), "category": "School", "limit": limit}
+    return {"city": "Patna", "category": "School", "limit": limit}
+
 @app.route("/api/chat", methods=["POST"])
 def api_chat():
     d = request.get_json(force=True, silent=True) or {}
     msg = d.get("message", "").strip()
     if not msg:
         return jsonify({"success": False, "error": "No message"}), 400
+    if get_mode() == "jarvis":
+        intent = parse_agency_mission_intent(msg)
+        if intent:
+            res = agency_client.agency_launch_mission(intent["city"], intent["category"], intent["limit"])
+            if res:
+                msg = f"[Agency mission launched: {intent['category']} in {intent['city']} (limit {intent['limit']}) — result {json.dumps(res)[:220]}. Confirm to the user and offer an agency briefing.] User says: {msg}"
+            else:
+                msg = f"[User asked to launch a mission but Agency OS is offline on :3200. Explain it's offline.] User says: {msg}"
     reply = grok_chat(msg, chatHistory)
     if not reply:
         reply = gemini_chat(msg, chatHistory)
