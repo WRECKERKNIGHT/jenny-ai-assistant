@@ -235,6 +235,7 @@ html,body { height:100%; background:var(--bg); color:var(--txt); font-family:var
 .dock-btn:hover { border-color:rgba(255,215,0,0.2); color:var(--cyan); background:rgba(255,215,0,0.06); transform:translateY(-2px); }
 .dock-btn:active { transform:translateY(0); }
 .dock-btn.active { border-color:rgba(255,215,0,0.3); color:var(--cyan); background:rgba(255,215,0,0.08); box-shadow:0 0 16px rgba(255,215,0,0.1); }
+body:not(.mode-jarvis) .jarvis-only { display: none; }
 
 /* RIGHT PANEL */
 .chat-panel { flex:1; display:flex; flex-direction:column; height:100vh; min-width:0; position:relative; z-index:2; }
