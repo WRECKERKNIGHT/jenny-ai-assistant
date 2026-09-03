@@ -645,6 +645,35 @@ def track_context(text):
         save_json(DATA_DIR / "context.json", ctx)
     except: pass
 
+def simulate_weather(city):
+    """Offline 'simulated' weather report — deterministic per day+city so it feels stable.
+    Used only when the AI API is unreachable, so the assistant still answers meaningfully."""
+    today = datetime.date.today()
+    seed = int(hashlib.md5(f"{city}-{today}".encode()).hexdigest()[:8], 16)
+    rng = random.Random(seed)
+    hour = datetime.datetime.now().hour
+    conditions = ["clear skies", "partly cloudy", "cloudy", "light drizzle", "scattered showers", "sunny", "hazy", "breezy and clear"]
+    cond = conditions[seed % len(conditions)]
+    base = 28 + (seed % 10) - 4
+    if not (6 <= hour <= 18):
+        base -= 5
+    temp = round(base + rng.randint(-2, 2))
+    low = temp - rng.randint(4, 7)
+    humid = rng.randint(40, 85)
+    wind = rng.randint(4, 22)
+    rain_pct = (seed % 40)
+    feel = "quite warm" if temp > 30 else "mild" if temp > 20 else "cool"
+    return {
+        "condition": cond,
+        "temp": temp,
+        "low": low,
+        "high": temp + rng.randint(2, 4),
+        "humidity": humid,
+        "wind": wind,
+        "rain_pct": rain_pct,
+        "feels": feel,
+    }
+
 def offline_reply(text):
     lo = text.lower().strip()
     lo_norm = lo.replace("i am", "i'm").replace("i dont", "i don't").replace("i cant", "i can't").replace("dont", "don't").replace("cant", "can't").replace("wont", "won't").replace("isnt", "isn't").replace("arent", "aren't").replace("wasnt", "wasn't").replace("wouldnt", "wouldn't")
@@ -774,8 +803,21 @@ def offline_reply(text):
     if any(w in lo for w in ["who made you", "your creator", "who created you", "who built you"]):
         return {"text": f"I was created by **Harshit** (WRECKERKNIGHT) - the Boss himself!", "speech": "I was created by Harshit, WRECKERKNIGHT. Built with Python and Flask."}
 
-    if any(w in lo for w in ["weather", "temperature", "forecast", "is it raining"]):
-        return {"text": "Checking weather!", "speech": "Checking weather.", "command": {"action": "weather", "value": ""}}
+    if any(w in lo for w in ["weather", "temperature", "forecast", "is it raining", "today's weather"]):
+        settings = load_json(DATA_DIR / "settings.json", {"cityName": "Lucknow"})
+        city = settings.get("cityName", "Lucknow")
+        w = simulate_weather(city)
+        try:
+            import re as _re
+            mc = _re.search(r"\bweather\s+in\s+([a-zA-Z ]+)", lo)
+            if mc:
+                city = mc.group(1).strip()
+                w = simulate_weather(city)
+        except Exception:
+            pass
+        now = datetime.datetime.now()
+        period = "night" if now.hour < 6 else "early morning" if now.hour < 12 else "afternoon" if now.hour < 17 else "evening" if now.hour < 21 else "night"
+        return {"text": f"Here's the (offline-simulated) weather for **{city.title()}**: **{w['temp']}°C**, {w['condition']}, feeling {w['feels']}. Low around **{w['low']}°C**, high near **{w['high']}°C**. Humidity **{w['humidity']}%**, wind **{w['wind']}** km/h, and about a **{w['rain_pct']}%** chance of rain this {period}. Take an umbrella or leave it — I've got a read on the sky, {boss}.", "speech": f"Weather in {city}: {w['temp']} degrees, {w['condition']}. Humidity {w['humidity']} percent, wind {w['wind']} kmh, {w['rain_pct']} percent chance of rain. This is a simulated report since I'm offline, boss."}
     if any(w in lo for w in ["news", "headlines", "what's happening"]):
         return {"text": "Fetching latest news!", "speech": "Fetching news.", "command": {"action": "news", "value": ""}}
     if any(w in lo for w in ["crypto", "bitcoin", "ethereum", "btc", "eth", "prices"]):
@@ -890,7 +932,9 @@ def offline_reply(text):
     if any(w in lo for w in ["clipboard", "what's on my clipboard"]):
         return {"text": f"Reading clipboard, {boss}!", "speech": "Reading clipboard.", "command": {"action": "clipboard-read", "value": ""}}
 
-    return None
+    # Offline catch-all: acknowledge, name the limitation, and steer to what still works.
+    detail = "Right now I'm running in **offline/simulation mode**, so I can't reach my brain (the AI API)." if not get_gemini_key() else "I couldn't reach the AI API just now, so I'm answering from my offline knowledge."
+    return {"text": f"{detail}\n\nYou can still ask me to:\n• **Control the PC** — open apps, lock, screenshot, timers, clipboard\n• **Read your system** — CPU, RAM, battery, disk, processes, uptime\n• **Do math** — calculators, conversions, percentages, primes, factorials\n• **Enjoy content** — jokes, quotes, facts, riddles, weather, time\n• **Talk about tech** — AI, Python, CPU, RAM, encryption and more offline\n\nTry one of those, or ask me about your **Agency OS** / business, {boss}!", "speech": f"I'm in offline mode, so I can't use the online AI. But I can still control your PC, read your system, do math, and tell jokes. Ask me something like open Chrome, what's the CPU usage, or tell me a joke, {boss}."}
 
 
 _last_net = {"bytes": 0, "time": 0}
