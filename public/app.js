@@ -19,6 +19,8 @@ function playTone(freq, dur, type = 'sine', vol = 0.06) {
   osc.stop(ctx.currentTime + dur);
 }
 
+let isSending = false;
+
 const sfx = {
   click: () => playTone(1200, 0.05, 'sine', 0.04),
   hover: () => playTone(800, 0.03, 'triangle', 0.02),
@@ -247,7 +249,7 @@ async function runBoot() {
     if (document.getElementById('msgs').children.length === 0) addAIMessage(greeting);
     speak(greeting);
     document.querySelectorAll('.welcome-card').forEach(card => {
-      card.addEventListener('click', () => { const cmd = card.dataset.cmd; if (cmd) { sendMessage(cmd); sfx.click(); } });
+      card.addEventListener('click', () => { const cmd = card.dataset.cmd; if (cmd) sendMessage(cmd); });
     });
     loadMode();
     return;
@@ -328,7 +330,7 @@ async function runBoot() {
   if (document.getElementById('msgs').children.length === 0) addAIMessage(greeting);
   speak(greeting);
   document.querySelectorAll('.welcome-card').forEach(card => {
-    card.addEventListener('click', () => { const cmd = card.dataset.cmd; if (cmd) { sendMessage(cmd); sfx.click(); } });
+    card.addEventListener('click', () => { const cmd = card.dataset.cmd; if (cmd) sendMessage(cmd); });
   });
   loadMode();
 }
@@ -1922,44 +1924,48 @@ sendBtn.addEventListener('click', () => {
 // SEND MESSAGE
 // ================================================
 async function sendMessage(text) {
-  addUserMessage(text);
-  sfx.click();
-  const cmd = parseCommand(text);
-  if (cmd) {
-    if (cmd.response === '__FETCH_BRIEFING__') {
-      addTyping();
-      setOrbState('thinking');
-      try {
-        const bRes = await fetch('/api/briefing');
-        const bData = await bRes.json();
-        removeTyping();
-        if (bData.success && bData.briefing) {
-          const b = bData.briefing;
-          const briefingText = `${b.greeting}. Here's your briefing for ${b.date} at ${b.time}.\n\nWeather: ${b.weather}\nSystem: ${b.system}\nBattery: ${b.battery}\nMemories stored: ${b.vaultCount}`;
-          addAIMessage(briefingText);
-          speak(`${b.greeting}. It's ${b.time}. Weather is ${b.weather}. System at ${b.system}, battery ${b.battery}. You have ${b.vaultCount} memories saved, BOSS.`);
-        } else { addAIMessage('Unable to fetch briefing, BOSS.'); }
-      } catch { removeTyping(); addAIMessage('Briefing service unavailable, BOSS.'); }
-      setOrbState('idle');
-      return;
-    }
-    if (cmd.response === '__CHECK_PERMISSIONS__') {
-      checkPermissions();
-      addAIMessage('Checking macOS permissions, BOSS. I\'ll show you a guide if anything is missing.');
-      speak('Checking your system permissions now.');
-      return;
-    }
-    setTimeout(() => addAIMessage(cmd.response), 300);
-    speak(cmd.response);
-    return;
-  }
-  addTyping();
-  setOrbState('thinking');
+  if (isSending) return;
+  isSending = true;
   try {
-    const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: text }) });
-    const data = await res.json();
-    removeTyping();
-    if (data.success && data.reply) {
+    addUserMessage(text);
+    sfx.click();
+    const cmd = parseCommand(text);
+    if (cmd) {
+      if (cmd.response === '__FETCH_BRIEFING__') {
+        addTyping();
+        setOrbState('thinking');
+        try {
+          const bRes = await fetch('/api/briefing');
+          const bData = await bRes.json();
+          removeTyping();
+          if (bData.success && bData.briefing) {
+            const b = bData.briefing;
+            const agencyLine = b.agency && b.agency.online ? `\nAgency OS: ${b.agency.brief || 'running'}` : (b.mode === 'jarvis' ? '\nAgency OS: offline' : '');
+            const briefingText = `${b.greeting}. Here's your briefing for ${b.date} at ${b.time}.\n\nSystem: ${b.system}\nBattery: ${b.battery}\nMemories stored: ${b.vaultCount}${agencyLine}`;
+            addAIMessage(briefingText);
+            speak(`${b.greeting}. It's ${b.time}. System at ${b.system}, battery ${b.battery}. You have ${b.vaultCount} memories saved, BOSS.`);
+          } else { addAIMessage('Unable to fetch briefing, BOSS.'); }
+        } catch { removeTyping(); addAIMessage('Briefing service unavailable, BOSS.'); }
+        setOrbState('idle');
+        return;
+      }
+      if (cmd.response === '__CHECK_PERMISSIONS__') {
+        checkPermissions();
+        addAIMessage('Checking system permissions, BOSS. I\'ll show you a guide if anything is missing.');
+        speak('Checking your system permissions now.');
+        return;
+      }
+      setTimeout(() => addAIMessage(cmd.response), 300);
+      speak(cmd.response);
+      return;
+    }
+    addTyping();
+    setOrbState('thinking');
+    try {
+      const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: text }) });
+      const data = await res.json();
+      removeTyping();
+      if (data.success && data.reply) {
       addAIMessage(data.reply.text);
       if (data.reply.command?.action === 'vault-save') { await fetch('/api/vault', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: data.reply.command.value?.text || '' }) }); toast('Saved to vault, BOSS.', 'ok'); }
       else if (data.reply.command?.action === 'open-chrome-bookmarks') {
@@ -1987,6 +1993,7 @@ async function sendMessage(text) {
       speak(data.reply.speech || data.reply.text);
     } else { addAIMessage('Something went wrong, BOSS. Please try again.'); setOrbState('idle'); }
   } catch { removeTyping(); addAIMessage('Connection error, BOSS. Please try again.'); setOrbState('idle'); }
+  } finally { isSending = false; }
 }
 
 // ================================================
