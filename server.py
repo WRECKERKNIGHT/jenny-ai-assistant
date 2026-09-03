@@ -219,6 +219,19 @@ def get_gemini_key():
         if k: return k
     return ""
 
+def _conversation_memory():
+    """Reads the rolling conversation context (recent topics + exchange count)
+    so replies stay coherent and continue naturally across the session."""
+    try:
+        ctx = load_json(DATA_DIR / "context.json", {})
+        topics = ctx.get("last_topics", "") or ""
+        count = ctx.get("message_count", 0)
+        if topics or count:
+            return {"topics": topics, "count": count}
+    except Exception:
+        pass
+    return {"topics": "", "count": 0}
+
 def gemini_chat(message, history=None):
     key = get_gemini_key()
     if not key: return None
@@ -229,6 +242,11 @@ def gemini_chat(message, history=None):
         vault_data = load_json(DATA_DIR / "vault.json", {"entries": []})
         vault_text = "\n".join(e.get("text","") for e in vault_data.get("entries", [])[-5:])
         prompt = f"You are {mp['name']}, AI assistant for {OWNER} (referred to as '{mp['boss']}'). Mode: {mode}. Personality: {mp['personality']}. Clock: {now}. Vault: {vault_text}. Reply naturally. Return JSON: {{\"text\": \"response\", \"speech\": \"tts version\"}}"
+        mem = _conversation_memory()
+        if mem.get("topics"):
+            prompt += f" Recently we've been talking about: {mem['topics']}. Acknowledge continuity and keep the conversation going naturally."
+        if int(mem.get("count", 0)) > 2:
+            prompt += " Give a warm, slightly fuller reply (a couple of sentences) and invite one gentle follow-up — but stay concise, no lists."
         contents = [{"parts": [{"text": prompt}]}]
         if history:
             for h in history[-10:]:
@@ -280,6 +298,11 @@ def grok_chat(message, history=None):
             f"You MUST return valid JSON with keys \"text\" (the response) and \"speech\" (a TTS-friendly version without markdown). "
             f"Do not wrap the JSON in markdown code fences — return raw JSON only."
         )
+        mem = _conversation_memory()
+        if mem.get("topics"):
+            system_msg += f" Recently we've been discussing: {mem['topics']}. If relevant, acknowledge that continuity and keep the conversation going naturally."
+        if int(mem.get("count", 0)) > 2:
+            system_msg += " Write a warm, slightly fuller reply (2-3 sentences) and invite one natural follow-up. No bullet lists."
         messages = [{"role": "system", "content": system_msg}]
         if history:
             for h in history[-10:]:
@@ -723,6 +746,10 @@ def track_context(text):
             if len(kw) > 3 and kw not in ctx["recent_topics"]:
                 ctx["recent_topics"].append(kw)
         ctx["recent_topics"] = ctx["recent_topics"][-30:]
+        ctx.setdefault("message_count", 0)
+        ctx.setdefault("last_topics", "")
+        ctx["message_count"] = int(ctx["message_count"]) + 1
+        ctx["last_topics"] = ", ".join(ctx["recent_topics"][-6:])
         save_json(DATA_DIR / "context.json", ctx)
     except: pass
 
@@ -763,6 +790,9 @@ def offline_reply(text):
     boss = mp["boss"]
     track_command_stats(text)
     track_context(text)
+    mem = _conversation_memory()
+    mem_topics = mem.get("topics", "").strip()
+    mem_count = int(mem.get("count", 0))
 
     for topic_list, responses in OFFLINE_CONVERSATIONS.items():
         for trigger, replies in responses.items():
@@ -982,7 +1012,11 @@ def offline_reply(text):
             words = words.strip()
             for k, v in KNOWLEDGE_BASE.items():
                 if k in words:
-                    return {"text": v, "speech": v[:200] + "..."}
+                    hook = ""
+                    if mem_topics and any(t in mem_topics.split(',') for t in words.split() if len(t) > 3):
+                        hook = f" Since we were just touching on {mem_topics}, this ties right in — "
+                    reply = f"{hook}{v} Want me to go deeper into {k}, or connect it to something from earlier in our talk, {boss}?"
+                    return {"text": reply, "speech": re.sub(r"[#*_`]", "", reply)}
             if words:
                 return {"text": f"I'd need internet for **{words}**, {boss}. Try AI, Python, CPU, RAM, encryption offline!", "speech": f"Need internet for that, {boss}. Try tech topics I know offline."}
         return {"text": f"Running offline, {boss}. Set up Gemini API key for detailed answers!", "speech": f"Running offline, {boss}."}
@@ -1015,7 +1049,10 @@ def offline_reply(text):
 
     # Offline catch-all: acknowledge, name the limitation, and steer to what still works.
     detail = "Right now I'm running in **offline/simulation mode**, so I can't reach my brain (the AI API)." if not get_gemini_key() else "I couldn't reach the AI API just now, so I'm answering from my offline knowledge."
-    return {"text": f"{detail}\n\nYou can still ask me to:\n• **Control the PC** — open apps, lock, screenshot, timers, clipboard\n• **Read your system** — CPU, RAM, battery, disk, processes, uptime\n• **Do math** — calculators, conversions, percentages, primes, factorials\n• **Enjoy content** — jokes, quotes, facts, riddles, weather, time\n• **Talk about tech** — AI, Python, CPU, RAM, encryption and more offline\n\nTry one of those, or ask me about your **Agency OS** / business, {boss}!", "speech": f"I'm in offline mode, so I can't use the online AI. But I can still control your PC, read your system, do math, and tell jokes. Ask me something like open Chrome, what's the CPU usage, or tell me a joke, {boss}."}
+    recall = ""
+    if mem_topics and mem_count > 2:
+        recall = f"\n\nJust to keep us on track — earlier we were talking about *{mem_topics}*. Want to pick any of those back up, {boss}?"
+    return {"text": f"{detail}\n\nYou can still ask me to:\n• **Control the PC** — open apps, lock, screenshot, timers, clipboard\n• **Read your system** — CPU, RAM, battery, disk, processes, uptime\n• **Do math** — calculators, conversions, percentages, primes, factorials\n• **Enjoy content** — jokes, quotes, facts, riddles, weather, time\n• **Talk about tech** — AI, Python, CPU, RAM, encryption and more offline{recall}\n\nTry one of those, or ask me about your **Agency OS** / business, {boss}!", "speech": f"I'm in offline mode, so I can't use the online AI. But I can still control your PC, read your system, do math, tell jokes, and remember what we've been talking about, {boss}."}
 
 
 _last_net = {"bytes": 0, "time": 0}
