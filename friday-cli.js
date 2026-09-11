@@ -401,6 +401,43 @@ const ASCII_LOGO = `
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
+// CLI flags: --version / --help
+const cliArgs = process.argv.slice(2);
+if (cliArgs.includes('--version') || cliArgs.includes('-v')) {
+  try {
+    const pkg = require('./package.json');
+    console.log(`F.R.I.D.A.Y. Client v${pkg.version}`);
+  } catch {
+    console.log('F.R.I.D.A.Y. Client v1.0.0');
+  }
+  process.exit(0);
+}
+if (cliArgs.includes('--help') || cliArgs.includes('-h')) {
+  console.log(`
+USAGE
+  friday-cli [options]
+
+OPTIONS
+  -v, --version    Print the client version
+  -h, --help       Show this help screen
+
+DIRECTIVES
+  open <app>            Launch an application
+  go to <site>          Open a website in the default browser
+  volume <0-100>        Set system volume
+  brightness <0-100>    Set display brightness
+  lock | sleep | restart | shutdown | screenshot | empty trash
+  remember <fact>       Save a fact to the secure vault
+  list vault | clear vault
+  add todo <task>       Queue a task into the task matrix
+  list todo | complete todo <N> | complete all todos | remove todo <N>
+  status                Print live system diagnostics
+  help | clear          More commands / clear the terminal
+  exit                  Terminate the shell
+`);
+  process.exit(0);
+}
+
 console.clear();
 console.log(ASCII_LOGO);
 console.log('F.R.I.D.A.Y. terminal client active. Control PC, manage vaults, or chat.');
@@ -507,6 +544,42 @@ function prompt() {
       }
     } else if (cmdLower === 'status' || cmdLower === 'diagnostics' || cmdLower === 'system') {
       checkSystem();
+    } else if (cmdLower === 'help' || cmdLower === 'commands') {
+      console.log('\n\x1b[33m================ COMMAND LIBRARY ================\x1b[0m');
+      console.log('open <app>            - Launch an application');
+      console.log('go to <site>          - Open a website');
+      console.log('volume <0-100>        - Set system volume');
+      console.log('brightness <0-100>    - Set display brightness');
+      console.log('lock / sleep / restart / shutdown / screenshot / empty trash');
+      console.log('remember <fact>       - Store a fact in the vault');
+      console.log('list vault / clear vault');
+      console.log('add todo <task>       - Add a task to the matrix');
+      console.log('list todo / complete todo <N> / complete all todos / remove todo <N>');
+      console.log('status                - Live system diagnostics');
+      console.log('clear                 - Clear the terminal');
+      console.log('exit                  - Terminate the shell');
+      console.log('\x1b[33m=================================================\x1b[0m\n');
+      speak("Command library displayed, BOSS.");
+    } else if (cmdLower === 'clear' || cmdLower === 'cls') {
+      console.clear();
+      console.log(ASCII_LOGO);
+    } else if (cmdLower === 'complete all todos' || cmdLower === 'complete all tasks') {
+      const todos = loadTodos();
+      todos.forEach(t => { t.completed = true; });
+      saveTodos(todos);
+      console.log('\x1b[32m[FRIDAY] All tasks marked complete.\x1b[0m');
+      speak("All tasks complete, BOSS.");
+    } else if (cmdLower.startsWith('remove todo ') || cmdLower.startsWith('remove task ')) {
+      const num = parseInt(input.replace(/[^\d]/g, ''), 10) - 1;
+      const todos = loadTodos();
+      if (todos[num]) {
+        const removed = todos.splice(num, 1);
+        saveTodos(todos);
+        console.log(`\x1b[32m[FRIDAY] Removed: "${removed[0].text}"\x1b[0m`);
+        speak("Task removed.");
+      } else {
+        console.log('\x1b[31m[FRIDAY] No task at that index, BOSS.\x1b[0m');
+      }
     } else {
       await chatQuery(input);
     }
