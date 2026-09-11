@@ -1,9 +1,15 @@
 services:
   - type: web
     name: jenny-ai-assistant
-    env: node
-    buildCommand: npm install
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install --omit=dev
     startCommand: node server.js
+    autoDeploy: true
+    healthCheckPath: /api/system-status
     envVars:
       - key: PORT
         value: 3000
+      - key: NODE_ENV
+        value: production
