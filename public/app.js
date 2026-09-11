@@ -332,6 +332,7 @@ async function runBoot() {
     if (audioCtx && audioCtx.state === 'suspended') {
       audioCtx.resume();
     }
+    initWelcomeTip();
     restoreChatHistory();
     const greeting = getGreeting();
     if (document.getElementById('msgs').children.length === 0) addAIMessage(greeting);
@@ -367,6 +368,49 @@ function getGreeting() {
   else if (hour >= 17 && hour < 21) timeOfDay = 'evening';
   else timeOfDay = 'night';
   return `Good ${timeOfDay}${name}, BOSS. I am JENNY, your personal assistant. All Systems are working fine. What are we doing today, BOSS?`;
+}
+
+// Time-aware welcome greeting for the dashboard hero screen
+function getWelcomeGreeting() {
+  const mem = loadOfflineMemory();
+  const name = mem.name ? ` ${mem.name}` : '';
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return `Good morning${name}, BOSS. How can I start your day?`;
+  if (hour >= 12 && hour < 17) return `Good afternoon${name}, BOSS. What shall we power through?`;
+  if (hour >= 17 && hour < 21) return `Good evening${name}, BOSS. Winding down or locking in?`;
+  return `Late session${name}, BOSS. What do you need?`;
+}
+
+// Rotating context-aware suggestion tips in the welcome screen
+const WELCOME_TIPS = [
+  { cmd: 'briefing', hint: 'Try: "brief JENNY" for a full system overview' },
+  { cmd: 'weather', hint: 'Say "what\'s the weather" to check conditions in Delhi' },
+  { cmd: 'timer', hint: 'Say "set a timer for 10 minutes" to track time hands-free' },
+  { cmd: 'emails', hint: 'Ask "check my emails" to scan your inbox' },
+  { cmd: 'vault', hint: 'Say "remember my keys are in the office" to save to vault' },
+  { cmd: 'music', hint: 'Say "play my chill playlist on Spotify" for instant sound' },
+  { cmd: 'recall', hint: 'Try "recall anything about my vault memory" anytime' }
+];
+
+function initWelcomeTip() {
+  const greetingEl = document.getElementById('welcome-greeting');
+  if (greetingEl) greetingEl.textContent = getWelcomeGreeting();
+
+  const tipEl = document.getElementById('welcome-tip-text');
+  if (!tipEl) return;
+  let idx = 0;
+  const tapeNext = () => {
+    const tip = WELCOME_TIPS[idx % WELCOME_TIPS.length];
+    if (tipEl) {
+      tipEl.textContent = tip.hint;
+      tipEl.parentElement?.classList.remove('tip-pop');
+      void tipEl.offsetWidth;
+      tipEl.parentElement?.classList.add('tip-pop');
+    }
+    idx++;
+  };
+  tapeNext();
+  setInterval(tapeNext, 6000);
 }
 
 // ================================================
@@ -627,7 +671,6 @@ function startOrb() {
     }
   }
   draw();
-}
 }
 
 function setOrbState(state) {
