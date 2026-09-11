@@ -116,6 +116,15 @@
       letter-spacing: 1px;
       font-weight: 700;
     }
+    .hdr-clock {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--txt2);
+      letter-spacing: 2px;
+      padding: 5px 8px;
+      border-left: 1px solid rgba(255, 215, 0, 0.2);
+      align-self: center;
+    }
 
     .hdr-controls {
       display: flex;
@@ -560,6 +569,7 @@
         <span class="hdr-badge">HUD 3.0</span>
       </div>
       <div class="hdr-controls">
+        <span class="hdr-clock" id="hud-clock">--:--:--</span>
         <button class="hdr-btn" id="training-btn" title="AI Memory & Training"><i class="fa-solid fa-brain"></i></button>
         <button class="hdr-btn" id="fullscreen-btn" title="Expand Interface"><i class="fa-solid fa-expand"></i></button>
       </div>
@@ -850,7 +860,7 @@
           body: JSON.stringify({ action: 'clipboard-read' })
         });
         const d = await res.json();
-        if (d.success) document.getElementById('clip-text').value = d.clipboard || '';
+        if (d.success) document.getElementById('clip-text').value = d.content || d.clipboard || '';
       } catch (e) {}
     }
 
@@ -976,6 +986,14 @@
     }
     updateTelemetry();
     setInterval(updateTelemetry, 3000);
+
+    // LIVE HUD CLOCK
+    const hudClock = document.getElementById('hud-clock');
+    function tickClock() {
+      if (hudClock) hudClock.textContent = new Date().toLocaleTimeString([], { hour12: false });
+    }
+    tickClock();
+    setInterval(tickClock, 1000);
 
     // CANVAS SPEECH ANIMATED ORB
     const canvas = document.getElementById('orb-canvas');
