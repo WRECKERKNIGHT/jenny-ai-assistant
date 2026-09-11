@@ -1264,6 +1264,39 @@ def api_system_status():
         cpu_count = 1; cpu_model = "Unknown"
     return jsonify({"success": True, "cpu": {"usage": system_cache["cpu"], "cores": cpu_count, "model": cpu_model}, "ram": {"usage": system_cache["ram"], "usedMB": int(float(system_cache["ram_used"]) * 1024), "totalMB": int(float(system_cache["ram_total"]) * 1024)}, "battery": {"level": system_cache["battery"], "charging": system_cache["charging"]}, "disk": {"usage": system_cache["disk"], "free": system_cache["disk_free"] + "GB"}, "net": {"usage": system_cache.get("net_usage", 0), "speed": system_cache["net_speed"], "bytes": system_cache.get("net_bytes", 0)}, "uptime": system_cache["uptime"], "hostname": system_cache["hostname"], "platform": sys.platform})
 
+# ---- Runtime / activity stats ---------------------------------------------
+SERVER_START = time.time()
+_runtime_counters = {"requests": 0, "api_requests": 0, "by_endpoint": {}}
+_runtime_lock = threading.Lock()
+
+@app.before_request
+def _count_requests():
+    with _runtime_lock:
+        _runtime_counters["requests"] += 1
+        if request.path.startswith("/api/"):
+            _runtime_counters["api_requests"] += 1
+            ep = request.path
+            _runtime_counters["by_endpoint"][ep] = _runtime_counters["by_endpoint"].get(ep, 0) + 1
+
+@app.route("/api/runtime")
+def api_runtime():
+    """Server runtime stats: uptime, request volume and hot endpoints."""
+    with _runtime_lock:
+        uptime_s = max(0, int(time.time() - SERVER_START))
+        top_endpoints = sorted(_runtime_counters["by_endpoint"].items(), key=lambda kv: kv[1], reverse=True)[:10]
+        snapshot = {
+            "success": True,
+            "started": datetime.datetime.fromtimestamp(SERVER_START, tz=datetime.timezone.utc).isoformat(),
+            "uptime_seconds": uptime_s,
+            "uptime_display": f"{uptime_s // 86400}d {uptime_s % 86400 // 3600}h {uptime_s % 3600 // 60}m",
+            "total_requests": _runtime_counters["requests"],
+            "api_requests": _runtime_counters["api_requests"],
+            "top_endpoints": [{"path": p, "hits": c} for p, c in top_endpoints],
+            "device_count": len(activeDevices),
+            "mode": get_mode(),
+        }
+    return jsonify(snapshot)
+
 @app.route("/api/stream")
 def api_stream():
     """Server-Sent Events: pushes live system telemetry to connected (mobile) clients.
