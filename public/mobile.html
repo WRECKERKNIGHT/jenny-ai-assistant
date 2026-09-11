@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>J.E.N.N.Y. Mobile Remote</title>
+  <meta name="apple-mobile-web-app-title" content="JENNY Remote">
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#000000">
   <meta name="mobile-web-app-capable" content="yes">
@@ -442,6 +443,9 @@
         <strong>JENNY:</strong> Mobile Remote Link active. Directing Mac OS.
       </div>
     </div>
+    <div style="display:flex; justify-content:flex-end;">
+      <button id="log-clear" class="terminal-btn" style="width:auto; height:30px; padding:0 12px; font-size:9px; border-radius:8px;" title="Clear response feed"><i class="fa-solid fa-broom"></i>&nbsp;CLEAR</button>
+    </div>
 
   </div>
 
@@ -692,6 +696,45 @@
 
     checkDeviceAuth();
     setInterval(pollAuthStatus, 1500);
+
+    // ================================================
+    // SERVER LINK STATUS & DEEP-LINK QUICK ACTIONS
+    // ================================================
+    const netStatus = document.getElementById('net-status');
+    async function checkServerStatus() {
+      try {
+        const res = await fetch(`${serverUrl}/api/remote-status`, { signal: AbortSignal.timeout(4000) });
+        const d = await res.json();
+        if (d.success) {
+          netStatus.textContent = 'ONLINE';
+          netStatus.style.borderColor = '#2ecc71';
+          netStatus.style.color = '#2ecc71';
+        } else {
+          netStatus.textContent = 'OFFLINE';
+          netStatus.style.borderColor = '#e67e22';
+          netStatus.style.color = '#e67e22';
+        }
+      } catch {
+        netStatus.textContent = 'OFFLINE';
+        netStatus.style.borderColor = '#e67e22';
+        netStatus.style.color = '#e67e22';
+        appendLog('HOST', 'Cannot reach Mac server. Retrying...');
+      }
+    }
+    checkServerStatus();
+    setInterval(checkServerStatus, 10000);
+
+    // Quick action deep links: /mobile.html?action=wake|lock|volume
+    const urlAction = new URLSearchParams(window.location.search).get('action');
+    if (urlAction) {
+      const launchMap = { wake: 'wake mac display', lock: 'lock screen', volume: 'volume 80' };
+      setTimeout(() => executeRemote(launchMap[urlAction] || urlAction), 1200);
+    }
+
+    document.getElementById('log-clear')?.addEventListener('click', () => {
+      logFeed.innerHTML = '';
+      appendLog('JENNY', 'Command feed cleared.');
+    });
 
     async function executeRemote(cmd) {
       if (!cmd.trim()) return;
