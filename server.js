@@ -18,6 +18,55 @@ const OFFLINE_MEMORY_FILE = path.join(__dirname, 'offline_memory.json');
 app.use(cors());
 app.use(express.json());
 
+// ================================================
+// SECURITY MIDDLEWARE — Rate Limiting & Hardening
+// ================================================
+const rateBuckets = new Map();
+const RATE_WINDOW_MS = 60000;
+const RATE_LIMITS = {
+  '/api/execute-shell': 10,
+  '/api/control': 60,
+  '/api/chat': 45,
+  default: 120
+};
+
+function rateLimitMiddleware(req, res, next) {
+  const key = req.ip || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const bucket = (rateBuckets.get(key) || []).filter(t => now - t < RATE_WINDOW_MS);
+  const limit = RATE_LIMITS[req.path] || RATE_LIMITS.default;
+  if (bucket.length >= limit) {
+    return res.status(429).json({ success: false, message: 'Too many requests, BOSS. Pausing for 60 seconds.' });
+  }
+  bucket.push(now);
+  rateBuckets.set(key, bucket);
+  next();
+}
+
+// Security headers + lightweight request logging
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Cache-Control', 'no-store');
+  if (req.method !== 'GET') {
+    console.log(`[JENNY] ${req.method} ${req.url} from ${req.ip || req.socket.remoteAddress}`);
+  }
+  next();
+});
+
+// Optional token-based auth for sensitive automation endpoints.
+// Active only when REMOTE_ACCESS_TOKEN is configured in .env.
+function requireRemoteAuth(req, res, next) {
+  if (!REMOTE_ACCESS_TOKEN) return next();
+  const header = req.headers['authorization'] || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : (req.headers['x-access-token'] || '');
+  if (token !== REMOTE_ACCESS_TOKEN) {
+    return res.status(401).json({ success: false, message: 'Unauthorized. Valid access token required.' });
+  }
+  next();
+}
+
 // Serve static frontend files from 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -602,7 +651,7 @@ app.get('/api/open-url', (req, res) => {
 });
 
 // Endpoint to manage system controls
-app.post('/api/control', (req, res) => {
+app.post('/api/control', rateLimitMiddleware, requireRemoteAuth, (req, res) => {
   const { action, value, deviceId } = req.body;
   if (deviceId && !isDeviceAuthorized(req)) {
     return res.status(403).json({ success: false, message: 'Device not authorized' });
@@ -1116,7 +1165,7 @@ app.post('/api/control', (req, res) => {
 });
 
 // Dedicated OS Shell Execution Endpoint
-app.post('/api/execute-shell', (req, res) => {
+app.post('/api/execute-shell', rateLimitMiddleware, requireRemoteAuth, (req, res) => {
   const { command } = req.body;
   if (!command) {
     return res.status(400).json({ success: false, message: 'Command string is required.' });
@@ -1562,7 +1611,7 @@ function cpuAverage() {
 }
 
 // Chat endpoint — offline commands FIRST, then Gemini fallback
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', rateLimitMiddleware, async (req, res) => {
   const { message, deviceId } = req.body;
   if (!message) return res.status(400).json({ success: false, message: 'Message is required' });
 
