@@ -5,6 +5,29 @@ import glob
 import json
 import os
 import re
+from datetime import datetime, timezone
+
+def relative_time(del_date):
+    """Convert a delivered_date value into a human 'x min ago' string."""
+    if not del_date:
+        return 'recent'
+    try:
+        ts = float(del_date)
+        if ts > 1e11:
+            ts = ts / 1000.0
+        dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+        delta = (datetime.now(timezone.utc) - dt).total_seconds()
+        if delta < 0:
+            return 'just now'
+        if delta < 60:
+            return f'{int(delta)}s ago'
+        if delta < 3600:
+            return f'{int(delta // 60)}m ago'
+        if delta < 86400:
+            return f'{int(delta // 3600)}h ago'
+        return f'{int(delta // 86400)}d ago'
+    except Exception:
+        return 'recent'
 
 def get_notifications():
     db_paths = glob.glob('/var/folders/*/*/*/com.apple.notificationcenter/db2/db')
@@ -13,6 +36,7 @@ def get_notifications():
 
     notifications = []
     discord_dms = []
+    seen = set()
 
     if db_paths:
         try:
@@ -35,22 +59,37 @@ def get_notifications():
                     subtitle = str(req.get('subtitle', ''))
                     body = str(req.get('body', ''))
 
-                    if title or body:
-                        item = {
-                            "app": app_id,
-                            "title": title,
-                            "subtitle": subtitle,
-                            "body": body,
-                            "date": del_date
-                        }
-                        notifications.append(item)
+                    if not (title or body):
+                        continue
 
-                        if 'discord' in app_id.lower() or 'discord' in title.lower() or 'discord' in subtitle.lower() or 'cursed_king' in body.lower():
-                            discord_dms.append(item)
+                    # Deduplicate repeated identical alerts
+                    dedupe_key = f"{app_id}|{title}|{body}"
+                    if dedupe_key in seen:
+                        continue
+                    seen.add(dedupe_key)
+
+                    item = {
+                        "app": app_id,
+                        "title": title,
+                        "subtitle": subtitle,
+                        "body": body,
+                        "date": del_date,
+                        "relative": relative_time(del_date)
+                    }
+                    notifications.append(item)
+
+                    if 'discord' in app_id.lower() or 'discord' in title.lower() or 'discord' in subtitle.lower() or 'cursed_king' in body.lower():
+                        discord_dms.append(item)
                 except Exception:
                     pass
         except Exception as e:
             pass
+
+    # Aggregate per-app summary counts
+    app_counts = {}
+    for n in notifications:
+        app_key = n.get('app', 'unknown')
+        app_counts[app_key] = app_counts.get(app_key, 0) + 1
 
     # If no live Discord DB entry yet, return structured Discord DM state
     if not discord_dms:
@@ -75,9 +114,20 @@ def get_notifications():
         "success": True,
         "total": len(notifications),
         "notifications": notifications,
-        "discord_dms": discord_dms
+        "discord_dms": discord_dms,
+        "app_summary": app_counts
     }
 
 if __name__ == "__main__":
     result = get_notifications()
-    print(json.dumps(result))
+
+    # CLI pretty-print mode: python3 read-notifications.py --pretty
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == '--pretty':
+        for n in result["notifications"][:15]:
+            print(f"[{n.get('relative')}] {n.get('app', '?')}: {n.get('title')} - {n.get('body')}")
+        print("\nPer-app summary:")
+        for app, count in result["app_summary"].items():
+            print(f"  {app}: {count}")
+    else:
+        print(json.dumps(result))
