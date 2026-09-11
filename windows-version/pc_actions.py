@@ -176,9 +176,46 @@ def open_app(name):
         "chrome": "chrome", "edge": "msedge", "vscode": "code",
         "spotify": "spotify", "discord": "discord", "file": "explorer.exe",
         "terminal": "wt.exe", "cmd": "cmd.exe",
+        "camera": "microsoft.windows.camera:", "settings": "ms-settings:",
+        "controlpanel": "control", "clipboard": "ms-settings:clipboard",
+        "clock": "ms-settings:dateandtime", "alarms": "ms-clock:",
     }
     target = apps.get(str(name).lower(), name)
     return _shell(f"start {target}")
+
+
+def browser_youtube():
+    return browser_open("https://www.youtube.com")
+
+
+def browser_gmail():
+    return browser_open("https://mail.google.com")
+
+
+def browser_github():
+    return browser_open("https://github.com")
+
+
+def speak_feedback(text):
+    """Audible confirmation via Windows SAPI (used for gesture results)."""
+    if not text:
+        return False
+    import re as _re
+    safe = _re.sub(r'[^0-9a-zA-Z .,!?]', '', str(text))
+    ps = (
+        "$ErrorActionPreference='SilentlyContinue';"
+        "Add-Type -AssemblyName System.Speech;"
+        f"$s=New-Object System.Speech.Synthesis.SpeechSynthesizer;"
+        f"$s.Speak('{safe}')"
+    )
+    return _shell(f"powershell -NoProfile -Command \"{ps}\"", timeout=8)
+
+
+def lock_screen_timer(seconds=0):
+    """Lock the PC now, or after a short countdown for safety."""
+    if seconds and seconds > 0:
+        time.sleep(min(seconds, 15))
+    return lock_pc()
 
 
 ACTION_INDEX = {
@@ -192,6 +229,9 @@ ACTION_INDEX = {
     "browser_new_window": browser_new_window,
     "browser_reopen_tab": browser_reopen_tab,
     "browser_fullscreen": browser_fullscreen,
+    "browser_youtube": browser_youtube,
+    "browser_gmail": browser_gmail,
+    "browser_github": browser_github,
     "volume_up": volume_up,
     "volume_down": volume_down,
     "volume_mute": volume_mute,
@@ -202,8 +242,10 @@ ACTION_INDEX = {
     "task_manager": open_task_manager,
     "show_desktop": show_desktop,
     "lock_pc": lock_pc,
+    "lock_screen_timer": lock_screen_timer,
     "close_window": close_window_focused,
     "open_app": open_app,
+    "speak_feedback": speak_feedback,
 }
 
 

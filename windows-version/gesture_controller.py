@@ -161,6 +161,22 @@ MAX_HANDS = 2
 MAX_HANDS_DRAW = 2        # cap limbs drawn per frame
 last_heartbeat = time.time()
 
+# Rolling gesture history (per hand slot) for UI feedback & stability debugging.
+GESTURE_HISTORY_MAX = 8
+_gesture_history = {"left": [], "right": []}
+
+
+def _push_gesture_history(slot, gesture):
+    buf = _gesture_history.get(slot, [])
+    buf.append({"g": gesture, "t": round(time.time(), 3)})
+    if len(buf) > GESTURE_HISTORY_MAX:
+        del buf[: len(buf) - GESTURE_HISTORY_MAX]
+    _gesture_history[slot] = buf
+
+
+def get_gesture_history(slot="right"):
+    return list(_gesture_history.get(slot, []))
+
 CONFIG_PATH = "gesture_config.json"
 DEFAULTS = {
     "smooth_factor": 0.3,
@@ -437,6 +453,7 @@ def run_gesture_loop():
                 for h in detected_hands:
                     h["gesture"] = classify_gesture(h["lm"])
                     gesture_state["hands"][h["side"]]["gesture"] = h["gesture"]
+                    _push_gesture_history(h["side"], h["gesture"])
                     if drawn < MAX_HANDS_DRAW:
                         mp_draw.draw_landmarks(frame, h["lm"], mp_hands.HAND_CONNECTIONS)
                         drawn += 1
@@ -512,6 +529,8 @@ def get_gesture_status():
         "orb_y": gesture_state.get("orb_target_y", 0.0),
         "mouse_x": gesture_state.get("mouse_x", 0),
         "mouse_y": gesture_state.get("mouse_y", 0),
+        "history_right": get_gesture_history("right"),
+        "history_left": get_gesture_history("left"),
         "has_mediapipe": HAS_MEDIAPIPE,
         "has_pyautogui": HAS_PYAUTOGUI,
         "last_heartbeat": round(last_heartbeat, 3),
