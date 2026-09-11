@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FRIDAY - AI Neural Assistant v6.0</title>
+  <!-- Google Fonts for Futuristic Glassmorphic UI -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;800;900&family=Rajdhani:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/png" href="logo.png">
+</head>
+<body class="cyberpunk-theme">
+  <!-- Glowing Background Network Canvas -->
+  <canvas id="bg-network-canvas"></canvas>
+  <div class="ambient-glow-background"></div>
+
+  <!-- Pre-dashboard Welcome Screen Overlay -->
+  <div id="pre-dashboard-overlay" class="pre-dashboard-overlay intro-mode">
+    <div class="hologram-grid"></div>
+    <div class="welcome-radial-glow"></div>
+    
+    <div class="welcome-content">
+      <div class="welcome-scanner-line"></div>
+      
+      <!-- Cinematic Intro Sequence -->
+      <div class="intro-sequence">
+        <div class="intro-badge"><i class="fa-solid fa-shield-halved"></i> SECURE NEURAL PROTOCOL</div>
+        <div class="intro-line line-1">COGNITIVE SYNC : INITIALIZING</div>
+        <h1 class="intro-line line-2">HI I AM JENNY</h1>
+        <p class="intro-line line-3">Establishing direct acoustic & neural sync connection...</p>
+        <div class="intro-loader">
+          <div class="intro-loader-bar"></div>
+        </div>
+      </div>
+
+      <!-- Main Interactive elements (shown after intro finishes) -->
+      <div class="welcome-interactive-elements hidden">
+        <div class="welcome-core-container">
+          <div class="welcome-core-ring ring-outer"></div>
+          <div class="welcome-core-ring ring-mid"></div>
+          <div class="welcome-core-ring ring-inner"></div>
+          <div class="welcome-core-center">
+            <i class="fa-solid fa-power-off"></i>
+          </div>
+        </div>
+
+        <div class="welcome-text-container">
+          <span class="welcome-subtag">AI ASSISTANT INTERFACE v6.0</span>
+          <h1 class="welcome-title">JENNY NEURAL MATRIX</h1>
+          
+          <button class="new-start-btn" id="start-button">
+            <span class="btn-glow-span"></span>
+            <i class="fa-solid fa-bolt-lightning"></i> INITIALIZE JENNY LINK
+          </button>
+          
+          <p class="welcome-instruction"><i class="fa-solid fa-circle-nodes"></i> CLICK BUTTON OR PRESS ANYWHERE TO START</p>
+        </div>
+
+        <!-- Booting logs display -->
+        <div class="welcome-boot-logs">
+          <div class="boot-line"><span class="success">[ OK ]</span> NEURAL COMPILER COMPILED SUCCESSFULLY.</div>
+          <div class="boot-line"><span class="success">[ OK ]</span> SOUND CORE ENGINE LOCKED: -OUBnvvuqEKdDWtapoJFn</div>
+          <div class="boot-line"><span class="success">[ OK ]</span> SPATIAL FLOATING WINDOW PIPES NOMINAL.</div>
+          <div class="boot-line"><span class="loading">[ RUN ]</span> WAITING FOR BOSS AUTHORIZATION...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header / HUD Status Bar -->
+  <header class="hud-header">
+    <div class="hud-title-container">
+      <span class="hud-tag">AI-SYS v6.0</span>
+      <h1 class="hud-main-title">J.E.N.N.Y.</h1>
+    </div>
+    
+    <div class="hud-status">
+      <div class="status-item">
+        <span class="label">SECURE LINK</span>
+        <span class="value active"><i class="fa-solid fa-shield-halved"></i> ONLINE</span>
+      </div>
+      <div class="status-item hidden-mobile">
+        <span class="label">SOUND ID</span>
+        <span class="value" style="font-family: var(--font-code); font-size: 11px; color: #ffffff;">-OUBnvvuqEKdDWtapoJFn</span>
+      </div>
+      <div class="status-item">
+        <span class="label">BATTERY</span>
+        <span class="value" id="system-battery">100%</span>
+      </div>
+      <div class="status-item hud-gauge-item hidden-mobile">
+        <span class="label">CPU LOAD</span>
+        <div class="hud-gauge-container">
+          <div class="hud-gauge-bar" id="hud-cpu-bar" style="width: 0%"></div>
+        </div>
+        <span class="value" id="hud-cpu-val">0%</span>
+      </div>
+      <div class="status-item hud-gauge-item hidden-mobile">
+        <span class="label">RAM LOAD</span>
+        <div class="hud-gauge-container">
+          <div class="hud-gauge-bar" id="hud-ram-bar" style="width: 0%"></div>
+        </div>
+        <span class="value" id="hud-ram-val">0%</span>
+      </div>
+      <div class="status-item">
+        <span class="label">UPTIME</span>
+        <span class="value" id="system-uptime">00:00:00</span>
+      </div>
+      <div class="status-item hidden-mobile">
+        <span class="label">SYSTEM CLOCK</span>
+        <span class="value" id="hud-clock">00:00:00</span>
+      </div>
+      <div class="status-item menubar-mic-btn" id="menubar-mic-trigger" title="Click to Speak to Jenny" onclick="toggleJennyDirectListening()" style="cursor: pointer;">
+        <span class="label">NEURAL MIC</span>
+        <span class="value active" id="menubar-mic-status"><i class="fa-solid fa-microphone"></i> SPEAK TO JENNY</span>
+      </div>
+      <div class="status-item" id="voice-mute-btn" title="Toggle Assistant Voice Mute" style="cursor: pointer;">
+        <span class="label">VOICE</span>
+        <span class="value active" id="voice-mute-status"><i class="fa-solid fa-volume-high"></i> ACTIVE</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Siri-Style Floating Neural HUD Card Overlay -->
+  <div id="siri-hud-card" class="siri-hud-card hidden">
+    <div class="siri-aura-border"></div>
+    <div class="siri-hud-inner">
+      <div class="siri-header-row">
+        <div class="siri-badge">
+          <span class="siri-status-dot" id="siri-status-dot"></span>
+          <span id="siri-badge-text">SIRI / JENNY NEURAL LINK</span>
+        </div>
+        <button class="siri-close-btn" onclick="toggleSiriHud(false)" title="Minimize Siri HUD">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="siri-core-body">
+        <!-- Siri Animated Liquid Orb & Wave Visualizer -->
+        <div class="siri-orb-container" onclick="toggleJennyDirectListening()" title="Click to Speak to Jenny">
+          <div class="siri-orb-glow" id="siri-orb-glow"></div>
+          <div class="siri-orb-core" id="siri-orb-core">
+            <div class="siri-orb-layer layer-1"></div>
+            <div class="siri-orb-layer layer-2"></div>
+            <div class="siri-orb-layer layer-3"></div>
+          </div>
+          <canvas id="siri-wave-canvas" width="260" height="50"></canvas>
+        </div>
+
+        <div class="siri-text-content">
+          <div class="siri-prompt-title" id="siri-prompt-title">Hi, I'm Jenny. How can I help you today?</div>
+          <div class="siri-transcript-preview" id="siri-transcript-preview">Tap glowing Siri sphere or menu bar icon to speak...</div>
+        </div>
+      </div>
+
+      <!-- Quick Siri Action Chips -->
+      <div class="siri-chips-row">
+        <button class="siri-chip" onclick="executeQuickCommand('system report')"><i class="fa-solid fa-chart-pie"></i> Reports</button>
+        <button class="siri-chip" onclick="executeQuickCommand('show todo')"><i class="fa-solid fa-list-check"></i> To-Do</button>
+        <button class="siri-chip" onclick="executeQuickCommand('countdown tracker')"><i class="fa-solid fa-stopwatch"></i> Countdowns</button>
+        <button class="siri-chip" onclick="executeQuickCommand('google api quota')"><i class="fa-solid fa-gauge-high"></i> API Quota</button>
+        <button class="siri-chip" onclick="executeQuickCommand('open youtube')"><i class="fa-solid fa-play"></i> YouTube</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Jenny Quick HUD Bar Overlay (Siri Mini Mode) -->
+  <div id="jenny-floating-overlay" class="jenny-floating-overlay" onclick="toggleSiriHud(true)" title="Click to Open Siri Floating Interface">
+    <div class="siri-mini-orb">
+      <div class="siri-mini-core"></div>
+    </div>
+    <span class="floating-label"><i class="fa-solid fa-microphone"></i> SIRI / JENNY AI</span>
+    <span class="floating-status" id="floating-mic-state">READY (CLICK TO SPEAK)</span>
+  </div>
+
+  <!-- Floating Sci-Fi Spatial Window Overlay Modal -->
+  <div id="spatial-window-overlay" class="spatial-window-overlay hidden">
+    <div class="spatial-window-container">
+      <div class="spatial-window-header">
+        <div class="spatial-window-title" id="spatial-window-title">
+          <i class="fa-solid fa-window-maximize"></i> SPATIAL HUD WINDOW
+        </div>
+        <div class="spatial-window-actions">
+          <button class="win-btn win-close" title="Close Window" onclick="closeSpatialWindow()"><i class="fa-solid fa-xmark"></i> CLOSE</button>
+        </div>
+      </div>
+      <div class="spatial-window-body" id="spatial-window-body">
+        <!-- Active pop-out widget rendered here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <main class="dashboard-container">
+    
+    <!-- TOP HERO SECTION: MIC TOGGLE & CHAT CONSOLE -->
+    <section class="hero-stage-container">
+      
+      <!-- HERO LEFT: Central Holographic Core & Mic Toggle -->
+      <div class="assistant-core-container" id="assistant-core-trigger">
+        <div class="glass-sheen"></div>
+        <div class="hologram-grid"></div>
+        
+        <div class="core-header-badge">
+          <span class="pulse-dot"></span>
+          <span class="badge-text">SOUND ID: -OUBnvvuqEKdDWtapoJFn</span>
+        </div>
+
+        <div class="orb-wrapper">
+          <canvas id="waveform-canvas" width="420" height="420"></canvas>
+          
+          <div class="ring outer-ring"></div>
+          <div class="ring mid-ring"></div>
+          <div class="ring inner-ring"></div>
+          
+          <div class="core-node" id="assistant-core" title="Click to Toggle Active Listening">
+            <i class="fa-solid fa-microphone" id="mic-icon"></i>
+          </div>
+        </div>
+
+        <div class="core-status-text">
+          <span class="status-indicator-dot" id="status-dot"></span>
+          <span id="core-status">JENNY READY (CLICK TO SPEAK)</span>
+        </div>
+        
+        <div class="speech-detection-box" id="speech-detection-box">
+          <div class="speech-detection-label"><i class="fa-solid fa-waveform-lines"></i> DETECTED SPEECH INPUT:</div>
+          <p class="speech-detection-text" id="speech-detection-text">Click Mic or Mac Menu Bar to speak command...</p>
+        </div>
+      </div>
+
+      <!-- HERO RIGHT: Live Conversational Stream & Commands -->
+      <div class="widget-panel terminal-widget hero-terminal-card">
+        <div class="panel-header">
+          <div class="header-title"><i class="fa-solid fa-comments"></i> CONVERSATIONAL INTELLIGENCE STREAM</div>
+          <div class="header-controls">
+            <button class="popout-win-btn" onclick="openWidgetWindow('terminal-widget')" title="Pop Out Terminal Window"><i class="fa-solid fa-expand"></i> POP OUT</button>
+          </div>
+        </div>
+        
+        <div class="panel-body split-terminal">
+          <div class="terminal-col logs-col">
+            <div class="terminal-log" id="console-logs">
+              <div class="log-entry system"><span class="timestamp">[00:00:00]</span> Sound ID -OUBnvvuqEKdDWtapoJFn active. Zero audio buffer latency enabled.</div>
+              <div class="log-entry system"><span class="timestamp">[00:00:01]</span> Spatial Floating Window manager ready. Say "open todo" or "open project matrix".</div>
+            </div>
+          </div>
+          <div class="terminal-col mind-col">
+            <div class="terminal-log mind-log" id="mind-logs">
+              <div class="log-entry mind"><span class="timestamp">[00:00:00]</span> [Agent Mind] System boot complete. Spatial HUD windows linked.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Action Command Pills -->
+        <div class="quick-chips-bar">
+          <span class="chip-label"><i class="fa-solid fa-bolt"></i> QUICK ACTIONS:</span>
+          <button class="chip-btn" onclick="openWidgetWindow('widget-project-progress')">🗔 Project Matrix Window</button>
+          <button class="chip-btn" onclick="openWidgetWindow('widget-todo')">🗔 To-Do Window</button>
+          <button class="chip-btn" onclick="openWidgetWindow('widget-timer')">🗔 Timer Window</button>
+          <button class="chip-btn" onclick="openWidgetWindow('widget-vault')">🗔 Vault Window</button>
+          <button class="chip-btn" onclick="sendQuickCommand('volume 50%')">🔊 Volume 50%</button>
+          <button class="chip-btn" onclick="sendQuickCommand('brightness 80%')">☀️ Brightness 80%</button>
+        </div>
+
+        <div class="terminal-input-bar-container">
+          <div class="terminal-input-container">
+            <span class="prompt">BOSS@FRIDAY:~$</span>
+            <input type="text" id="terminal-input" placeholder="Type or speak a command (e.g. 'open todo list', 'open project matrix', 'close window')..." autocomplete="off">
+            <button id="terminal-send-btn" title="Send Command"><i class="fa-solid fa-paper-plane"></i></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BOTTOM BENTO GRID SECTION -->
+    <section class="widgets-grid-container">
+      
+      <!-- Onboarding Tutorial Card -->
+      <div class="widget-panel tutorial-widget" id="widget-tutorial">
+        <div class="panel-header animate-header">
+          <div class="header-title"><i class="fa-solid fa-graduation-cap"></i> ONBOARDING TUTORIAL</div>
+          <span class="widget-badge" id="tutorial-step-indicator">STEP 1/4</span>
+        </div>
+        <div class="panel-body tutorial-body">
+          <div class="tutorial-step active" data-step="1">
+            <h3><span class="step-num">01</span> INITIALIZE ACOUSTICS</h3>
+            <p>Click the **Holographic Core** (the large pulsing orb at top left) to grant browser microphone permissions.</p>
+            <button class="tutorial-next-btn" onclick="nextTutorialStep()">NEXT STEP <i class="fa-solid fa-arrow-right"></i></button>
+          </div>
+          <div class="tutorial-step" data-step="2">
+            <h3><span class="step-num">02</span> SPATIAL HUD WINDOWS</h3>
+            <p>Say **"open To-Do list window"** or **"open project matrix"** or click the **Pop-Out** button on any card to launch floating glass windows!</p>
+            <div class="tutorial-actions">
+              <button class="tutorial-prev-btn" onclick="prevTutorialStep()"><i class="fa-solid fa-arrow-left"></i> BACK</button>
+              <button class="tutorial-next-btn" onclick="nextTutorialStep()">NEXT STEP <i class="fa-solid fa-arrow-right"></i></button>
+            </div>
+          </div>
+          <div class="tutorial-step" data-step="3">
+            <h3><span class="step-num">03</span> SPOTIFY WORKSPACE TUNES</h3>
+            <p>Say: **"play Interstellar Theme on Spotify"**. FRIDAY will automatically boot Spotify and launch the track.</p>
+            <div class="tutorial-actions">
+              <button class="tutorial-prev-btn" onclick="prevTutorialStep()"><i class="fa-solid fa-arrow-left"></i> BACK</button>
+              <button class="tutorial-next-btn" onclick="nextTutorialStep()">NEXT STEP <i class="fa-solid fa-arrow-right"></i></button>
+            </div>
+          </div>
+          <div class="tutorial-step" data-step="4">
+            <h3><span class="step-num">04</span> ENCRYPTED VAULT MEMORY</h3>
+            <p>Say: **"remember that my garage code is 9940"** to write to secure storage.</p>
+            <div class="tutorial-actions">
+              <button class="tutorial-prev-btn" onclick="prevTutorialStep()"><i class="fa-solid fa-arrow-left"></i> BACK</button>
+              <button class="tutorial-finish-btn" onclick="finishTutorial()">COMPLETE <i class="fa-solid fa-check"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Widget: Real-Time Hardware Telemetry & Oscilloscope -->
+      <div class="widget-panel hardware-radar-widget" id="widget-hardware-radar">
+        <div class="panel-header">
+          <div class="header-title"><i class="fa-solid fa-wave-square"></i> HARDWARE TELEMETRY RADAR</div>
+          <div class="header-controls">
+            <span class="widget-badge" id="telemetry-fps-badge">60 FPS LIVE</span>
+            <button class="popout-win-btn" onclick="openWidgetWindow('widget-hardware-radar')" title="Pop-Out Window"><i class="fa-solid fa-expand"></i></button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="oscilloscope-container">
+            <canvas id="telemetry-oscilloscope-canvas" width="400" height="110"></canvas>
+          </div>
+          <div class="telemetry-metrics-grid">
+            <div class="telemetry-card">
+              <span class="label">CPU THREADS</span>
+              <span class="val" id="telemetry-cpu-val">--%</span>
+            </div>
+            <div class="telemetry-card">
+              <span class="label">RAM PRESSURE</span>
+              <span class="val" id="telemetry-ram-val">--%</span>
+            </div>
+            <div class="telemetry-card">
+              <span class="label">STORAGE FREE</span>
+              <span class="val" id="telemetry-disk-val">--GB</span>
+            </div>
+            <div class="telemetry-card">
+              <span class="label">SYS LATENCY</span>
+              <span class="val" id="telemetry-ping-val">12ms</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Widget: Atmospheric Weather & Planetary Radar -->
+      <div class="widget-panel weather-radar-widget" id="widget-weather-radar">
+        <div class="panel-header">
+          <div class="header-title"><i class="fa-solid fa-cloud-sun"></i> ATMOSPHERIC WEATHER RADAR</div>
+          <div class="header-controls">
+            <span class="widget-badge" id="weather-city-badge">NEW DELHI</span>
+            <button class="popout-win-btn" onclick="openWidgetWindow('widget-weather-radar')" title="Pop-Out Window"><i class="fa-solid fa-expand"></i></button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="weather-hero-row">
+            <div class="weather-temp-container">
+              <span class="weather-temp" id="weather-temp-val">30°C</span>
+              <span class="weather-condition" id="weather-condition-val">Partly Cloudy</span>
+            </div>
+            <div class="weather-icon-box" id="weather-icon-box">
+              <i class="fa-solid fa-cloud-sun"></i>
+            </div>
+          </div>
+
+          <div class="weather-details-grid">
+            <div class="weather-detail">
+              <span class="label">HUMIDITY</span>
+              <span class="val" id="weather-humidity-val">60%</span>
+            </div>
+            <div class="weather-detail">
+              <span class="label">WIND VECTOR</span>
+              <span class="val" id="weather-wind-val">14 km/h</span>
+            </div>
+            <div class="weather-detail">
+              <span class="label">UV INDEX</span>
+              <span class="val">MODERATE (5)</span>
+            </div>
+          </div>
+
+          <div class="weather-forecast-row" id="weather-forecast-row">
+            <div class="forecast-pill"><span class="day">MON</span><span class="temp">32°</span></div>
+            <div class="forecast-pill"><span class="day">TUE</span><span class="temp">33°</span></div>
+            <div class="forecast-pill"><span class="day">WED</span><span class="temp">31°</span></div>
+            <div class="forecast-pill"><span class="day">THU</span><span class="temp">34°</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Widget: Google AI Studio Token & Quota Matrix -->
+      <div class="widget-panel quota-widget" id="widget-api-quota">
+        <div class="panel-header">
+          <div class="header-title"><i class="fa-solid fa-key"></i> GOOGLE AI STUDIO TOKEN & QUOTA</div>
+          <div class="header-controls">
+            <span class="widget-badge" id="quota-status-badge">GEMINI 1.5 FLASH</span>
+            <button class="popout-win-btn" onclick="openWidgetWindow('widget-api-quota')" title="Pop-Out Window"><i class="fa-solid fa-expand"></i></button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="quota-bars-container">
+            <div class="quota-row">
+              <div class="quota-info">
+                <span class="label">REQUESTS / MIN (RPM)</span>
+                <span class="val" id="quota-rpm-text">2 / 15 RPM</span>
+              </div>
+              <div class="quota-track"><div class="quota-fill" id="quota-rpm-fill" style="width: 15%"></div></div>
+            </div>
+
+            <div class="quota-row">
+              <div class="quota-info">
+                <span class="label">TOKENS / MIN (TPM)</span>
+                <span class="val" id="quota-tpm-text">14,250 / 1,000,000 TPM</span>
+              </div>
+              <div class="quota-track"><div class="quota-fill" id="quota-tpm-fill" style="width: 5%"></div></div>
+            </div>
+
+            <div class="quota-row">
+              <div class="quota-info">
+                <span class="label">REQUESTS / DAY (RPD)</span>
+                <span class="val" id="quota-rpd-text">42 / 1,500 RPD</span>
+              </div>
+              <div class="quota-track"><div class="quota-fill" id="quota-rpd-fill" style="width: 3%"></div></div>
+            </div>
+          </div>
+
+          <div class="api-key-input-bar">
+            <input type="password" id="gemini-key-input" placeholder="Paste Google AI Studio API Key..." autocomplete="off">
+            <button id="save-gemini-key-btn" onclick="saveGeminiKeyFromInput()"><i class="fa-solid fa-floppy-disk"></i> SAVE</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Widget: Project Progression Matrix -->
+      <div class="widget-panel project-progress-widget" id="widget-project-progress">
+        <div class="panel-header">
+          <div class="header-title"><i class="fa-solid fa-chart-line"></i> PROJECT PROGRESSION MATRIX</div>
+          <div class="header-controls">
+            <span class="widget-badge" id="project-overall-pct">75% COMPLETE</span>
+            <button class="popout-win-btn" onclick="openWidgetWindow('widget-project-progress')" title="Pop-Out Window"><i class="fa-solid fa-expand"></i></button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="project-overall-bar-container">
+            <div class="project-bar-header">
+              <span class="label">OVERALL MILESTONE PROGRESS</span>
+              <span class="val" id="project-bar-pct-text">75%</span>
+            </div>
+            <div class="project-progress-track">
+              <div class="project-progress-fill" id="project-bar-fill" style="width: 75%"></div>
+            </div>
+          </div>
+          
+          <div class="milestones-list" id="milestones-list">
+            <div class="milestone-item completed" onclick="toggleMilestone(0)">
+              <i class="fa-solid fa-circle-check"></i>
+              <span class="title">Phase 1: Core Neural Acoustic Engine</span>
+            </div>
+            <div class="milestone-item completed" onclick="toggleMilestone(1)">
+              <i class="fa-solid fa-circle-check"></i>
+              <span class="title">Phase 2: macOS Native IPC Controls & Security</span>
+            </div>
+            <div class="milestone-item active" onclick="toggleMilestone(2)">
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              <span class="title">Phase 3: High-Tech Glassmorphic UI Overhaul</span>
+            </div>
+            <div class="milestone-item pending" onclick="toggleMilestone(3)">
+              <i class="fa-regular fa-circle"></i>
+              <span class="title">Phase 4: Autonomous Agent Pipeline Integrations</span>
+            </div>
+          </div>
+
+          <div class="project-add-bar">
+            <input type="text" id="milestone-input" placeholder="Add new project milestone..." autocomplete="off">
+            <button id="milestone-add-btn" onclick="addMilestoneFromInput()"><i class="fa-solid fa-plus"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Widget 1: To-Do List -->
+      <div class="widget-panel todo-widget" id="widget-todo">
+        <div class="panel-header">
+          <div class="header-title"><i class="fa-solid fa-list-check"></i> TO-DO LIST & TASK MATRIX</div>
+          <div class="header-controls">
+            <span class="widget-badge" id="todo-count">0 TASKS</span>
+            <button class="popout-win-btn" onclick="openWidgetWindow('widget-todo')" title="Pop-Out Window"><i class="fa-solid fa-expand"></i></button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="todo-list-container" id="todo-list">
+            <div class="empty-state">No pending operations, BOSS.</div>
+          </div>
+          <div class="todo-input-bar">
+            <input type="text" id="todo-input" placeholder="Add new task..." autocomplete="off">
+            <button id="todo-add-btn"><i class="fa-solid fa-plus"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Widget 2: Date Countdown -->
+      <div class="widget-panel countdown-widget" id="widget-countdown">
+        <div class="panel-header">
+          <div class="header-title"><i class="fa-solid fa-hourglass-half"></i> EVENT COUNTDOWN</div>
+          <div class="header-controls">
+            <button class="header-action-btn" id="edit-countdown-btn" title="Set Target Date"><i class="fa-solid fa-pen-to-square"></i></button>
+            <button class="popout-win-btn" onclick="openWidgetWindow('widget-countdown')" title="Pop-Out Window"><i class="fa-solid fa-expand"></i></button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="countdown-title-container">
+            <span class="label">TARGET OPERATION</span>
+            <h3 id="countdown-label">NEXT MILESTONE</h3>
+          </div>
+          
+          <div class="countdown-display">
+            <div class="countdown-segment">
+              <span class="number" id="cd-days">00</span>
+              <span class="label">DAYS</span>
+            </div>
+            <div class="countdown-divider">:</div>
+            <div class="countdown-segment">
+              <span class="number" id="cd-hours">00</span>
+              <span class="label">HOURS</span>
+            </div>
+            <div class="countdown-divider">:</div>
+            <div class="countdown-segment">
+              <span class="number" id="cd-mins">00</span>
+              <span class="label">MINS</span>
+            </div>
+            <div class="countdown-divider">:</div>
+            <div class="countdown-segment">
+              <span class="number" id="cd-secs">00</span>
+              <span class="label">SECS</span>
+            </div>
+          </div>
+
+          <div class="countdown-settings hidden" id="countdown-settings-panel">
+            <input type="text" id="countdown-label-input" placeholder="Event Label (e.g. Next Deadline)">
+            <input type="datetime-local" id="countdown-date-input">
+            <div class="settings-actions">
+              <button class="btn btn-save" id="save-countdown-btn">Save</button>
+              <button class="btn btn-cancel" id="cancel-countdown-btn">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Widget 3: Timer -->
+      <div class="widget-panel timer-widget" id="widget-timer">
+        <div class="panel-header">
+          <div class="header-title"><i class="fa-solid fa-clock"></i> COUNTDOWN TIMER</div>
+          <div class="header-controls">
+            <button class="popout-win-btn" onclick="openWidgetWindow('widget-timer')" title="Pop-Out Window"><i class="fa-solid fa-expand"></i></button>
+          </div>
+        </div>
+        <div class="panel-body timer-body">
+          <div class="timer-visual-container">
+            <svg class="progress-ring" width="120" height="120">
+              <circle class="progress-ring-bg" stroke="rgba(255,255,255,0.05)" stroke-width="6" fill="transparent" r="50" cx="60" cy="60"/>
+              <circle class="progress-ring-bar" id="timer-progress" stroke="#ffffff" stroke-width="6" fill="transparent" r="50" cx="60" cy="60" stroke-dasharray="314.16" stroke-dashoffset="314.16"/>
+            </svg>
+            <div class="timer-digits-container">
+              <span class="timer-digits" id="timer-display">00:00</span>
+            </div>
+          </div>
+          
+          <div class="timer-controls">
+            <div class="timer-setup" id="timer-setup-inputs">
+              <input type="number" id="timer-min-input" min="0" max="99" placeholder="MIN" value="5">
+              <span>m</span>
+              <input type="number" id="timer-sec-input" min="0" max="59" placeholder="SEC" value="00">
+              <span>s</span>
+            </div>
+            
+            <div class="timer-buttons">
+              <button class="btn-icon" id="timer-start-btn" title="Start Timer"><i class="fa-solid fa-play"></i></button>
+              <button class="btn-icon hidden" id="timer-pause-btn" title="Pause Timer"><i class="fa-solid fa-pause"></i></button>
+              <button class="btn-icon" id="timer-reset-btn" title="Reset Timer"><i class="fa-solid fa-arrow-rotate-left"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Widget 4: Stopwatch -->
+      <div class="widget-panel stopwatch-widget" id="widget-stopwatch">
+        <div class="panel-header">
+          <div class="header-title"><i class="fa-solid fa-stopwatch"></i> CHRONOMETER</div>
+          <div class="header-controls">
+            <button class="popout-win-btn" onclick="openWidgetWindow('widget-stopwatch')" title="Pop-Out Window"><i class="fa-solid fa-expand"></i></button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="stopwatch-display">
+            <span class="digits" id="sw-display">00:00<span class="ms">.00</span></span>
+          </div>
+          
+          <div class="stopwatch-controls">
+            <button class="btn-text" id="sw-lap-btn" disabled>LAP</button>
+            <button class="btn-text" id="sw-start-btn">START</button>
+            <button class="btn-text hidden" id="sw-stop-btn">STOP</button>
+            <button class="btn-text" id="sw-reset-btn">RESET</button>
+          </div>
+          
+          <div class="stopwatch-laps" id="sw-laps"></div>
+        </div>
+      </div>
+
+      <!-- Widget 5: Memory Vault -->
+      <div class="widget-panel vault-widget" id="widget-vault">
+        <div class="panel-header">
+          <div class="header-title"><i class="fa-solid fa-vault"></i> SECURE MEMORY VAULT</div>
+          <div class="header-controls">
+            <span class="widget-badge" id="vault-count">0 DATA</span>
+            <button class="popout-win-btn" onclick="openWidgetWindow('widget-vault')" title="Pop-Out Window"><i class="fa-solid fa-expand"></i></button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="vault-list-container" id="vault-list">
+            <div class="empty-state">Vault database empty, BOSS.</div>
+          </div>
+          <div class="vault-input-bar">
+            <input type="text" id="vault-input" placeholder="Tell FRIDAY to remember something..." autocomplete="off">
+            <button id="vault-add-btn"><i class="fa-solid fa-floppy-disk"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Widget: System Commands & Protocols Matrix -->
+      <div class="widget-panel protocols-widget" id="widget-protocols" style="grid-column: 1 / -1;">
+        <div class="panel-header animate-header">
+          <div class="header-title"><i class="fa-solid fa-microchip"></i> F.R.I.D.A.Y. SYSTEM PROTOCOLS</div>
+          <div class="header-controls">
+            <span class="widget-badge">18 COMMANDS</span>
+            <button class="popout-win-btn" onclick="openWidgetWindow('widget-protocols')" title="Pop-Out Window"><i class="fa-solid fa-expand"></i></button>
+          </div>
+        </div>
+        <div class="panel-body protocols-body">
+          <div class="protocol-section">
+            <h4><i class="fa-solid fa-desktop"></i> PC HARDWARE CONTROLS</h4>
+            <div class="protocol-grid">
+              <div class="protocol-item">
+                <span class="command">"volume &lt;0-100&gt;" / "mute"</span>
+                <span class="desc">Adjust volume levels or mute system sound</span>
+              </div>
+              <div class="protocol-item">
+                <span class="command">"brightness &lt;0-100&gt;"</span>
+                <span class="desc">Modify screen luminance natively</span>
+              </div>
+              <div class="protocol-item">
+                <span class="command">"lock pc" / "sleep pc"</span>
+                <span class="desc">Secure workstation or display sleep</span>
+              </div>
+              <div class="protocol-item">
+                <span class="command">"screenshot"</span>
+                <span class="desc">Capture screen to macOS Desktop</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Widget 6: Settings & Speech Controls -->
+      <div class="widget-panel voice-settings-widget" id="widget-settings">
+        <div class="panel-header">
+          <div class="header-title"><i class="fa-solid fa-sliders"></i> VOICE & SYSTEM CONFIG</div>
+          <div class="header-controls">
+            <button class="popout-win-btn" onclick="openWidgetWindow('widget-settings')" title="Pop-Out Window"><i class="fa-solid fa-expand"></i></button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="setting-row">
+            <label for="voice-select">SOUND TOKEN VOICE</label>
+            <select id="voice-select">
+              <option value="-OUBnvvuqEKdDWtapoJFn">-OUBnvvuqEKdDWtapoJFn (Locked Sound Token)</option>
+            </select>
+          </div>
+
+          <div class="setting-row">
+            <label for="speech-rate">SPEECH RATE</label>
+            <div class="slider-container">
+              <input type="range" id="speech-rate" min="0.5" max="2" step="0.1" value="1.0">
+              <span class="slider-val" id="speech-rate-val">1.0x</span>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <label for="speech-pitch">SPEECH PITCH</label>
+            <div class="slider-container">
+              <input type="range" id="speech-pitch" min="0.5" max="2" step="0.1" value="1.0">
+              <span class="slider-val" id="speech-pitch-val">1.0</span>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <label for="continuous-listen">CONTINUOUS WAKE WORD</label>
+            <label class="switch">
+              <input type="checkbox" id="continuous-listen" checked>
+              <span class="slider round"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <footer class="hud-footer">
+    <div class="footer-left">
+      <span class="glitch-text" data-text="SYSTEM SECURED">SYSTEM SECURED</span>
+    </div>
+    <div class="footer-center">
+      <span>PERMANENT SOUND CORE ID: -OUBnvvuqEKdDWtapoJFn</span>
+    </div>
+    <div class="footer-right">
+      <span>SPATIAL HUD WINDOWS: READY</span>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
