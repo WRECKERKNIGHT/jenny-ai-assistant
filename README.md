@@ -59,6 +59,77 @@ npm start
 
 ---
 
+## 🖥️ Command-Line Interface (CLI)
+
+The bundled `friday-cli.js` turns your terminal into a JENNY console:
+
+```bash
+# Run the CLI
+node friday-cli.js
+
+# Flags & commands inside the prompt
+help                 Show the built-in command library
+clear                Clear the console
+todos / todo add / todo complete / todo remove    Task manager
+
+# Standalone flags
+node friday-cli.js --help
+node friday-cli.js --version
+```
+
+---
+
+## 🪟 JENNY on Windows (Python Port)
+
+A native Windows subsystem lives in [`windows-version/`](windows-version) — a Python/Flask server with the same APIs plus OS-specific extras:
+
+```bash
+cd windows-version
+pip install -r requirements.txt
+python server.py            # API on http://localhost:3005
+python app.py               # Desktop pywebview window (modes.html)
+python hud.py               # transparent always-on-top HUD overlay
+```
+
+* `python app.py --page ultron.html --debug` — pick the startup page and enable DevTools.
+* `python hud.py --x 50 --y 50 --width 480 --height 720` — reposition the HUD overlay.
+* Runtime telemetry: `GET /api/runtime` (uptime, request counts, hot endpoints).
+
+### ✋ Gesture Control (ULTRON)
+
+`windows-version/gesture_controller.py` drives hand-tracking PC control via MediaPipe + PyAutoGUI:
+
+* **Pointer mode**: point to move the mouse, pinch to click, double-pinch to double-click.
+* **Browser / System / Media modes**: two-handed combo (both palms) cycles modes; mapped gestures like `THUMBS_UP`, `FIST`, `TWO_FINGERS` run PC actions.
+* Configurable in `gesture_config.json` (smoothing, cooldowns, FPS budget).
+
+---
+
+## 🐳 Deployment (Docker / Render / Heroku)
+
+```bash
+# Docker
+docker build -t jenny-ai-assistant .
+docker run -p 3000:3000 jenny-ai-assistant
+# Container runs non-root with a HEALTHCHECK on /api/system-status
+
+# Render.com — commit render.yaml, then attach the repo as a Blueprint service
+
+# Heroku
+git push heroku main   # uses Procfile (web: node server.js)
+```
+
+---
+
+## 🎩 Holographic HUD
+
+Open `http://<host>:3000/mini.html` for a lightweight, always-on-top HUD:
+* Live system clock over the holographic ring.
+* Clipboard sync, chat, and system status at a glance.
+* Used by `windows-version/hud.py` as the transparent overlay window.
+
+---
+
 ## 📱 Mobile Remote App (Android)
 
 1. Open **Chrome** on your Android phone.
