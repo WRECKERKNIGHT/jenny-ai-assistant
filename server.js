@@ -1629,6 +1629,54 @@ app.post('/api/chat', rateLimitMiddleware, async (req, res) => {
   const query = message.toLowerCase().trim();
 
   // ============================================
+  // PHASE 0: INSTANT OFFLINE KNOWLEDGE SHORTCUTS
+  // Pure local utilities answered without AI latency
+  // ============================================
+
+  // --- Quick math evaluation (token-based, no eval) ---
+  const mathMatch = query.match(/^(?:what is|what's|calculate|compute|solve)?\s*([0-9.]+)\s*([+\-*/x×÷])\s*([0-9.]+)\s*$/i);
+  if (mathMatch) {
+    const a = parseFloat(mathMatch[1]);
+    const b = parseFloat(mathMatch[3]);
+    const op = mathMatch[2].replace('x', '*').replace('×', '*').replace('÷', '/');
+    if (!isNaN(a) && !isNaN(b)) {
+      const result = op === '+' ? a + b
+        : op === '-' ? a - b
+        : op === '*' ? a * b
+        : b === 0 ? null : a / b;
+      if (result !== null) {
+        const t = `${a} ${op} ${b} equals ${Math.round(result * 100) / 100}, BOSS.`;
+        return res.json({ success: true, reply: { text: t, speech: t } });
+      }
+    }
+  }
+
+  // --- Memory Vault recall ---
+  const recallMatch = query.match(/(?:recall|what did i (?:save|store|remember|note down)|look up (?:in )?(?:my )?(?:vault|memory))/i);
+  if (recallMatch) {
+    let vaultItems = [];
+    if (fs.existsSync(VAULT_FILE)) {
+      try { vaultItems = JSON.parse(fs.readFileSync(VAULT_FILE, 'utf8')); } catch (e) {}
+    }
+    if (vaultItems.length === 0) {
+      const t = 'Your vault is empty, BOSS.';
+      return res.json({ success: true, reply: { text: t, speech: t } });
+    }
+    let keyword = query
+      .split(/recall|what did i (?:save|store|remember|note down)|look up (?:in )?(?:my )?(?:vault|memory)/)
+      .pop()
+      .replace(/^(about|in the|from the|the)\s+/, '')
+      .trim();
+    if (keyword.length > 40) keyword = '';
+    const matches = keyword ? vaultItems.filter(it => it.text.toLowerCase().includes(keyword)) : vaultItems;
+    const chosen = matches.slice(-3);
+    const t = matches.length === 0
+      ? `Nothing stored about "${keyword}" in the vault yet, BOSS.`
+      : `Recalling from vault${keyword ? ` for "${keyword}"` : ''}: ${chosen.map(it => it.text).join('. ')}`;
+    return res.json({ success: true, reply: { text: t, speech: t } });
+  }
+
+  // ============================================
   // PHASE 1: INSTANT OFFLINE SYSTEM COMMANDS
   // These run BEFORE Gemini to avoid 7s+ delays
   // ============================================
