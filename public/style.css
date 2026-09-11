@@ -506,6 +506,31 @@ html,body { height:100%; background:var(--bg); color:var(--txt); font-family:var
 .welcome-footer-hint { margin-top:24px; display:flex; align-items:center; gap:6px; font-family:var(--orbitron); font-size:9px; font-weight:700; color:var(--txt3); opacity:0.6; text-transform:uppercase; letter-spacing:1px; }
 .welcome-footer-hint i { font-size:10px; color:var(--cyan); }
 
+/* Welcome suggestion chip (rotating tips) */
+.welcome-tip {
+  display:flex; align-items:center; gap:8px;
+  margin:-20px 0 24px; padding:8px 16px;
+  background:rgba(255,215,0,0.05);
+  border:1px solid rgba(255,215,0,0.14);
+  border-radius:999px;
+  font-family:var(--rajdhani); font-size:11px; font-weight:600;
+  color:var(--txt2); letter-spacing:0.4px;
+}
+.welcome-tip .tip-icon { font-size:11px; color:var(--cyan); }
+.welcome-tip.tip-pop { animation:tip-pop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+@keyframes tip-pop { 0% { opacity:0; transform:translateY(8px) scale(0.94); } 100% { opacity:1; transform:translateY(0) scale(1); } }
+
+/* Accessible focus rings for interactive elements */
+button:focus-visible, input:focus-visible, .dock-btn:focus-visible, .welcome-card:focus-visible {
+  outline:2px solid rgba(255,215,0,0.55); outline-offset:2px;
+}
+:focus:not(:focus-visible) { outline:none; }
+
+/* Reduced-motion accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration:0.001s !important; transition-duration:0.001s !important; }
+}
+
 /* Messages */
 .msg { display:flex; flex-direction:column; gap:3px; animation:msg-in 0.35s cubic-bezier(0.16,1,0.3,1) forwards; opacity:0; }
 .msg-ai.msg-pop { animation:msg-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
