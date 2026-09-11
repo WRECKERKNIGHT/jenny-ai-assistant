@@ -12,3 +12,6 @@ Rules and principles to follow when animating UI elements:
    - Hover: Slight raise (`translateY(-2px)`) + subtle golden drop-shadow glow.
    - Active: Pressed state (`translateY(1px)`) + dim glow.
 4. **Radar & Particle Sweeps**: Use high-performance canvas loops running on `requestAnimationFrame` instead of nested CSS transitions or layout shifts.
+5. **GPU-Friendly Animations**: Animate only `transform` and `opacity`; never `top/left/width/height/box-shadow` in a repeating loop (causes layout/paint thrash).
+6. **Reduced Motion**: Wrap decorative sweeps in `@media (prefers-reduced-motion: reduce)` and provide a static fallback state.
+7. **Duration Budget**: Keep micro-interactions under `0.2s`, panels/sheets `0.3s–0.45s`, and full-screen crossfades ≤ `0.6s` with the `cubic-bezier(0.16, 1, 0.3, 1)` ease-out.
