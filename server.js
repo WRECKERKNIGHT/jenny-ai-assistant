@@ -10,6 +10,8 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3005;
+const SERVER_START = Date.now();
+const { version: APP_VERSION } = require('./package.json');
 
 const VAULT_FILE = path.join(__dirname, 'vault.json');
 const OFFLINE_MEMORY_FILE = path.join(__dirname, 'offline_memory.json');
@@ -1456,6 +1458,25 @@ app.delete('/api/vault', (req, res) => {
   const filtered = items.filter(item => item.id !== id);
   fs.writeFileSync(VAULT_FILE, JSON.stringify(filtered, null, 2), 'utf8');
   res.json({ success: true, message: `Item ${id} deleted from vault.` });
+});
+
+app.get('/api/vault/search', (req, res) => {
+  const q = (req.query.q || '').trim().toLowerCase();
+  if (!q) {
+    return res.status(400).json({ success: false, message: 'Query parameter q is required.' });
+  }
+  let items = [];
+  if (fs.existsSync(VAULT_FILE)) {
+    try {
+      items = JSON.parse(fs.readFileSync(VAULT_FILE, 'utf8'));
+    } catch (e) {
+      console.error('[Vault Search] Read error:', e);
+    }
+  }
+  const matches = items.filter(item =>
+    (item.text || '').toLowerCase().includes(q)
+  );
+  res.json({ success: true, query: q, count: matches.length, data: matches });
 });
 
 // Endpoint to check macOS permissions status
@@ -3205,6 +3226,33 @@ setInterval(updateSystemStatusTelemetry, 3000);
 
 app.get('/api/system-status', (req, res) => {
   res.json(cachedSystemStatus);
+});
+
+app.get('/api/health', (req, res) => {
+  const uptimeSec = Math.round((Date.now() - SERVER_START) / 1000);
+  const mem = process.memoryUsage();
+  const vaultExists = fs.existsSync(VAULT_FILE);
+  let vaultCount = 0;
+  if (vaultExists) {
+    try {
+      vaultCount = JSON.parse(fs.readFileSync(VAULT_FILE, 'utf8')).length;
+    } catch (e) { /* ignore corrupt vault */ }
+  }
+  res.json({
+    success: true,
+    status: 'ok',
+    version: APP_VERSION,
+    node: process.version,
+    platform: process.platform,
+    uptime: uptimeSec,
+    memory: {
+      rss: mem.rss,
+      heapUsed: mem.heapUsed,
+      heapTotal: mem.heapTotal,
+    },
+    vault: { exists: vaultExists, entries: vaultCount },
+    rateLimits: RATE_LIMITS,
+  });
 });
 
 // Endpoint for ElevenLabs Text-to-Speech (Voice ID: 21m00Tcm4TlvDq8ikWAM - "Rachel")
