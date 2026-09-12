@@ -55,6 +55,35 @@ def handle_extended_commands(command):
         except Exception:
             return "Couldn't get screen resolution, Boss!"
 
+    if "battery" in lower or "battery percentage" in lower or "battery status" in lower:
+        try:
+            class SYSTEM_POWER_STATUS(ctypes.Structure):
+                _fields_ = [
+                    ("ACLineStatus", ctypes.c_byte),
+                    ("BatteryFlag", ctypes.c_byte),
+                    ("BatteryLifePercent", ctypes.c_byte),
+                    ("SystemStatusFlag", ctypes.c_byte),
+                    ("BatteryLifeTime", ctypes.c_ulong),
+                    ("BatteryFullLifeTime", ctypes.c_ulong),
+                ]
+            status = SYSTEM_POWER_STATUS()
+            ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(status))
+            pct = status.BatteryLifePercent
+            plugged = "plugged in" if status.ACLineStatus == 1 else "on battery"
+            return f"Battery at {pct}%, {plugged}, Boss!"
+        except Exception:
+            return "Couldn't read battery status, Boss!"
+
+    if "disk space" in lower or "free space" in lower or "storage" in lower or "drive space" in lower:
+        try:
+            import shutil
+            total, used, free = shutil.disk_usage(os.environ.get('SYSTEMDRIVE', 'C:'))
+            gb = 1024 ** 3
+            return (f"Drive {os.environ.get('SYSTEMDRIVE', 'C:')}: {used // gb} GB used, "
+                    f"{free // gb} GB free of {total // gb} GB, Boss!")
+        except Exception:
+            return "Couldn't read disk usage, Boss!"
+
     if "list processes" in lower or "running apps" in lower or "task list" in lower:
         try:
             result = subprocess.run(
@@ -79,15 +108,6 @@ def handle_extended_commands(command):
     if "what time zone" in lower or "time zone" in lower:
         tz = time.tzname
         return f"Time zone: {tz[0]} ({tz[1]}), Boss!"
-
-    if "screen resolution" in lower or "display" in lower and "resolution" in lower:
-        try:
-            user32 = ctypes.windll.user32
-            w = user32.GetSystemMetrics(0)
-            h = user32.GetSystemMetrics(1)
-            return f"Screen: {w} x {h} pixels, Boss!"
-        except Exception:
-            return "Couldn't detect screen resolution, Boss!"
 
     if "computer name" in lower or "pc name" in lower or "hostname" in lower:
         return f"Computer name: {os.environ.get('COMPUTERNAME', 'Unknown')}, Boss!"
@@ -245,6 +265,22 @@ def handle_extended_commands(command):
     if "open chatgpt" in lower or "open ai" in lower:
         webbrowser.open("https://chat.openai.com")
         return "Opening ChatGPT, Boss!"
+
+    if "open youtube" in lower:
+        webbrowser.open("https://youtube.com")
+        return "Opening YouTube, Boss!"
+
+    if "open whatsapp" in lower or "open whatsapp web" in lower:
+        webbrowser.open("https://web.whatsapp.com")
+        return "Opening WhatsApp Web, Boss!"
+
+    if "open zoom" in lower:
+        webbrowser.open("https://zoom.us")
+        return "Opening Zoom, Boss!"
+
+    if "open spotify" in lower:
+        webbrowser.open("https://open.spotify.com")
+        return "Opening Spotify, Boss!"
 
     if "open gmail" in lower or "open email" in lower:
         webbrowser.open("https://mail.google.com")
