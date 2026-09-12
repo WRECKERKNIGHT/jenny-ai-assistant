@@ -3,6 +3,18 @@
 # Exit on error
 set -e
 
+BINARIES_ONLY=0
+NO_MASK=0
+for arg in "$@"; do
+  case "$arg" in
+    --binaries-only) BINARIES_ONLY=1 ;;
+    --no-mask) NO_MASK=1 ;;
+    --help|-h)
+      echo "Usage: $0 [--binaries-only] [--no-mask]"
+      exit 0 ;;
+  esac
+done
+
 echo "================ BUNDLING BINARIES ================"
 # Clean old dist folder if exists
 rm -rf dist
@@ -34,9 +46,16 @@ mkdir -p "$MACOS_DIR"
 mkdir -p "$RESOURCES_DIR"
 
 # Run python image masking script first to ensure squircle transparency
-if [ -f "mask_icon.py" ]; then
+if [ -f "mask_icon.py" ] && [ "$NO_MASK" -eq 0 ]; then
     echo "Applying Python Pillow macOS squircle masking to logo.png..."
     python3 mask_icon.py
+fi
+
+if [ "$BINARIES_ONLY" -eq 1 ]; then
+    echo "================ BINARIES ONLY - SKIPPING APP BUNDLE ================"
+    echo "Build outputs created in the dist/ folder:"
+    ls -la dist/
+    exit 0
 fi
 
 # Copy the server executable into the bundle as the backend binary
