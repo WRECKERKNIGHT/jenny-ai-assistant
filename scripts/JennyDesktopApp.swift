@@ -201,19 +201,26 @@ class DesktopAppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate,
     }
 
     func checkServer() {
-        guard let url = URL(string: "\(SERVER_URL)/api/system-status?t=\(Int(Date().timeIntervalSince1970))") else { return }
+        guard let url = URL(string: "\(SERVER_URL)/api/health?t=\(Int(Date().timeIntervalSince1970))") else { return }
         var request = URLRequest(url: url)
         request.timeoutInterval = HEALTH_CHECK_TIMEOUT
-        let task = URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
+        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             let online = error == nil && (response as? HTTPURLResponse)?.statusCode == 200
-            DispatchQueue.main.async { self?.updateServerStatus(online) }
+            var version = ""
+            if let data = data,
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let v = json["version"] as? String {
+                version = v
+            }
+            DispatchQueue.main.async { self?.updateServerStatus(online, version: version) }
         }
         task.resume()
     }
 
-    func updateServerStatus(_ online: Bool) {
+    func updateServerStatus(_ online: Bool, version: String = "") {
         serverOnline = online
-        statusLabel?.stringValue = online ? "● Online" : "● Offline"
+        let suffix = version.isEmpty ? "" : "  ·  \(version)"
+        statusLabel?.stringValue = online ? "● Online\(suffix)" : "● Offline"
         statusLabel?.textColor = online ? NSColor.systemGreen : NSColor.systemOrange
         if online {
             loadMainUI()
