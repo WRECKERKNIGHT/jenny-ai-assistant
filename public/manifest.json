@@ -30,6 +30,24 @@
       "short_name": "Vol 80",
       "description": "Set Mac volume to 80%",
       "url": "/mobile.html?action=volume"
+    },
+    {
+      "name": "Full Briefing",
+      "short_name": "Brief",
+      "description": "Get a full system overview",
+      "url": "/mobile.html?action=briefing"
+    },
+    {
+      "name": "Purge RAM",
+      "short_name": "Purge",
+      "description": "Free up memory with purge",
+      "url": "/mobile.html?action=purge"
+    },
+    {
+      "name": "Take Screenshot",
+      "short_name": "Capture",
+      "description": "Capture the Mac screen",
+      "url": "/mobile.html?action=screenshot"
     }
   ],
   "icons": [

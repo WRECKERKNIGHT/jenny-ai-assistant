@@ -662,6 +662,21 @@
           }
         }, 80);
       }
+
+      if (action === 'notify') {
+        const body = value || 'JENNY has a message for you, BOSS!';
+        if ('Notification' in window && Notification.permission === 'granted') {
+          try {
+            new Notification('J.E.N.N.Y.', { body, tag: 'jenny-remote', renotify: true });
+            return;
+          } catch (e) {}
+        }
+        showMobileToast(body);
+      }
+      
+      if (action === 'host-ping') {
+        showMobileToast(`Mac health: ${value || 'reporting normal'}`);
+      }
       
       if (action === 'toast') {
         showMobileToast(value || 'System ping, BOSS!');
@@ -724,12 +739,39 @@
     checkServerStatus();
     setInterval(checkServerStatus, 10000);
 
-    // Quick action deep links: /mobile.html?action=wake|lock|volume
+    // Quick action deep links: /mobile.html?action=wake|lock|volume|...
     const urlAction = new URLSearchParams(window.location.search).get('action');
     if (urlAction) {
-      const launchMap = { wake: 'wake mac display', lock: 'lock screen', volume: 'volume 80' };
+      const launchMap = {
+        wake: 'wake mac display',
+        lock: 'lock screen',
+        volume: 'volume 80',
+        briefing: 'brief JENNY',
+        purge: 'purge ram',
+        screenshot: 'take screenshot',
+        mute: 'volume mute',
+        sleep: 'sleep display'
+      };
       setTimeout(() => executeRemote(launchMap[urlAction] || urlAction), 1200);
     }
+
+    // Keep the PWA screen awake while the remote is in use.
+    let wakeLock = null;
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener('release', () => { wakeLock = null; });
+        }
+      } catch (e) { /* wake lock unavailable */ }
+    }
+    async function refreshWakeLock() {
+      if (!wakeLock) requestWakeLock();
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') refreshWakeLock();
+    });
+    requestWakeLock();
 
     document.getElementById('log-clear')?.addEventListener('click', () => {
       logFeed.innerHTML = '';
