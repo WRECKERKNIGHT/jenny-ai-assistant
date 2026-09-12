@@ -68,6 +68,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
     var healthTimer: Timer?
     var serverMenuItem = NSMenuItem(title: "  ● Checking server...", action: nil, keyEquivalent: "")
     var statusMenuItem = NSMenuItem(title: "  Status: Starting", action: nil, keyEquivalent: "")
+    var versionMenuItem = NSMenuItem(title: "  v-.-.-", action: nil, keyEquivalent: "")
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -123,6 +124,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
 
         statusMenuItem.isEnabled = false
         menu.addItem(statusMenuItem)
+
+        versionMenuItem.isEnabled = false
+        menu.addItem(versionMenuItem)
         menu.addItem(NSMenuItem.separator())
 
         let miniItem = NSMenuItem(title: "  Open Mini HUD", action: #selector(togglePopover(_:)), keyEquivalent: "j")
@@ -136,6 +140,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
         let mainItem = NSMenuItem(title: "  Open Main Interface", action: #selector(openMainApp), keyEquivalent: "o")
         mainItem.target = self
         menu.addItem(mainItem)
+
+        let mobileItem = NSMenuItem(title: "  Mobile Remote", action: #selector(openMobileRemote), keyEquivalent: "p")
+        mobileItem.target = self
+        menu.addItem(mobileItem)
         menu.addItem(NSMenuItem.separator())
 
         let weatherItem = NSMenuItem(title: "  Quick Weather", action: #selector(quickWeather), keyEquivalent: "w")
@@ -171,20 +179,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
     }
 
     func checkServer() {
-        guard let url = URL(string: "\(SERVER_URL)/api/system-status?t=\(Int(Date().timeIntervalSince1970))") else { return }
+        guard let url = URL(string: "\(SERVER_URL)/api/health?t=\(Int(Date().timeIntervalSince1970))") else { return }
         var request = URLRequest(url: url)
         request.timeoutInterval = HEALTH_CHECK_TIMEOUT
-        let task = URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
+        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             let online = error == nil && (response as? HTTPURLResponse)?.statusCode == 200
-            DispatchQueue.main.async { self?.updateServerStatus(online) }
+            var version = ""
+            if let data = data,
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                if let v = json["version"] as? String { version = v }
+            }
+            DispatchQueue.main.async { self?.updateServerStatus(online, version: version) }
         }
         task.resume()
     }
 
-    func updateServerStatus(_ online: Bool) {
+    func updateServerStatus(_ online: Bool, version: String = "") {
         serverOnline = online
         serverMenuItem.title = online ? "  ● Server Online" : "  ● Server Offline"
         statusMenuItem.title = online ? "  Status: Ready" : "  Status: Starting Server..."
+        versionMenuItem.title = version.isEmpty ? "  v2.0" : "  v\(version) core"
         if online {
             loadMiniHUD()
         } else {
@@ -237,6 +251,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
 
     @objc func openMainApp() {
         if let url = URL(string: SERVER_URL) { NSWorkspace.shared.open(url) }
+    }
+
+    @objc func openMobileRemote() {
+        if let url = URL(string: "\(SERVER_URL)/mobile.html") { NSWorkspace.shared.open(url) }
     }
 
     @objc func quickWeather() {

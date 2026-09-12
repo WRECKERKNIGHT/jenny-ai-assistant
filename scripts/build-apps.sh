@@ -1,6 +1,7 @@
 #!/bin/bash
 # Build macOS native apps from Swift source files
 # Requires: macOS with Xcode Command Line Tools (swiftc)
+# Usage: ./build-apps.sh [--clean]
 
 set -e
 
@@ -10,12 +11,25 @@ BIN_DIR="$PROJECT_DIR/bin"
 SRC_MENU="$SCRIPT_DIR/JennyMenuBarApp.swift"
 SRC_DESKTOP="$SCRIPT_DIR/JennyDesktopApp.swift"
 
+if ! command -v swiftc >/dev/null 2>&1; then
+  echo "ERROR: swiftc not found. Install Xcode Command Line Tools:"
+  echo "  xcode-select --install"
+  exit 1
+fi
+
 echo "=========================================================="
 echo "  JENNY AI - Building Native macOS Apps"
 echo "=========================================================="
 
 # Create bin directory
 mkdir -p "$BIN_DIR"
+
+# Wipe previous build artifacts so stale binaries never ship
+if [ "$1" = "--clean" ]; then
+  echo "Cleaning previous build..."
+  rm -rf "$BIN_DIR/JennyMenuBarApp" "$BIN_DIR/JennyDesktop" \
+         "$BIN_DIR/JennyAI.app" "$BIN_DIR/JennyDesktop.app"
+fi
 
 # Build Menu Bar App
 echo ""
