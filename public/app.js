@@ -321,6 +321,14 @@ async function runBoot() {
     });
   });
 
+  document.querySelectorAll('.quick-action-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const control = btn.dataset.control;
+      const value = btn.dataset.value || '';
+      if (control) { triggerSystemControl(control, value); sfx.click(); }
+    });
+  });
+
   const launchApp = () => {
     if (pressStartScreen) {
       pressStartScreen.classList.add('fade-out');

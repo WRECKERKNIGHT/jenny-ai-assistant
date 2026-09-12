@@ -503,6 +503,14 @@ html,body { height:100%; background:var(--bg); color:var(--txt); font-family:var
 .wc-title { font-family:var(--orbitron); font-size:11px; font-weight:700; letter-spacing:1px; color:inherit; text-transform:uppercase; }
 .wc-desc { font-family:var(--sans); font-size:8px; color:var(--txt3); }
 
+.quick-actions-grid { display:grid; grid-template-columns:repeat(6, 1fr); gap:6px; max-width:560px; width:100%; margin-top:14px; }
+.quick-action-btn { display:flex; flex-direction:column; align-items:center; gap:5px; padding:10px 6px 8px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,215,0,0.1); border-radius:12px; cursor:pointer; transition:all 0.2s cubic-bezier(0.16, 1, 0.3, 1); color:var(--txt2); position:relative; overflow:hidden; }
+.quick-action-btn:hover { border-color:rgba(255,215,0,0.4); background:radial-gradient(circle at 50% 50%, rgba(255,215,0,0.1) 0%, rgba(255,255,255,0.02) 100%); color:var(--txt); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.35), 0 0 18px rgba(255,215,0,0.05); }
+.quick-action-btn:active { transform:translateY(0px); }
+.quick-action-btn i { font-size:15px; color:var(--gold); transition:transform 0.2s ease, color 0.2s ease; }
+.quick-action-btn:hover i { color:#ffffff; transform:scale(1.12); }
+.qa-title { font-family:var(--orbitron); font-size:7px; font-weight:700; letter-spacing:0.8px; color:inherit; text-transform:uppercase; }
+
 .welcome-footer-hint { margin-top:24px; display:flex; align-items:center; gap:6px; font-family:var(--orbitron); font-size:9px; font-weight:700; color:var(--txt3); opacity:0.6; text-transform:uppercase; letter-spacing:1px; }
 .welcome-footer-hint i { font-size:10px; color:var(--cyan); }
 
@@ -521,7 +529,7 @@ html,body { height:100%; background:var(--bg); color:var(--txt); font-family:var
 @keyframes tip-pop { 0% { opacity:0; transform:translateY(8px) scale(0.94); } 100% { opacity:1; transform:translateY(0) scale(1); } }
 
 /* Accessible focus rings for interactive elements */
-button:focus-visible, input:focus-visible, .dock-btn:focus-visible, .welcome-card:focus-visible {
+button:focus-visible, input:focus-visible, .dock-btn:focus-visible, .welcome-card:focus-visible, .quick-action-btn:focus-visible {
   outline:2px solid rgba(255,215,0,0.55); outline-offset:2px;
 }
 :focus:not(:focus-visible) { outline:none; }
@@ -721,6 +729,10 @@ body.light-mode .welcome-sub { color: rgba(0,0,0,0.5); }
 body.light-mode .logo { background: linear-gradient(90deg, #0891b2, #db2777); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 body.light-mode .welcome-card i { color: rgba(8,145,178,0.6); }
 body.light-mode .welcome-card:hover i { color: rgba(8,145,178,0.9); }
+body.light-mode .quick-action-btn { background: rgba(0,0,0,0.03); color: rgba(0,0,0,0.55); border-color: rgba(8,145,178,0.08); }
+body.light-mode .quick-action-btn:hover { background: rgba(8,145,178,0.05); border-color: rgba(8,145,178,0.2); color: rgba(0,0,0,0.8); }
+body.light-mode .quick-action-btn i { color: rgba(8,145,178,0.6); }
+body.light-mode .quick-action-btn:hover i { color: rgba(8,145,178,0.9); }
 body.light-mode .sys-info-chip { background: rgba(8,145,178,0.05); border-color: rgba(8,145,178,0.1); }
 body.light-mode .sys-info-chip:hover { background: rgba(8,145,178,0.08); border-color: rgba(8,145,178,0.15); }
 body.light-mode .welcome-vitals .wv-ring svg circle:first-child { stroke: rgba(0,0,0,0.06); }
@@ -810,6 +822,10 @@ body.light-mode .welcome-footer-hint i { color: rgba(8,145,178,0.5); }
   .welcome-card i { font-size:16px; }
   .wc-title { font-size:9px; }
   .wc-desc { font-size:7px; }
+  .quick-actions-grid { grid-template-columns:repeat(3, 1fr); gap:5px; }
+  .quick-action-btn { padding:8px 4px 6px; }
+  .quick-action-btn i { font-size:13px; }
+  .qa-title { font-size:6px; }
   .welcome-footer-hint { font-size:7px; margin-top:12px; }
 
   /* Input bar phone */
