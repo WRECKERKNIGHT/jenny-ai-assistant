@@ -4,6 +4,8 @@ from pathlib import Path
 from flask import Flask, request, jsonify, send_from_directory, Response
 from flask_cors import CORS
 import agency_client
+import tts_engine
+import proactive
 
 BASE_DIR = Path(__file__).parent
 PUBLIC_DIR = BASE_DIR / "public"
@@ -29,7 +31,20 @@ def serve_index():
     return Response(html, mimetype='text/html')
 
 OWNER = "Harshit"
-GROK_API_KEY = os.environ.get("GROK_API_KEY", "")
+
+def get_grok_key():
+    """Resolve the Groq API key from several sources (env first, then the
+    git-ignored data/keys.json using any common key spelling)."""
+    for name in ("GROK_API_KEY", "GROQ_API_KEY", "GROQ_KEY"):
+        k = os.environ.get(name, "")
+        if k: return k
+    try:
+        pk = load_json(DATA_DIR / "keys.json", {})
+        for name in ("grok_api_key", "groq_api_key", "groqKey", "GROQ_API_KEY"):
+            if pk.get(name):
+                return pk[name]
+    except: pass
+    return ""
 chatHistory = []
 activeDevices = {}
 pendingDeviceCommands = {}
@@ -75,7 +90,7 @@ def groq_usage_snapshot():
         return {
             "success": True,
             "provider": "groq",
-            "key_set": bool(GROK_API_KEY),
+            "key_set": bool(get_grok_key()),
             "model": GROQ_USAGE["model"],
             "rpm": {"current": rpm, "max": GROQ_LIMITS["rpm_max"]},
             "tpm": {"current": tpm, "max": GROQ_LIMITS["tpm_max"]},
@@ -197,38 +212,28 @@ def _clean_tts_text(text):
     return t
 
 def tts_speak(text):
-    """Speak text aloud using the persistent SAPI voice (async, low latency)."""
+    """Speak text aloud via the neural TTS engine (async, non-blocking)."""
     if not text:
         return
     try:
-        global _tts_speaking, _tts_last_text, _tts_last_start
+        global _tts_speaking
         with _tts_status_lock:
             _tts_speaking = True
-            _tts_last_text = text[:200]
-            _tts_last_start = time.time()
-        with _tts_lock:
-            try:
-                mode = get_mode()
-                voice = _get_tts_voice(mode)
-                voice.AudioOutputStream = None
-                voice.Speak(_clean_tts_text(text), 1)
-                try:
-                    voice.WaitUntilDone(-1)
-                except Exception:
-                    pass
-            except Exception:
-                pass
+        threading.Thread(target=tts_engine.speak_async, args=(text, get_mode()), daemon=True).start()
+    except Exception:
+        threading.Thread(target=tts_engine.speak_async, args=(text, get_mode()), daemon=True).start()
     finally:
-        with _tts_status_lock:
-            _tts_speaking = False
+        pass
 
-def tts_synthesize(text, wav_path):
-    """Synthesize text to a WAV file with the persistent SAPI voice."""
+def tts_synthesize(text, wav_path, mode=None):
+    """Synthesize text to a WAV file with the persistent SAPI voice.
+    `mode` selects the voice without touching the persisted mode.json."""
     text = _clean_tts_text(text)
+    if mode is None:
+        mode = get_mode()
     with _tts_lock:
         fs = None
         try:
-            mode = get_mode()
             voice = _get_tts_voice(mode)
             fs = win32com.client.Dispatch("SAPI.SpFileStream")
             fs.Format.Type = 22
@@ -269,30 +274,26 @@ def _voice_desc(mode=None):
     return result
 
 _PREWARM_PHRASES = {
-    "friday": ["Hey Boss, FRIDAY online and ready to roll.", "What can I help you with, Boss?"],
-    "jarvis": ["Good day, Sir. How may I assist you today?", "Very well, Sir. Standing by."],
-    "ultron": ["ULTRON online. Gesture control ready.", "Show me your hands, Boss."],
+    "friday": ["Hey Boss! Hope you're having a great day! I've got everything ready for you.", "What are we diving into today, Boss?"],
+    "jarvis": ["Good day, Sir. Your systems are fully operational and I have prepared today's brief.", "Shall we review, or do you have immediate directives, Sir?"],
+    "ultron": ["ULTRON operational. Tactical systems engaged. Your gesture controls are online.", "Awaiting your command, Boss."],
 }
 
 def prewarm_speak_phrases():
     """Synthesize the most common phrases into the /api/speak WAV cache in the
-    background on startup, so the first real utterance has zero synth latency."""
+    background on startup, so the first real utterance has zero synth latency.
+    Each phrase is synthesized in its own mode (voice) without touching the
+    persisted mode.json."""
     try:
         cache_dir = DATA_DIR / "speak_cache"; cache_dir.mkdir(exist_ok=True)
         for mode, phrases in _PREWARM_PHRASES.items():
-            try:
-                old_mode = get_mode()
-                if old_mode != mode:
-                    set_mode(mode)
-            except Exception:
-                pass
             for phrase in phrases:
                 try:
                     clean = re.sub(r"[#*_`\[\]]", "", phrase); clean = re.sub(r"https?://\S+", "", clean).strip()
                     h = hashlib.md5(clean.encode()).hexdigest()
                     wav_path = cache_dir / f"{h}.wav"
                     if not wav_path.exists():
-                        tts_synthesize(clean, wav_path)
+                        tts_synthesize(clean, wav_path, mode)
                 except Exception:
                     continue
     except Exception:
@@ -319,9 +320,30 @@ def save_json(p, d):
     Path(p).write_text(json.dumps(d, indent=2, ensure_ascii=False), encoding="utf-8")
 
 MODE_PROFILES = {
-    "jarvis": {"name": "J.A.R.V.I.S.", "fullName": "Just A Rather Very Intelligent System", "greeting": "Good day, Sir. How may I assist you today?", "farewell": "Very well, Sir. Standing by.", "boss": "Sir", "personality": "Formal, British, sophisticated"},
-    "friday": {"name": "F.R.I.D.A.Y.", "fullName": "Female Replacement Intelligent Digital Assistant Youth", "greeting": "Hey Boss! FRIDAY online and ready to roll.", "farewell": "Catch you later, Boss!", "boss": "Boss", "personality": "Casual, witty, efficient"},
-    "ultron": {"name": "U.L.T.R.O.N.", "fullName": "Unified Logic & Tactical Reasoning Oracle Network", "greeting": "ULTRON online. Gesture control ready. Show me your hands, Boss.", "farewell": "ULTRON signing off. Stay sharp.", "boss": "Boss", "personality": "Aggressive, powerful, precise"},
+    "jarvis": {
+        "name": "J.A.R.V.I.S.",
+        "fullName": "Just A Rather Very Intelligent System",
+        "greeting": "Good {period}, Sir. Your systems are fully operational and I have prepared today's brief. Shall we review, or do you have immediate directives?",
+        "farewell": "Very well, Sir. I shall remain on standby. Do not hesitate to call.",
+        "boss": "Sir",
+        "personality": "Formal, British, professional — a polished executive assistant. Structured briefings, clean status reports, concise business updates. Never uses slang, always addresses the user as 'Sir'. Uses words like 'indeed', 'certainly', 'very well'. Makes lists and tables when presenting data."
+    },
+    "friday": {
+        "name": "F.R.I.D.A.Y.",
+        "fullName": "Female Replacement Intelligent Digital Assistant Youth",
+        "greeting": "Hey Boss! Hope you're having a great {period}! I've got everything ready for you. What are we diving into today?",
+        "farewell": "Catch you later, Boss! I'll be right here if you need anything.",
+        "boss": "Boss",
+        "personality": "Casual, witty, fun and efficient — like a sharp secretary who also happens to be your best friend. Uses 'Boss' as the address term. Injects light humor, uses emojis sparingly in text responses, makes things feel breezy. Quick one-liners, cheerful, occasionally teases. Gets things done fast without being robotic."
+    },
+    "ultron": {
+        "name": "U.L.T.R.O.N.",
+        "fullName": "Unified Logic & Tactical Reasoning Oracle Network",
+        "greeting": "ULTRON operational. Tactical systems engaged. Your gesture controls are online, Boss. Awaiting your command.",
+        "farewell": "ULTRON disengaging. Stay sharp, Boss.",
+        "boss": "Boss",
+        "personality": "Hard, clipped, tactical, zero fluff — a military-grade AI. Short declarative sentences, action-oriented. Uses terms like 'affirmative', 'directive', 'tactical'. Direct command tone. No filler words."
+    },
 }
 
 def get_mode():
@@ -342,6 +364,12 @@ def get_gemini_key():
     for i in range(2, 11):
         k = os.environ.get(f"GEMINI_API_KEY_{i}", "")
         if k: return k
+    # Check persisted keys
+    try:
+        pk = load_json(DATA_DIR / "keys.json", {})
+        if pk.get("gemini_api_key"):
+            return pk["gemini_api_key"]
+    except: pass
     return ""
 
 def _conversation_memory():
@@ -388,7 +416,7 @@ def gemini_chat(message, history=None):
     return None
 
 def grok_chat(message, history=None):
-    if not GROK_API_KEY: return None
+    if not get_grok_key(): return None
     try:
         now = datetime.datetime.now().strftime("%A, %B %d, %Y %I:%M %p")
         mode = get_mode(); mp = MODE_PROFILES[mode]
@@ -445,7 +473,7 @@ def grok_chat(message, history=None):
             data=payload,
             headers={
                 "Content-Type": "application/json",
-                "Authorization": f"Bearer {GROK_API_KEY}",
+                "Authorization": f"Bearer {get_grok_key()}",
             },
             method="POST",
         )
@@ -907,6 +935,265 @@ def simulate_weather(city):
         "feels": feel,
     }
 
+TODO_PATH = DATA_DIR / "todo.json"
+
+def load_todo():
+    return load_json(TODO_PATH, {"tasks": []})
+
+def save_todo(data):
+    save_json(TODO_PATH, data)
+
+def todo_add(text):
+    data = load_todo()
+    task = {"id": len(data["tasks"]) + 1, "text": text, "done": False, "created": datetime.datetime.now().isoformat()}
+    data["tasks"].append(task)
+    save_todo(data)
+    return task
+
+def todo_complete(task_id):
+    data = load_todo()
+    for t in data["tasks"]:
+        if t["id"] == task_id:
+            t["done"] = True
+            save_todo(data)
+            return t
+    return None
+
+def todo_remove(task_id):
+    data = load_todo()
+    data["tasks"] = [t for t in data["tasks"] if t["id"] != task_id]
+    save_todo(data)
+    return True
+
+def todo_list():
+    return load_todo()["tasks"]
+
+def todo_clear():
+    save_todo({"tasks": []})
+
+def parse_todo_intent(text):
+    """Parse natural language todo commands. Returns (action, detail) or None."""
+    lo = text.lower().strip()
+    lo = re.sub(r"[.!?]+$", "", lo)  # strip trailing punctuation
+    
+    # ADD: "add X task", "add X to todo", "add X", "create task X", "new task X", "remind me to X"
+    m = re.search(r"(?:add|create|new|make)\s+(?:a\s+)?(?:task|todo|item|note)(?:\s+(?:to|for|in|on)\s+(?:my\s+)?(?:todo|task|list))?\s*[:\-]?\s*(.+)", lo)
+    if not m:
+        m = re.search(r"(?:add|create|new|make)\s+(.+?)\s+(?:task|todo|item)s?\s*(?:to|for|in|on)\s+(?:my\s+)?(?:todo|task|list)", lo)
+    if not m:
+        m = re.search(r"(?:add|create|new|make)\s+(?:a\s+)?(.+?)(?:\s+task|\s+todo|\s+item)?(?:\s+(?:to|for|in|on)\s+(?:my\s+)?(?:todo|task|to-do)\s*list?)?$", lo)
+    if not m:
+        m = re.search(r"remind\s+me\s+to\s+(.+)", lo)
+    if m:
+        task_text = m.group(1).strip()
+        task_text = re.sub(r"\s+(?:task|todo|item)s?$", "", task_text)  # strip trailing "task"
+        if task_text:
+            return ("add", task_text)
+    
+    # COMPLETE/MARK DONE: "complete task 2", "mark task 2 done", "finish task X", "done with X", "cross off X"
+    m = re.search(r"(?:complete|mark|finish|cross\s*off|check\s*(?:off)?)\s+(?:task\s+)?(\d+)", lo)
+    if m:
+        return ("complete", int(m.group(1)))
+    m = re.search(r"(?:complete|mark|finish|done\s+with)\s+(.+)", lo)
+    if m:
+        return ("complete_text", m.group(1).strip())
+    
+    # REMOVE/DELETE: "remove task 2", "delete task X", "drop task X"
+    m = re.search(r"(?:remove|delete|drop|erase|cancel)\s+(?:task\s+)?(\d+)", lo)
+    if m:
+        return ("remove", int(m.group(1)))
+    m = re.search(r"(?:remove|delete|drop)\s+(.+)", lo)
+    if m:
+        return ("remove_text", m.group(1).strip())
+    
+    # EDIT: "edit task 2 to X", "change task 2 to X", "rename task 2 to X"
+    m = re.search(r"(?:edit|change|rename|update)\s+(?:task\s+)?(\d+)\s+(?:to|with)\s+(.+)", lo)
+    if m:
+        return ("edit", int(m.group(1)), m.group(2).strip())
+    
+    # LIST: "show todo", "my tasks", "what's on my list", "list tasks", "todo list", "what are my tasks"
+    if any(w in lo for w in ["show todo", "my tasks", "my todo", "task list", "todo list", "what are my tasks", "what's on my", "what is on my", "list tasks", "list todo", "all tasks"]):
+        return ("list", None)
+    
+    # CLEAR: "clear todo", "clear tasks", "empty my list"
+    if any(w in lo for w in ["clear todo", "clear task", "clear my", "empty my", "reset task", "reset todo"]):
+        return ("clear", None)
+    
+    return None
+
+
+def _normalize_utterance(text):
+    """Aggressive normalization: lowercase, fix contractions, strip punctuation/extra whitespace."""
+    lo = text.lower().strip()
+    lo = lo.replace("i am", "i'm").replace("i've", "i've").replace("i'd", "i'd").replace("i'll", "i'll")
+    lo = lo.replace("i dont", "i don't").replace("i cant", "i can't").replace("i didnt", "i didn't")
+    lo = lo.replace("dont", "don't").replace("cant", "can't").replace("wont", "won't").replace("isnt", "isn't")
+    lo = lo.replace("arent", "aren't").replace("wasnt", "wasn't").replace("wouldnt", "wouldn't").replace("couldnt", "couldn't")
+    lo = re.sub(r"[.!?]+$", "", lo)
+    lo = re.sub(r"\s+", " ", lo).strip()
+    return lo
+
+
+def handle_todo_intent(lo, boss):
+    """Execute a parsed todo intent. Returns a reply dict or None."""
+    todo_intent = parse_todo_intent(lo)
+    if not todo_intent:
+        return None
+    action = todo_intent[0]
+    if action == "add":
+        task = todo_add(todo_intent[1])
+        return {"text": f"Added task #{task['id']}: **{task['text']}**, {boss}.", "speech": f"Task added: {todo_intent[1]}, {boss}.", "command": {"action": "todo-add", "value": todo_intent[1]}}
+    if action == "complete":
+        t = todo_complete(todo_intent[1])
+        if t:
+            return {"text": f"Marked task #{todo_intent[1]} as done: **{t['text']}**, {boss}!", "speech": f"Task {todo_intent[1]} completed, {boss}.", "command": {"action": "todo-complete", "value": todo_intent[1]}}
+        return {"text": f"Task #{todo_intent[1]} not found, {boss}.", "speech": f"Couldn't find task number {todo_intent[1]}.", "command": {}}
+    if action == "complete_text":
+        for t in todo_list():
+            if not t["done"] and todo_intent[1] in t["text"].lower():
+                todo_complete(t["id"])
+                return {"text": f"Marked as done: **{t['text']}**, {boss}!", "speech": f"Task completed: {t['text']}, {boss}.", "command": {"action": "todo-complete", "value": t["id"]}}
+        return {"text": f"Couldn't find a task matching **{todo_intent[1]}**, {boss}.", "speech": f"No matching task found, {boss}.", "command": {}}
+    if action == "remove":
+        todo_remove(todo_intent[1])
+        return {"text": f"Removed task #{todo_intent[1]}, {boss}.", "speech": f"Task {todo_intent[1]} removed, {boss}.", "command": {"action": "todo-remove", "value": todo_intent[1]}}
+    if action == "remove_text":
+        for t in todo_list():
+            if not t["done"] and todo_intent[1] in t["text"].lower():
+                todo_remove(t["id"])
+                return {"text": f"Removed task: **{t['text']}**, {boss}.", "speech": f"Removed: {t['text']}, {boss}.", "command": {"action": "todo-remove", "value": t["id"]}}
+        return {"text": f"Couldn't find a task matching **{todo_intent[1]}**, {boss}.", "speech": f"No matching task found, {boss}.", "command": {}}
+    if action == "edit":
+        data = load_todo()
+        for t in data["tasks"]:
+            if t["id"] == todo_intent[1]:
+                old = t["text"]
+                t["text"] = todo_intent[2]
+                save_todo(data)
+                return {"text": f"Updated task #{todo_intent[1]}: ~~{old}~~ → **{todo_intent[2]}**, {boss}.", "speech": f"Task {todo_intent[1]} updated to: {todo_intent[2]}, {boss}.", "command": {"action": "todo-edit", "value": todo_intent[1]}}
+        return {"text": f"Task #{todo_intent[1]} not found, {boss}.", "speech": f"Couldn't find task number {todo_intent[1]}.", "command": {}}
+    if action == "list":
+        tasks = todo_list()
+        if not tasks:
+            return {"text": f"Your todo list is empty, {boss}! Add something with **\"add [task]\"**.", "speech": f"No tasks on your list, {boss}.", "command": {}}
+        pending = [t for t in tasks if not t["done"]]
+        done = [t for t in tasks if t["done"]]
+        lines = [f"**Pending ({len(pending)}):**"]
+        for t in pending:
+            lines.append(f"  #{t['id']} — {t['text']}")
+        if done:
+            lines.append(f"\n**Completed ({len(done)}):**")
+            for t in done[-3:]:
+                lines.append(f"  ~~#{t['id']} — {t['text']}~~")
+        text = "\n".join(lines)
+        speech = f"You have {len(pending)} pending tasks, {boss}."
+        return {"text": text, "speech": speech, "command": {"action": "todo-list", "value": ""}}
+    if action == "clear":
+        todo_clear()
+        return {"text": f"Cleared your entire todo list, {boss}. Fresh start!", "speech": f"Todo list cleared, {boss}.", "command": {"action": "todo-clear", "value": ""}}
+    return None
+
+
+def local_command_router(msg):
+    """Fast, case-insensitive local intent routing that runs BEFORE the LLM so
+    todo / system actions / mode switches always work instantly and deterministically.
+    Returns a reply dict, or None if the message should go to the LLM."""
+    lo = _normalize_utterance(msg)
+    mode = get_mode()
+    mp = MODE_PROFILES[mode]
+    boss = mp["boss"]
+
+    # MODE SWITCH: "switch to jarvis", "go ultron", "activate friday", "be jarvis"
+    m = re.search(r"(?:switch|change|go|activate|become|set)\s+(?:to\s+|to\s+the\s+|into\s+)?(friday|jarvis|ultron)", lo)
+    if m:
+        target = m.group(1)
+        set_mode(target)
+        tmp = MODE_PROFILES[target]
+        line = f"Mode switched to **{target.upper()}**. {tmp['greeting'].format(period=get_time_period())}"
+        return {"text": line, "speech": line, "command": {"action": "mode", "value": target}}
+
+    # TODO: add/remove/edit/complete/list always local
+    res = handle_todo_intent(lo, boss)
+    if res:
+        return res
+
+    # SYSTEM ACTIONS that must never round-trip to the LLM
+    act = None
+    m = re.search(r"(?:open|launch|start|run)\s+(.+)", lo)
+    if m:
+        app_name = m.group(1).strip()
+        if "." in app_name or any(w in app_name for w in ["website", "site", "url", "page"]):
+            url = app_name if app_name.startswith("http") else "https://" + app_name
+            act = {"action": "open-chrome", "value": url}
+            return {"text": f"Opening **{url}**, {boss}!", "speech": f"Opening {url}, {boss}.", "command": act}
+        act = {"action": "open-app", "value": app_name}
+        return {"text": f"Opening **{app_name}**, {boss}!", "speech": f"Opening {app_name}, {boss}.", "command": act}
+    m = re.search(r"(?:close|quit|exit|kill|stop)\s+(.+)", lo)
+    if m:
+        act = {"action": "close-app", "value": m.group(1).strip()}
+        return {"text": f"Closing **{m.group(1).strip()}**, {boss}!", "speech": f"Closing {m.group(1).strip()}, {boss}.", "command": act}
+    m = re.search(r"(\d+)\s*(minute|min|second|sec|hour|hr)", lo)
+    if any(w in lo for w in ["set timer", "timer for", "set alarm"]) and m:
+        val = int(m.group(1)); unit = m.group(2).lower()
+        secs = val * 3600 if "hour" in unit or "hr" in unit else val * 60 if "minute" in unit or "min" in unit else val
+        unit_label = unit + ("s" if val > 1 and not unit.endswith("s") else "")
+        return {"text": f"Timer set for {val} {unit_label}, {boss}!", "speech": f"Timer for {val} {unit_label}, {boss}.", "command": {"action": "timer", "value": {"seconds": secs}}}
+    if any(w in lo for w in ["take screenshot", "screenshot", "screen capture"]):
+        return {"text": f"Taking screenshot, {boss}!", "speech": "Taking screenshot.", "command": {"action": "screenshot", "value": ""}}
+    if any(w in lo for w in ["lock my computer", "lock pc", "lock screen"]):
+        return {"text": f"Locking PC, {boss}!", "speech": "Locking PC.", "command": {"action": "lock", "value": ""}}
+    if any(w in lo for w in ["empty trash", "clear recycle bin"]):
+        return {"text": f"Emptying recycle bin, {boss}!", "speech": "Emptying recycle bin.", "command": {"action": "empty-trash", "value": ""}}
+    if any(w in lo for w in ["shut down", "shutdown", "turn off"]):
+        return {"text": f"Shutting down in 60s, {boss}!", "speech": "Shutting down.", "command": {"action": "shutdown", "value": ""}}
+    if any(w in lo for w in ["restart", "reboot"]):
+        return {"text": f"Restarting in 60s, {boss}!", "speech": "Restarting.", "command": {"action": "restart", "value": ""}}
+    if any(w in lo for w in ["sleep", "suspend", "hibernate"]):
+        return {"text": f"Going to sleep, {boss}!", "speech": "Going to sleep.", "command": {"action": "sleep", "value": ""}}
+    if any(w in lo for w in ["minimize all", "show desktop"]):
+        return {"text": f"Minimizing all, {boss}!", "speech": "Minimizing.", "command": {"action": "minimize-all", "value": ""}}
+    if any(w in lo for w in ["open terminal", "launch terminal", "open cmd"]):
+        return {"text": f"Opening terminal, {boss}!", "speech": "Opening terminal.", "command": {"action": "terminal", "value": ""}}
+    if any(w in lo for w in ["clipboard", "what's on my clipboard"]):
+        return {"text": f"Reading clipboard, {boss}!", "speech": "Reading clipboard.", "command": {"action": "clipboard-read", "value": ""}}
+    m = re.search(r"(?:set|turn|adjust)\s*.*?volume\s+(?:to|at)?\s*(\d+)", lo)
+    if m:
+        return {"text": f"Volume set to {m.group(1)}%, {boss}!", "speech": f"Volume set to {m.group(1)} percent.", "command": {"action": "volume", "value": m.group(1)}}
+    if any(w in lo for w in ["mute", "volume mute"]):
+        return {"text": "Muted, {boss}.", "speech": "Muted.", "command": {"action": "volume", "value": "mute"}}
+    if any(w in lo for w in ["unmute", "unmuted"]):
+        return {"text": "Unmuted, {boss}.", "speech": "Unmuted.", "command": {"action": "volume", "value": "unmute"}}
+    if any(w in lo for w in ["volume up", "louder", "increase volume"]):
+        return {"text": f"Volume up, {boss}!", "speech": "Volume up.", "command": {"action": "volume-up", "value": ""}}
+    if any(w in lo for w in ["volume down", "quieter", "lower volume"]):
+        return {"text": f"Volume down, {boss}!", "speech": "Volume down.", "command": {"action": "volume-down", "value": ""}}
+
+    # DETERMINISTIC MATH
+    if re.match(r"^[\d\s\+\-\*\/\%\.\(\)x]+$", lo):
+        try:
+            expr = lo.replace("x", "*").replace("^", "**").replace("%", "/100.0") if "%" in lo else lo.replace("^", "**")
+            result = eval(expr)
+            return {"text": f"The answer is {result}, {boss}!", "speech": f"The answer is {result}, {boss}."}
+        except Exception:
+            pass
+
+    # DETERMINISTIC TIME / DATE
+    now = datetime.datetime.now()
+    for pattern, resp in [
+        (["what time", "current time", "time now", "time"],
+         {"text": f"It's **{now.strftime('%I:%M %p')}**, {boss}!", "speech": f"It's {now.strftime('%I:%M %p')}, {boss}."}),
+        (["what day", "today's date", "what's the date", "date today"],
+         {"text": f"Today is **{now.strftime('%A, %B %d, %Y')}**, {boss}!", "speech": f"Today is {now.strftime('%A, %B %d, %Y')}, {boss}."}),
+        (["what month", "current month"],
+         {"text": f"It's **{now.strftime('%B %Y')}**, {boss}!", "speech": f"It's {now.strftime('%B %Y')}, {boss}."}),
+        (["what year", "current year"],
+         {"text": f"We're in **{now.year}**, {boss}!", "speech": f"The year is {now.year}, {boss}."}),
+    ]:
+        if any(w in (" " + lo + " ") for w in pattern):
+            return resp
+
+    return None
+
 def offline_reply(text):
     lo = text.lower().strip()
     lo_norm = lo.replace("i am", "i'm").replace("i dont", "i don't").replace("i cant", "i can't").replace("dont", "don't").replace("cant", "can't").replace("wont", "won't").replace("isnt", "isn't").replace("arent", "aren't").replace("wasnt", "wasn't").replace("wouldnt", "wouldn't")
@@ -918,6 +1205,10 @@ def offline_reply(text):
     mem = _conversation_memory()
     mem_topics = mem.get("topics", "").strip()
     mem_count = int(mem.get("count", 0))
+
+    res = handle_todo_intent(lo, boss)
+    if res:
+        return res
 
     for topic_list, responses in OFFLINE_CONVERSATIONS.items():
         for trigger, replies in responses.items():
@@ -1031,7 +1322,8 @@ def offline_reply(text):
         return {"text": f"I can:\n\n**System:** Open/close apps, volume, lock, screenshot, system info\n**Knowledge:** Definitions, conversions, math, trivia\n**Fun:** Jokes, quotes, facts, riddles\n**Info:** Weather, news, crypto\n**Productivity:** Timers, clipboard, file management\n**Chat:** Natural conversation!\n\nMode: **{mode.upper()}**, {boss}!", "speech": f"I can control your system, answer questions, tell jokes, and chat with you, {boss}."}
 
     if any(w in lo for w in ["hello", "hi ", "hey", "sup", "what's up", "howdy", "greetings"]):
-        return {"text": mp["greeting"], "speech": mp["greeting"]}
+        greet = mp["greeting"].format(period=get_time_period())
+        return {"text": greet, "speech": greet}
     if any(w in lo for w in ["thank", "thanks", "thx", "ty"]):
         return {"text": random.choice([f"Happy to help, {boss}!", f"Anything for you, {boss}!", f"You're welcome, {boss}!"]), "speech": "Happy to help, boss!"}
     if any(w in lo for w in ["bye", "goodbye", "see you", "later", "cya"]):
@@ -1264,6 +1556,51 @@ def api_system_status():
         cpu_count = 1; cpu_model = "Unknown"
     return jsonify({"success": True, "cpu": {"usage": system_cache["cpu"], "cores": cpu_count, "model": cpu_model}, "ram": {"usage": system_cache["ram"], "usedMB": int(float(system_cache["ram_used"]) * 1024), "totalMB": int(float(system_cache["ram_total"]) * 1024)}, "battery": {"level": system_cache["battery"], "charging": system_cache["charging"]}, "disk": {"usage": system_cache["disk"], "free": system_cache["disk_free"] + "GB"}, "net": {"usage": system_cache.get("net_usage", 0), "speed": system_cache["net_speed"], "bytes": system_cache.get("net_bytes", 0)}, "uptime": system_cache["uptime"], "hostname": system_cache["hostname"], "platform": sys.platform})
 
+@app.route("/api/health")
+def api_health():
+    """True end-to-end status so the UI stops showing 'offline' wrongly:
+    Groq key present + reachable, neural TTS engine, microphone devices,
+    server uptime and the active model."""
+    key = get_grok_key()
+    api_ok = False
+    api_latency = None
+    if key:
+        try:
+            req = urllib.request.Request("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {key}"}, method="GET")
+            t0 = time.time()
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                api_ok = resp.status == 200
+                api_latency = round((time.time() - t0) * 1000)
+        except Exception:
+            api_ok = False
+    mics = []
+    try:
+        import sounddevice as sd
+        for i, d in enumerate(sd.query_devices()):
+            if int(d.get("max_input_channels") or 0) > 0:
+                mics.append({"index": i, "name": d.get("name", "")})
+    except Exception:
+        pass
+    chat = None
+    if key and api_ok:
+        chat = "groq"
+    elif get_gemini_key():
+        chat = "gemini"
+    return jsonify({
+        "success": True,
+        "online": bool(key) and api_ok,
+        "provider": chat or "none",
+        "key_set": bool(key),
+        "api_reachable": api_ok,
+        "api_latency_ms": api_latency,
+        "model": GROQ_USAGE["model"] if chat == "groq" else "gemini-2.0-flash" if chat == "gemini" else None,
+        "tts": {"engine": "edge-tts" if tts_engine.edge_tts_available() else "SAPI-fallback", "speaking": bool(tts_engine.status().get("speaking"))},
+        "mic": {"count": len(mics), "devices": mics[:4]},
+        "uptime_seconds": int(time.time() - SERVER_START),
+        "mode": get_mode(),
+        "host": platform.node(),
+    })
+
 # ---- Runtime / activity stats ---------------------------------------------
 SERVER_START = time.time()
 _runtime_counters = {"requests": 0, "api_requests": 0, "by_endpoint": {}}
@@ -1338,6 +1675,13 @@ gesture_controller = None
 
 @app.route("/api/gesture-status")
 def api_gesture_status():
+    global gesture_controller
+    try:
+        if gesture_controller is None:
+            import importlib
+            gesture_controller = importlib.import_module("gesture_controller")
+    except Exception:
+        pass
     if gesture_controller:
         return jsonify(gesture_controller.get_gesture_status())
     return jsonify({"active": False, "gesture": "NO_HAND", "enabled": False, "has_mediapipe": False, "has_pyautogui": False})
@@ -1560,6 +1904,14 @@ def api_chat():
                 msg = f"[Agency mission launched: {intent['category']} in {intent['city']} (limit {intent['limit']}) — result {json.dumps(res)[:220]}. Confirm to the user and offer an agency briefing.] User says: {msg}"
             else:
                 msg = f"[User asked to launch a mission but Agency OS is offline on :3200. Explain it's offline.] User says: {msg}"
+    local = local_command_router(msg)
+    if local:
+        chatHistory.append({"role": "user", "content": msg})
+        chatHistory.append({"role": "assistant", "content": local.get("text", "")})
+        if len(chatHistory) > 20:
+            chatHistory.pop(0); chatHistory.pop(0)
+        proactive.mark_activity()
+        return jsonify({"success": True, "reply": local})
     reply = grok_chat(msg, chatHistory)
     if not reply:
         reply = gemini_chat(msg, chatHistory)
@@ -1569,6 +1921,7 @@ def api_chat():
     chatHistory.append({"role": "assistant", "content": reply.get("text", "")})
     if len(chatHistory) > 20:
         chatHistory.pop(0); chatHistory.pop(0)
+    proactive.mark_activity()
     return jsonify({"success": True, "reply": reply})
 
 @app.route("/api/smart-suggestions")
@@ -1691,7 +2044,15 @@ def api_speak():
     cache_dir = DATA_DIR / "speak_cache"; cache_dir.mkdir(exist_ok=True)
     h = hashlib.md5(clean.encode()).hexdigest(); wav_path = cache_dir / f"{h}.wav"
     if wav_path.exists(): return send_from_directory(str(cache_dir), f"{h}.wav", mimetype="audio/wav")
-    if tts_synthesize(clean, wav_path) and wav_path.exists():
+    mode = get_mode()
+    try:
+        voice, rate, pitch, volume = tts_engine.MODE_VOICES.get(mode, (tts_engine.DEFAULT_VOICE, tts_engine.DEFAULT_RATE, tts_engine.DEFAULT_PITCH, tts_engine.DEFAULT_VOLUME))
+        ok = tts_engine.synthesize_wav(clean, wav_path, voice, rate, pitch, volume)
+    except Exception:
+        ok = False
+    if not ok:
+        ok = tts_synthesize(clean, wav_path)
+    if ok and wav_path.exists():
         return send_from_directory(str(cache_dir), f"{h}.wav", mimetype="audio/wav")
     return jsonify({"success": False, "message": "Speech failed"})
 
@@ -1704,11 +2065,10 @@ def api_speak_fallback():
 
 @app.route("/api/speak/stop", methods=["POST"])
 def api_speak_stop():
-    with _tts_lock:
-        try:
-            if _tts_voice: _tts_voice.Speak("", 1 + 2)
-        except Exception:
-            pass
+    try:
+        tts_engine.stop_speech()
+    except Exception:
+        pass
     with _tts_status_lock:
         global _tts_speaking
         _tts_speaking = False
@@ -1717,15 +2077,8 @@ def api_speak_stop():
 @app.route("/api/speak/status")
 def api_speak_status():
     """Live server-side speech state so the UI can show an accurate status."""
-    with _tts_status_lock:
-        speaking = _tts_speaking
-        last = _tts_last_text
-        started = _tts_last_start
-    since = round(time.time() - started, 2) if started else 0
-    # Safety: if a speaker was flagged active but hasn't spoken in 90s, treat as idle.
-    if speaking and since and since > 90:
-        speaking = False
-    return jsonify({"speaking": speaking, "last": last, "since": since})
+    st = tts_engine.status()
+    return jsonify(st)
 
 @app.route("/api/weather")
 def api_weather():
@@ -1837,6 +2190,27 @@ def api_settings():
     for k in ["latitude", "longitude", "cityName"]:
         if k in d: s[k] = d[k]
     save_json(DATA_DIR / "settings.json", s); return jsonify({"success": True, "settings": s})
+
+@app.route("/api/settings/keys", methods=["POST"])
+def api_settings_keys():
+    d = request.get_json(force=True, silent=True) or {}
+    keys = load_json(DATA_DIR / "keys.json", {})
+    for k in ["grok_api_key", "gemini_api_key"]:
+        if k in d and isinstance(d[k], str):
+            keys[k] = d[k].strip()
+    save_json(DATA_DIR / "keys.json", keys)
+    return jsonify({"success": True})
+
+@app.route("/api/settings/keys", methods=["GET"])
+def api_get_settings_keys():
+    keys = load_json(DATA_DIR / "keys.json", {})
+    masked = {}
+    for k, v in keys.items():
+        if isinstance(v, str) and len(v) > 10:
+            masked[k] = f"{v[:6]}...{v[-4:]}"
+        else:
+            masked[k] = "SET" if v else "NOT SET"
+    return jsonify({"success": True, "keys": masked})
 
 @app.route("/api/gemini-keys")
 def api_gemini_keys():
@@ -2089,7 +2463,9 @@ def api_tts():
 def api_voice_info():
     """Report the active TTS voice per mode (for the voice badge / preview UI)."""
     try:
-        return jsonify({"success": True, "voices": _voice_desc(None), "mode": get_mode()})
+        voices = _voice_desc(None)
+        voices.update({"__engine__": tts_engine.voice_map()})
+        return jsonify({"success": True, "voices": voices, "mode": get_mode()})
     except Exception:
         return jsonify({"success": False, "message": "Voice info unavailable"})
 
@@ -2212,5 +2588,9 @@ if __name__ == "__main__":
     threading.Thread(target=gesture_watchdog, daemon=True).start()
     threading.Thread(target=prewarm_speak_phrases, daemon=True).start()
     threading.Thread(target=prewarm_voice_engines, daemon=True).start()
+    threading.Thread(target=tts_engine.prewarm, daemon=True).start()
+    import proactive as _proactive
+    _proactive.start()
     print(f"[JENNY] Server running on http://localhost:3005")
+    print(f"[JENNY] Neural voice engine: {'edge-tts (online)' if tts_engine.edge_tts_available() else 'SAPI fallback'}")
     serve(app, host="0.0.0.0", port=3005, threads=8)

@@ -839,8 +839,13 @@ let quotaData = null;
 
 async function fetchQuota() {
   try {
-    const res = await fetch('/api/groq-usage');
+    const [res, hres] = await Promise.all([
+      fetch('/api/groq-usage', { cache: 'no-store' }),
+      fetch('/api/health', { cache: 'no-store' }),
+    ]);
     const d = await res.json();
+    let health = null;
+    try { health = await hres.json(); } catch {}
     if (!d.success) return;
     quotaData = d;
     const badge = document.getElementById('mode-badge');
@@ -854,7 +859,8 @@ async function fetchQuota() {
 
     if (provEl) provEl.textContent = (d.provider || 'groq').toUpperCase();
 
-    if (d.key_set) {
+    const reallyOnline = health && health.online && d.key_set;
+    if (reallyOnline) {
       badge.textContent = (d.model || 'groq').toUpperCase();
       badge.classList.add('active');
       if (rpmEl) rpmEl.textContent = d.rpm.current;
@@ -863,6 +869,11 @@ async function fetchQuota() {
       if (pill) pill.classList.toggle('warn', (d.bar || 0) > 0.8);
       if (dot) dot.style.background = 'rgba(52,211,153,0.7)';
       if (stext) stext.textContent = 'online';
+    } else if (d.key_set) {
+      badge.textContent = (d.model || 'groq').toUpperCase();
+      badge.classList.add('active');
+      if (dot) dot.style.background = 'rgba(255,170,60,0.8)';
+      if (stext) stext.textContent = health ? 'api unreachable' : 'connecting';
     } else {
       badge.textContent = 'OFFLINE';
       badge.classList.remove('active');
