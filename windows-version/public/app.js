@@ -1666,6 +1666,16 @@ function loadSettingsPanel(el) {
       <div style="font-family:var(--mono); font-size:8px; color:var(--txt3); letter-spacing:1px; margin-bottom:8px;">API KEYS</div>
       <div id="api-keys-list" style="font-family:var(--mono); font-size:9px; color:var(--txt2);">Loading...</div>
       <div class="setting-row"><label></label><button id="show-keys-btn" style="padding:4px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:var(--txt3);font-family:var(--mono);font-size:9px;cursor:pointer;">Show Key Details</button></div>
+      <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
+        <div style="font-size:10px; color:var(--txt3); letter-spacing:2px; margin-bottom:8px; font-family:var(--mono);">CONFIGURE KEYS</div>
+        <div style="display:flex; gap:6px; margin-bottom:6px;">
+          <input id="key-gemini" type="password" placeholder="Gemini API key" style="flex:1; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 10px; color:var(--txt); font-family:var(--mono); font-size:10px;">
+        </div>
+        <div style="display:flex; gap:6px; margin-bottom:8px;">
+          <input id="key-grok" type="password" placeholder="Grok API key" style="flex:1; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 10px; color:var(--txt); font-family:var(--mono); font-size:10px;">
+        </div>
+        <button id="save-keys-btn" style="width:100%; padding:7px; border-radius:6px; border:1px solid rgba(168,85,247,0.3); background:rgba(168,85,247,0.1); color:var(--accent); font-family:var(--mono); font-size:10px; letter-spacing:1px; cursor:pointer;">SAVE KEYS</button>
+      </div>
     </div>
   `;
   
@@ -1793,6 +1803,25 @@ function loadSettingsPanel(el) {
       </div>
     `).join('');
   }).catch(() => {});
+
+  // Wire up key save
+  var saveKeysBtn = document.getElementById('save-keys-btn');
+  if (saveKeysBtn) {
+    saveKeysBtn.addEventListener('click', function() {
+      var gemini = document.getElementById('key-gemini').value.trim();
+      var grok = document.getElementById('key-grok').value.trim();
+      var payload = {};
+      if (gemini) payload.gemini_api_key = gemini;
+      if (grok) payload.grok_api_key = grok;
+      if (Object.keys(payload).length === 0) { toast('No keys entered', 'info'); return; }
+      fetch('/api/settings/keys', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.success) { toast('Keys saved! Restart server to activate.', 'ok'); fetchQuota(); }
+      }).catch(function() { toast('Failed to save keys', 'err'); });
+    });
+  }
   
   // Apply saved values
   if (mem.voiceId) document.getElementById('voice-select').value = mem.voiceId;
@@ -2146,28 +2175,11 @@ function speak(text, onEndCallback) {
   if (typeof setOrbState === 'function') setOrbState('speaking');
   lastSpeakStart = Date.now();
   duckSfx(true);
-  if ('speechSynthesis' in window) {
-    ensureVoices((vs) => {
-      if (!vs.length) { speakServer(spokenText); if (onEndCallback) setTimeout(onEndCallback, 1000); return; }
-      speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(spokenText);
-      if (_cachedMode === currentMode && _cachedVoice) {
-        u.voice = _cachedVoice;
-      } else {
-        const picked = pickBestVoice(currentMode);
-        if (picked) { _cachedVoice = picked; _cachedMode = currentMode; u.voice = picked; }
-      }
-      const rt = pickVoiceRates(currentMode, loadOfflineMemory());
-      u.rate = rt.rate;
-      u.pitch = rt.pitch;
-      u.onend = () => { if (typeof setOrbState === 'function') setOrbState('idle'); duckSfx(false); if (onEndCallback) onEndCallback(); };
-      u.onerror = () => { speakServer(spokenText); if (onEndCallback) onEndCallback(); };
-      speechSynthesis.speak(u);
-    });
-    return;
-  }
-  speakServer(spokenText);
-  if (onEndCallback) setTimeout(onEndCallback, 1000);
+  // SINGLE-VOICE RULE — the PC's neural engine (edge-tts via /api/speak) is the
+  // ONLY voice. The old path preferred the browser's Web Speech (robotic Zira /
+  // David over SAPI) which overlapped with the server voice and caused the
+  // "two voices at once" bug. Web Speech is now a last-resort crash-net only.
+  queueServerSpeech(spokenText, onEndCallback);
 }
 
 function speakServer(text) {
@@ -2175,8 +2187,9 @@ function speakServer(text) {
 }
 
 // Segmented server-WAV queue: splits long text into sentences and plays them
-// back-to-back with next-segment prefetch, so output is continuous and low-latency.
-const serverSpeechQ = { items: [], playing: false, currentEl: null };
+// back-to-back with next-segment prefetch, so output is continuous, low-latency
+// and always uses ONE neural voice (edge-tts on the PC).
+const serverSpeechQ = { items: [], playing: false, currentEl: null, endPending: [] };
 
 function splitSpeechChunks(text) {
   return text.split(/(?<=[.!?])\s+/)
@@ -2185,14 +2198,15 @@ function splitSpeechChunks(text) {
     .map(s => s.slice(0, 400));
 }
 
-function queueServerSpeech(text) {
+function queueServerSpeech(text, onEndCallback) {
   if (!text) return;
   const parts = splitSpeechChunks(text);
-  if (!parts.length) return;
+  if (!parts.length) { if (onEndCallback) setTimeout(onEndCallback, 0); return; }
   if (typeof setOrbState === 'function') setOrbState('speaking');
   lastSpeakStart = Date.now();
   duckSfx(true);
   parts.forEach(p => serverSpeechQ.items.push({ text: p, el: null }));
+  if (onEndCallback) serverSpeechQ.endPending.push(onEndCallback);
   pumpServerQueue();
 }
 
@@ -2201,7 +2215,9 @@ function pumpServerQueue() {
   const next = serverSpeechQ.items.shift();
   if (!next) {
     serverSpeechQ.playing = false;
+    const endCbs = serverSpeechQ.endPending.splice(0);
     if (typeof setOrbState === 'function' && serverSpeechQ.items.length === 0) { setOrbState('idle'); duckSfx(false); }
+    endCbs.forEach(cb => { try { cb(); } catch(e) {} });
     return;
   }
   serverSpeechQ.playing = true;
@@ -2226,6 +2242,7 @@ function pumpServerQueue() {
 
 function stopServerSpeech() {
   serverSpeechQ.items = [];
+  serverSpeechQ.endPending = [];
   if (serverSpeechQ.currentEl) { try { serverSpeechQ.currentEl.pause(); } catch(e) {} serverSpeechQ.currentEl = null; }
   if (window.currentSpeechAudio) { try { window.currentSpeechAudio.pause(); } catch(e) {} window.currentSpeechAudio = null; }
   serverSpeechQ.playing = false;
@@ -2916,7 +2933,7 @@ function makeOverlayDraggable(el) {
 }
 
 // ================================================
-// MODE SYSTEM — JARVIS / FRIDAY / JENNY
+// MODE SYSTEM — JARVIS / FRIDAY / ULTRON
 // ================================================
 let currentMode = 'friday';
 const modeConfig = {
@@ -3341,7 +3358,7 @@ let wakeWordActive = false;
 let wakeRecognition = null;
 let wakeListening = false;
 
-const WAKE_WORDS = ['hey jenny', 'hey jenni', 'hey jeeny', 'hey friday', 'hey jeni', 'hey ultron'];
+const WAKE_WORDS = ['hey friday', 'hey jarvis', 'hey ultron'];
 
 function initWakeWord() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -3413,7 +3430,7 @@ function startWakeWord() {
   try {
     wakeRecognition.start();
     wakeListening = true;
-    toast('Wake word active — Say "Hey Jenny" or "Hey Friday"', 'ok');
+    toast('Wake word active — Say "Hey Friday", "Hey Jarvis" or "Hey Ultron"', 'ok');
   } catch(e) {
     if (e.message && e.message.includes('already started')) {
       wakeListening = true;
