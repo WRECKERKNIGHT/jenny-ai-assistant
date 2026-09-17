@@ -1,7 +1,10 @@
 """
-J.E.N.N.Y - Wake Word Detector
-Listens for "Hey Jenny" or "Hey Friday" and activates the assistant
-Lightweight - uses minimal CPU/RAM
+J.E.N.N.Y - Wake Word Detector (mode-aware, neural voice)
+
+Listens for "Hey Jenny", "Hey Friday", "Hey Jarvis" or "Hey Ultron" and
+activates the assistant with the matching persona. Wake acknowledgements and
+replies are spoken through the JENNY server (neural edge-tts voice), with a
+gentle chime so you always know it heard you.
 
 Usage: python wakeword.py [--server http://localhost:3005] [--energy 300]
                           [--timeout 7] [--push-to-talk]
@@ -11,7 +14,7 @@ import sys
 import time
 import json
 import urllib.request
-import threading
+import urllib.parse
 
 try:
     import speech_recognition as sr
@@ -20,56 +23,112 @@ except ImportError:
     sys.exit(1)
 
 SERVER_URL = "http://localhost:3005"
-WAKE_WORDS = ["hey jenny", "hey jenni", "hey jeeny", "hey friday", "hey jeni",
-              "hello jenny", "hello friday", "jenny", "friday"]
+WAKE_WORDS = ["hey friday", "hello friday", "hey jarvis", "hello jarvis",
+              "hey ultron", "hello ultron",
+              "friday", "jarvis", "ultron"]
+WAKE_TO_MODE = {
+    "hey friday": "friday", "hello friday": "friday", "friday": "friday",
+    "hey jarvis": "jarvis", "hello jarvis": "jarvis", "jarvis": "jarvis",
+    "hey ultron": "ultron", "hello ultron": "ultron", "ultron": "ultron",
+}
 LISTEN_TIMEOUT = 7
 PHRASE_LIMIT = 10
 ENERGY_THRESHOLD = 300
 PUSH_TO_TALK = False
 
+ACK_PHRASES = {
+    "friday": "Friday here! What can I help you with, Boss?",
+    "jarvis": "Jarvis at your service, Sir. What may I do for you?",
+    "ultron": "Ultrons listening. State your command.",
+}
+SLEEP_PHRASES = {
+    "friday": "Going back to sleep, Boss! Say Hey Friday to wake me up.",
+    "jarvis": "Very well, Sir. I shall remain on standby.",
+    "ultron": "Powering down. Say Hey Ultron when you need me.",
+}
+
 
 def server_online(timeout=2):
-    """Preflight /api/health check so we don't listen for nothing."""
+    """Preflight /api/speak/status check so we don't listen for nothing."""
     try:
-        req = urllib.request.Request(f"{SERVER_URL}/api/health", method="GET")
+        req = urllib.request.Request(f"{SERVER_URL}/api/speak/status", method="GET")
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return resp.status == 200
     except Exception:
         return False
 
 
-def speak(text):
+def server_speak(text):
+    """Speak through the neural voice engine on the server (preferred)."""
     try:
-        import pyttsx3
-        engine = pyttsx3.init()
-        voices = engine.getProperty('voices')
-        for v in voices:
-            if any(name in v.name.lower() for name in ['david', 'mark']):
-                engine.setProperty('voice', v.id)
-                break
-        engine.setProperty('rate', 175)
-        engine.setProperty('volume', 0.9)
-        engine.say(text)
-        engine.runAndWait()
+        req = urllib.request.Request(
+            f"{SERVER_URL}/api/speak/fallback",
+            data=json.dumps({"text": text}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+
+def local_speak(text):
+    """Last-resort feedback when the server voice is unreachable.
+
+    Uses only a soft beep — never a second SAPI/pyttsx3 voice — so the single
+    neural voice rule is preserved and we can never double-speak."""
+    try:
+        import winsound
+        winsound.Beep(880, 90)
+        winsound.Beep(1320, 120)
+    except Exception:
+        pass
+
+
+def speak(text):
+    if not server_speak(text):
+        local_speak(text)
+
+
+def play_chime():
+    """Soft two-note chime so the user always knows the wake word was heard."""
+    try:
+        import winsound
+        winsound.Beep(880, 80)
+        winsound.Beep(1320, 110)
+    except Exception:
+        pass
+
+
+def set_mode(mode):
+    try:
+        req = urllib.request.Request(
+            f"{SERVER_URL}/api/mode",
+            data=json.dumps({"mode": mode}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=5):
+            pass
     except Exception:
         pass
 
 
 def send_to_jenny(text):
     try:
-        import urllib.request
-        import urllib.parse
         req = urllib.request.Request(
             f"{SERVER_URL}/api/chat",
             data=json.dumps({"message": text}).encode(),
             headers={"Content-Type": "application/json"},
-            method="POST"
+            method="POST",
         )
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read().decode())
-            reply = data.get("reply", "I didn't quite get that, Boss!")
-            speak(reply)
-            print(f"[Jenny] {reply}")
+            reply = data.get("reply", {})
+            spoken = reply.get("speech") or reply.get("text", "I didn't quite get that, Boss!")
+            speak(spoken)
+            print(f"[Jenny] {reply.get('text', spoken)}")
             return reply
     except Exception:
         speak("Server is not running. Please start the server first, Boss!")
@@ -80,8 +139,8 @@ def check_wake_word(text):
     text_lower = text.lower().strip()
     for word in WAKE_WORDS:
         if word in text_lower:
-            return True
-    return False
+            return word
+    return None
 
 
 def extract_command(text, wake_word):
@@ -93,6 +152,11 @@ def extract_command(text, wake_word):
             command = command[1:].strip()
         return command
     return text.strip()
+
+
+def is_dismissal(text):
+    return any(w in text for w in ["goodbye", "bye", "sleep", "stop listening",
+                                   "dismiss", "shut up", "quiet now"])
 
 
 def main():
@@ -123,7 +187,7 @@ def main():
 
     print("=" * 50)
     print(f"  J.E.N.N.Y - Wake Word Detector  (server: {SERVER_URL})")
-    print("  Say 'Hey Jenny' or 'Hey Friday' to activate")
+    print("  Say 'Hey Jenny' / 'Hey Friday' / 'Hey Jarvis' / 'Hey Ultron'")
     print("=" * 50)
     print("  Listening... (Ctrl+C to stop)")
     print("=" * 50)
@@ -157,22 +221,21 @@ def main():
                 if wake_word_used and (time.time() - last_wake) < 30:
                     command = extract_command(text, wake_word_used)
                     wake_word_used = None
-                    if any(w in command for w in ["goodbye", "bye", "sleep", "stop listening", "dismiss"]):
-                        speak("Going back to sleep mode, Boss! Say Hey Jenny to wake me up.")
+                    if is_dismissal(command):
+                        speak(SLEEP_PHRASES.get("friday", "Going back to sleep."))
                         print("[*] Going back to sleep mode...")
                     else:
                         send_to_jenny(command)
                     continue
 
-                found = None
-                for word in WAKE_WORDS:
-                    if word in text:
-                        found = word
-                        break
+                found = check_wake_word(text)
 
                 if found:
                     print("[*] Wake word detected!")
-                    speak("Yes Boss? I'm listening!")
+                    play_chime()
+                    mode = WAKE_TO_MODE.get(found, "friday")
+                    set_mode(mode)
+                    speak(ACK_PHRASES.get(mode, ACK_PHRASES["friday"]))
                     wake_word_used = found
                     last_wake = time.time()
 
@@ -187,8 +250,8 @@ def main():
                         try:
                             command = recognizer.recognize_google(audio).lower()
                             print(f"[Command] {command}")
-                            if any(w in command for w in ["goodbye", "bye", "sleep", "stop listening", "dismiss"]):
-                                speak("Going back to sleep mode, Boss! Say Hey Jenny to wake me up.")
+                            if is_dismissal(command):
+                                speak(SLEEP_PHRASES.get(mode, "Going back to sleep."))
                                 print("[*] Going back to sleep mode...")
                             else:
                                 send_to_jenny(command)
