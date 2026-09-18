@@ -1094,6 +1094,96 @@ def handle_todo_intent(lo, boss):
     return None
 
 
+# Synonym expansion: many intents accept dozens of natural phrasings. Each
+# alias is mapped to a normalized word the command router already understands,
+# so "close the browser" == "kill firefox" == "exit the web" all work.
+COMMAND_SYNONYMS = {
+    "launch": "open", "start up": "open", "boot up": "open", "fire up": "open",
+    "bring up": "open", "pop open": "open", "run program": "open", "run app": "open",
+    "kill": "close", "shut down app": "close", "close down": "close", "exit app": "close",
+    "capture screen": "screenshot", "take a screenshot": "screenshot", "snapshot": "screenshot",
+    "cap the screen": "screenshot", "screen grab": "screenshot",
+    "secure my pc": "lock", "lock workstation": "lock", "lock the computer": "lock",
+    "empty bin": "empty trash", "clear the trash": "empty trash", "dump recycle bin": "empty trash",
+    "power off": "shutdown", "power down": "shutdown", "switch off pc": "shutdown",
+    "turn off the computer": "shutdown", "reboot the pc": "restart", "reset the pc": "restart",
+    "make pc sleep": "sleep", "sleep mode": "sleep", "put pc to sleep": "sleep",
+    "minimise all": "minimize all", "minimize everything": "minimize all", "show my desktop": "minimize all",
+    "terminal window": "terminal", "open command prompt": "terminal", "launch cmd": "terminal",
+    "whats on clipboard": "clipboard", "read clipboard": "clipboard", "clipboard contents": "clipboard",
+    "lower volume": "volume down", "turn volume down": "volume down", "quieter": "volume down",
+    "raise volume": "volume up", "turn volume up": "volume up", "louder": "volume up",
+    "silence my pc": "mute", "mute audio": "mute", "turn off sound": "mute",
+    "turn on sound": "unmute", "restore audio": "unmute", "unmute audio": "unmute",
+    "play music": "media play", "pause playback": "media pause", "next song": "media next",
+    "previous song": "media previous", "skip track": "media next", "shuffle": "media next",
+    "increase brightness": "brightness up", "brighter": "brightness up", "make screen brighter": "brightness up",
+    "decrease brightness": "brightness down", "dimmer": "brightness down", "make screen dimmer": "brightness down",
+    "wifi status": "wifi", "network status": "wifi", "connected network": "wifi",
+    "file manager": "file", "open files": "file", "open file explorer": "file",
+    "note": "notepad", "open notes": "notepad", "txtpad": "notepad",
+    "calculator app": "calculator", "run calculator": "calculator", "open calc": "calculator",
+    "launch browser": "chrome", "open web browser": "chrome", "open internet": "chrome",
+    "open editor": "vscode", "launch vscode": "vscode", "code editor": "vscode",
+    "open spotify": "spotify", "launch music": "spotify",
+}
+
+def _expand_synonyms(lo: str) -> str:
+    """Replace common command aliases with canonical router words so the same
+    intent is recognized no matter how the user phrases it."""
+    out = lo
+    for alias, canonical in COMMAND_SYNONYMS.items():
+        out = out.replace(f" {alias} ", f" {canonical} ")
+        out = out.replace(f" {alias}.", f" {canonical}.")
+        out = out.replace(f" {alias},", f" {canonical},")
+    out = re.sub(r"\s+", " ", out).strip()
+    return out
+
+
+LEARNED_ALIASES_FILE = DATA_DIR / "learned_aliases.json"
+
+def _match_learned_alias(lo: str):
+    """Check the learned-alias registry (user-taught phrasings -> intents)."""
+    try:
+        aliases = load_json(LEARNED_ALIASES_FILE, {"aliases": []})["aliases"]
+        for a in aliases:
+            phrase = str(a.get("phrase") or "").strip().lower()
+            intent = a.get("intent")
+            if phrase and intent and phrase in lo:
+                reply = _apply_learned_intent(intent, boss="Boss")
+                if reply:
+                    return reply
+    except Exception:
+        pass
+    return None
+
+
+def _apply_learned_intent(intent: dict, boss: str):
+    """Execute an intent dict learned at runtime (action + value)."""
+    action = str(intent.get("action") or "")
+    value = intent.get("value", "")
+    try:
+        if action in ("open-app", "open-chrome"):
+            return {"text": f"Opening **{value}**, {boss}!", "speech": f"Opening {value}, {boss}.", "command": {"action": action, "value": value}}
+        if action == "close-app":
+            return {"text": f"Closing **{value}**, {boss}!", "speech": f"Closing {value}, {boss}.", "command": {"action": action, "value": value}}
+        if action == "screenshot":
+            return {"text": f"Taking screenshot, {boss}!", "speech": "Taking screenshot.", "command": {"action": "screenshot", "value": ""}}
+        if action == "volume":
+            return {"text": f"Volume set to {value}%, {boss}!", "speech": f"Volume set to {value} percent.", "command": {"action": "volume", "value": value}}
+        if action in ("volume-up", "volume-down", "mute", "unmute"):
+            return {"text": f"Volume adjusted, {boss}!", "speech": f"Volume adjusted.", "command": {"action": action, "value": value}}
+        if action == "timer":
+            return {"text": f"Timer set, {boss}!", "speech": f"Timer set, {boss}.", "command": {"action": "timer", "value": value}}
+        if action in ("lock", "empty-trash", "sleep", "restart", "shutdown", "minimize-all", "terminal", "wifi"):
+            return {"text": f"Done, {boss}!", "speech": "Done.", "command": {"action": action, "value": value}}
+        if action == "media":
+            return {"text": f"Media {value}, {boss}!", "speech": f"Media {value}.", "command": {"action": "media", "value": value}}
+    except Exception:
+        pass
+    return None
+
+
 def local_command_router(msg):
     """Fast, case-insensitive local intent routing that runs BEFORE the LLM so
     todo / system actions / mode switches always work instantly and deterministically.
@@ -1102,9 +1192,15 @@ def local_command_router(msg):
     mode = get_mode()
     mp = MODE_PROFILES[mode]
     boss = mp["boss"]
+    lo = _expand_synonyms(lo)
+
+    # Learned aliases: previously-taught custom phrasings map straight to intents.
+    learned = _match_learned_alias(lo)
+    if learned:
+        return learned
 
     # MODE SWITCH: "switch to jarvis", "go ultron", "activate friday", "be jarvis"
-    m = re.search(r"(?:switch|change|go|activate|become|set)\s+(?:to\s+|to\s+the\s+|into\s+)?(friday|jarvis|ultron)", lo)
+    m = re.search(r"(?:switch|change|go|activate|become|set|start|enter|use)\s+(?:to\s+|to\s+the\s+|into\s+)?(friday|jarvis|ultron)", lo)
     if m:
         target = m.group(1)
         set_mode(target)
@@ -1167,6 +1263,22 @@ def local_command_router(msg):
         return {"text": f"Volume up, {boss}!", "speech": "Volume up.", "command": {"action": "volume-up", "value": ""}}
     if any(w in lo for w in ["volume down", "quieter", "lower volume"]):
         return {"text": f"Volume down, {boss}!", "speech": "Volume down.", "command": {"action": "volume-down", "value": ""}}
+    if any(w in lo for w in ["media play", "play pause", "resume music"]):
+        return {"text": f"Playing, {boss}!", "speech": "Playing.", "command": {"action": "media", "value": "playpause"}}
+    if any(w in lo for w in ["media pause", "pause music", "stop music"]):
+        return {"text": f"Paused, {boss}!", "speech": "Paused.", "command": {"action": "media", "value": "pause"}}
+    if any(w in lo for w in ["media next", "next song", "next track", "skip track"]):
+        return {"text": f"Skipping to next, {boss}!", "speech": "Next track.", "command": {"action": "media", "value": "next"}}
+    if any(w in lo for w in ["media previous", "previous song", "previous track", "back track"]):
+        return {"text": f"Going back, {boss}!", "speech": "Previous track.", "command": {"action": "media", "value": "previous"}}
+    if any(w in lo for w in ["brightness up", "increase brightness", "brighter"]):
+        return {"text": f"Brighter, {boss}!", "speech": "Increasing brightness.", "command": {"action": "brightness", "value": "up"}}
+    if any(w in lo for w in ["brightness down", "decrease brightness", "dimmer"]):
+        return {"text": f"Dimmer, {boss}!", "speech": "Decreasing brightness.", "command": {"action": "brightness", "value": "down"}}
+    m = re.search(r"set brightness (?:to |at )?(\d+)", lo)
+    if m:
+        pct = min(100, max(0, int(m.group(1))))
+        return {"text": f"Brightness set to {pct}%, {boss}!", "speech": f"Brightness set to {pct} percent.", "command": {"action": "brightness", "value": str(pct)}}
 
     # DETERMINISTIC MATH
     if re.match(r"^[\d\s\+\-\*\/\%\.\(\)x]+$", lo):
