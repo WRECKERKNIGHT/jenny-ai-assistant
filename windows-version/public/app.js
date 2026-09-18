@@ -2419,16 +2419,40 @@ function initRecognition() {
 }
 
 async function startListening() {
-  if (!recognition) recognition = initRecognition();
-  if (!recognition) { toast('Speech recognition not supported', 'err'); return; }
+  stopServerSpeech();
+  sfx.confirm();
   isListening = true;
   dictationTranscript = '';
-  orbClick.classList.add('active');
+  if (orbClick) orbClick.classList.add('active');
   setOrbState('listening');
-  sfx.confirm();
-  stopServerSpeech();
   try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); startSpeechWaves(micStream); } catch {}
-  try { recognition.start(); } catch {}
+
+  // PRIORITY: the PC's own STT engine (Groq Whisper + Google fallback) works in
+  // pywebview/Chromium reliably. Browser Web Speech is only used as a fallback.
+  try {
+    const res = await fetch('/api/stt/record', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({seconds: 5}),
+    });
+    const d = await res.json();
+    stopListening();
+    if (d && d.success && d.text) {
+      const heard = d.text.trim();
+      toast('Heard: ' + heard.slice(0, 60), 'ok');
+      sendMessage(heard);
+    } else if (d && d.error) {
+      toast('Mic: ' + d.error, 'err');
+    } else {
+      toast('No speech heard, Boss.', 'info');
+    }
+    return;
+  } catch {
+    // Server STT unavailable -> browser fallback.
+    if (!recognition) recognition = initRecognition();
+    if (!recognition) { stopListening(); toast('Speech recognition not supported', 'err'); return; }
+    try { recognition.start(); } catch {}
+  }
 }
 
 function stopListening() {
