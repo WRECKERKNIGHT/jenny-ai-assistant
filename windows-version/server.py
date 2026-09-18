@@ -2521,11 +2521,49 @@ def api_emails(): return jsonify({"success": True, "emails": [], "message": "Ema
 @app.route("/api/timers")
 def api_timers(): return jsonify({"success": True, "timers": []})
 
+@app.route("/api/stt/mics")
+def api_stt_mics():
+    """List detected microphone devices (index + name)."""
+    import speech_stt
+    return jsonify({"success": True, "mics": speech_stt.get_mics()})
+
+@app.route("/api/stt/record", methods=["POST"])
+def api_stt_record():
+    """Record the microphone for N seconds and transcribe it.
+    Body: {seconds, device?}. Returns {text, engine} so the UI never has to
+    rely on the flaky browser Web Speech recognizer."""
+    import speech_stt
+    d = request.get_json(force=True, silent=True) or {}
+    seconds = max(1, min(int(d.get("seconds", 5)), 12))
+    device = d.get("device")
+    if device is not None:
+        try:
+            device = int(device)
+        except (TypeError, ValueError):
+            device = None
+    result = speech_stt.record_and_transcribe(seconds, device=device)
+    return jsonify(result)
+
+@app.route("/api/stt/status")
+def api_stt_status():
+    """STT capability report (mics + which transcription engines are ready)."""
+    import speech_stt
+    mics = speech_stt.get_mics()
+    return jsonify({
+        "success": True,
+        "mics": mics,
+        "count": len(mics),
+        "whisper": bool(speech_stt._groq_key() and speech_stt.transcribe_groq is not None),
+        "engine": "groq-whisper + google-fallback",
+    })
+
 @app.route("/api/toggle-mic")
-def api_toggle_mic(): return jsonify({"success": True, "timestamp": int(time.time() * 1000)})
+def api_toggle_mic():
+    return jsonify({"success": True, "mode": "push", "stt": "/api/stt/record"})
 
 @app.route("/api/toggle-mic-poll")
-def api_toggle_mic_poll(): return jsonify({"success": True, "lastToggle": 0})
+def api_toggle_mic_poll():
+    return jsonify({"success": True, "lastToggle": int(time.time() * 1000)})
 
 @app.route("/api/active-apps")
 def api_active_apps():

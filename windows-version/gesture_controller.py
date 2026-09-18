@@ -1,6 +1,6 @@
 """
 U.L.T.R.O.N. Gesture Controller
-Hand-tracking PC control via MediaPipe + OpenCV + PyAutoGUI
+Hand-tracking PC control via MediaPipe Tasks API + OpenCV + PyAutoGUI
 """
 import cv2
 import time
@@ -18,19 +18,52 @@ try:
 except Exception:
     HAS_PYAUTOGUI = False
 
+MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+MODEL_PATH = Path(__file__).resolve().parent / "data" / "hand_landmarker.task"
+
+
+def _ensure_model():
+    """Download the hand_landmarker.task model if it isn't present yet."""
+    if MODEL_PATH.exists() and MODEL_PATH.stat().st_size > 0:
+        return True
+    try:
+        MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+        print(f"[ULTRON] Downloading hand_landmarker.task ...")
+        import urllib.request
+        import ssl as _ssl
+        ctx = _ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = _ssl.CERT_NONE
+        urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
+        ok = MODEL_PATH.exists() and MODEL_PATH.stat().st_size > 0
+        print("[ULTRON] Model ready" if ok else "[ULTRON] Model download failed")
+        return ok
+    except Exception as exc:
+        print(f"[ULTRON] Model download failed: {exc}")
+        return False
+
+
+landmarker = None
 try:
-    import mediapipe as mp
-    mp_hands = mp.solutions.hands
-    mp_draw = mp.solutions.drawing_utils
-    hands = mp_hands.Hands(
-        static_image_mode=False,
-        max_num_hands=2,
-        model_complexity=1,
-        min_detection_confidence=0.7,
-        min_tracking_confidence=0.7
+    from mediapipe import Image as MPImage
+    from mediapipe import ImageFormat as MPImageFormat
+    from mediapipe.tasks import python as mp_python
+    from mediapipe.tasks.python import vision
+
+    base_options = mp_python.BaseOptions(model_asset_path=str(MODEL_PATH))
+    options = vision.HandLandmarkerOptions(
+        base_options=base_options,
+        running_mode=vision.RunningMode.VIDEO,
+        num_hands=2,
+        min_hand_detection_confidence=0.5,
+        min_hand_presence_confidence=0.5,
+        min_tracking_confidence=0.5,
     )
-    HAS_MEDIAPIPE = True
-except Exception:
+    if _ensure_model():
+        landmarker = vision.HandLandmarker.create_from_options(options)
+    HAS_MEDIAPIPE = landmarker is not None
+except Exception as exc:
+    print(f"[ULTRON] MediaPipe init failed: {exc}")
     HAS_MEDIAPIPE = False
 
 try:
@@ -58,7 +91,7 @@ gesture_state = {
         "left": {"present": False, "gesture": "NO_HAND", "x": 0, "y": 0},
         "right": {"present": False, "gesture": "NO_HAND", "x": 0, "y": 0},
     },
-    "control_mode": "pointer",   # pointer | browser | system | media
+    "control_mode": "pointer",   # pointer | windows | browser | system | media
     "orb_drive": False,          # when ON, hand position steers the orb instead of the mouse
     "orb_x": 0.0,
     "orb_y": 0.0,
@@ -66,7 +99,15 @@ gesture_state = {
     "orb_target_y": 0.0,
 }
 
-MODE_ORDER = ["pointer", "browser", "system", "media"]
+MODE_ORDER = ["pointer", "windows", "browser", "system", "media"]
+
+WINDOWS_ACTIONS = {
+    "OPEN_PALM": "window_maximize",
+    "FIST": "window_minimize",
+    "TWO_FINGERS": "window_snap_left",
+    "THUMBS_UP": "window_snap_right",
+    "THUMBS_DOWN": "window_restore",
+}
 
 BROWSER_ACTIONS = {
     "POINT": "browser_search",
@@ -304,12 +345,142 @@ def set_orb_drive(on):
     return gesture_state["orb_drive"]
 
 
+# ---------------------------------------------------------------------------
+# Tony Stark window control (self-contained via ctypes Win32 API)
+# ---------------------------------------------------------------------------
+
+def _get_foreground_window():
+    try:
+        import ctypes
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+        return hwnd or None
+    except Exception:
+        return None
+
+
+def move_active_window(dx, dy):
+    """Move the active (foreground) window by dx/dy screen pixels."""
+    try:
+        import ctypes
+        import ctypes.wintypes as _wt
+        dx, dy = int(dx), int(dy)
+        if dx == 0 and dy == 0:
+            return True
+        user32 = ctypes.windll.user32
+        hwnd = _get_foreground_window()
+        if not hwnd:
+            return False
+        rect = _wt.RECT()
+        if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+            return False
+        return bool(user32.MoveWindow(hwnd, rect.left + dx, rect.top + dy,
+                                      rect.right - rect.left, rect.bottom - rect.top, True))
+    except Exception:
+        return False
+
+
+def _show_window_command(cmd):
+    try:
+        import ctypes
+        hwnd = _get_foreground_window()
+        if not hwnd:
+            return False
+        return bool(ctypes.windll.user32.ShowWindow(hwnd, cmd))
+    except Exception:
+        return False
+
+
+def _win_hotkey(*keys):
+    if HAS_PYAUTOGUI:
+        try:
+            pyautogui.hotkey(*keys)
+            return True
+        except Exception:
+            pass
+    return False
+
+
+def window_maximize():
+    return _show_window_command(3)      # SW_MAXIMIZE
+
+
+def window_minimize():
+    return _show_window_command(6)      # SW_MINIMIZE
+
+
+def window_restore():
+    return _show_window_command(9)      # SW_RESTORE
+
+
+def window_snap_left():
+    return _win_hotkey("win", "left")
+
+
+def window_snap_right():
+    return _win_hotkey("win", "right")
+
+
+WINDOW_ACTION_RUNNERS = {
+    "window_maximize": window_maximize,
+    "window_minimize": window_minimize,
+    "window_restore": window_restore,
+    "window_snap_left": window_snap_left,
+    "window_snap_right": window_snap_right,
+}
+
+
+def run_window_action(name):
+    fn = WINDOW_ACTION_RUNNERS.get(name)
+    if fn is None:
+        return False
+    try:
+        return fn()
+    except Exception:
+        return False
+
+
+WINDOW_MOVE_GAIN = 2.5
+_win_grab = {
+    "active": False,
+    "hwnd": None,
+    "last_x": 0.0,
+    "last_y": 0.0,
+}
+
+
 def process_gesture(lm, gesture, role="right", slot="g"):
-    global smooth_x, smooth_y, last_click_time, last_scroll_time, prev_index_y, gesture_state, last_mode_action_time
+    global smooth_x, smooth_y, last_click_time, last_scroll_time, prev_index_y, gesture_state, last_mode_action_time, _win_grab
     now = time.time()
 
     is_pointer = role == "left"
     control_mode = gesture_state.get("control_mode", "pointer")
+
+    if control_mode == "windows" and not is_pointer:
+        if gesture == "POINT":
+            # Grab-and-move the active window while pointing (pinch-to-move).
+            if not _win_grab["active"]:
+                _win_grab["active"] = True
+                _win_grab["hwnd"] = _get_foreground_window()
+                _win_grab["last_x"] = lm[8].x
+                _win_grab["last_y"] = lm[8].y
+                gesture_state["gesture"] = "WINDOW_GRAB"
+            else:
+                dx = (lm[8].x - _win_grab["last_x"]) * SCREEN_W * WINDOW_MOVE_GAIN
+                dy = (lm[8].y - _win_grab["last_y"]) * SCREEN_H * WINDOW_MOVE_GAIN
+                _win_grab["last_x"] = lm[8].x
+                _win_grab["last_y"] = lm[8].y
+                if move_active_window(dx, dy):
+                    gesture_state["gesture"] = "WINDOW_MOVE"
+        else:
+            _win_grab["active"] = False
+            _win_grab["hwnd"] = None
+            action = WINDOWS_ACTIONS.get(gesture)
+            if action and is_stable(gesture, slot) and (now - last_mode_action_time) > MODE_ACTION_COOLDOWN:
+                run_window_action(action)
+                last_mode_action_time = now
+                gesture_state["gesture"] = f"WINDOWS:{action}"
+        prev_index_y = None
+        return
 
     if control_mode != "pointer" and not is_pointer:
         action_map = {
@@ -396,8 +567,41 @@ def process_gesture(lm, gesture, role="right", slot="g"):
         prev_index_y = None
 
 
+# ---------------------------------------------------------------------------
+# Hand overlay drawing (MediaPipe Tasks removed mp_draw.draw_landmarks)
+# ---------------------------------------------------------------------------
+
+DRAW_CONNECTIONS = [
+    (0, 1), (1, 2), (2, 3), (3, 4),
+    (0, 5), (5, 6), (6, 7), (7, 8),
+    (5, 9), (9, 10), (10, 11), (11, 12),
+    (9, 13), (13, 14), (14, 15), (15, 16),
+    (13, 17), (17, 18), (18, 19), (19, 20),
+    (0, 17),
+]
+TIP_LANDMARKS = (4, 8, 12, 16, 20)
+
+
+def _draw_hand(frame, lm):
+    """Simple cv2-only overlay: key landmark circles + connecting lines."""
+    h, w = frame.shape[:2]
+    pts = [(int(l.x * w), int(l.y * h)) for l in lm]
+    for a, b in DRAW_CONNECTIONS:
+        if a < len(pts) and b < len(pts):
+            cv2.line(frame, pts[a], pts[b], (0, 255, 0), 2)
+    for i, p in enumerate(pts):
+        if i == 0:                       # wrist
+            cv2.circle(frame, p, 5, (0, 165, 255), -1)
+        elif i == 8:                     # index tip
+            cv2.circle(frame, p, 6, (0, 0, 255), -1)
+        elif i in TIP_LANDMARKS:         # other fingertips
+            cv2.circle(frame, p, 4, (255, 0, 255), -1)
+        else:
+            cv2.circle(frame, p, 2, (255, 255, 0), -1)
+
+
 def run_gesture_loop():
-    if not HAS_MEDIAPIPE:
+    if not HAS_MEDIAPIPE or landmarker is None:
         print("[ULTRON] MediaPipe not available")
         return
 
@@ -408,6 +612,7 @@ def run_gesture_loop():
     gesture_state["active"] = True
 
     frame_idx = 0
+    timestamp_ms = 0
     try:
         while gesture_state["active"]:
             iter_start = time.time()
@@ -419,17 +624,21 @@ def run_gesture_loop():
 
             frame = cv2.flip(frame, 1)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            result = hands.process(rgb)
+            timestamp_ms += int((time.time() - iter_start) * 1000) + 1
+            result = landmarker.detect_for_video(
+                MPImage(image_format=MPImageFormat.SRGB, data=rgb),
+                timestamp_ms,
+            )
 
             gesture = "NO_HAND"
             detected_hands = []
 
-            if result.multi_hand_landmarks:
-                for i, hand in enumerate(result.multi_hand_landmarks):
-                    lm = hand.landmark
+            if result.hand_landmarks:
+                for i, hand in enumerate(result.hand_landmarks):
+                    lm = hand
                     handedness = "Right"
                     try:
-                        label = result.multi_handedness[i].classification[0].label
+                        label = result.handedness[i][0].category_name
                         if label in ("Left", "Right"):
                             handedness = label
                     except Exception:
@@ -455,7 +664,7 @@ def run_gesture_loop():
                     gesture_state["hands"][h["side"]]["gesture"] = h["gesture"]
                     _push_gesture_history(h["side"], h["gesture"])
                     if drawn < MAX_HANDS_DRAW:
-                        mp_draw.draw_landmarks(frame, h["lm"], mp_hands.HAND_CONNECTIONS)
+                        _draw_hand(frame, h["lm"])
                         drawn += 1
 
                 navigator = None
@@ -504,6 +713,11 @@ def run_gesture_loop():
         print(f"[ULTRON] Gesture error: {e}")
     finally:
         cap.release()
+        if landmarker is not None:
+            try:
+                landmarker.close()
+            except Exception:
+                pass
         gesture_state["active"] = False
 
 
