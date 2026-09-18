@@ -1306,6 +1306,50 @@ def local_command_router(msg):
 
     return None
 
+@app.route("/api/commands/teach", methods=["POST"])
+def api_commands_teach():
+    """Train JENNY: teach a custom phrase -> command intent mapping.
+
+    Body: {"phrase": "blow up the lights", "action": "volume", "value": "up"}
+    Once learned, the phrase works forever (case-insensitive) - the system gets
+    smarter about the user's natural language as they use it.
+    """
+    d = request.get_json(force=True, silent=True) or {}
+    phrase = str(d.get("phrase") or "").strip().lower()
+    action = str(d.get("action") or "").strip().lower()
+    value = d.get("value", "")
+    if not phrase or not action:
+        return jsonify({"success": False, "error": "phrase and action required"}), 400
+    data = load_json(LEARNED_ALIASES_FILE, {"aliases": []})
+    aliases = data.setdefault("aliases", [])
+    for a in aliases:
+        if str(a.get("phrase") or "").lower() == phrase:
+            a["intent"] = {"action": action, "value": value}
+            a["updated"] = time.time()
+            break
+    else:
+        aliases.append({"phrase": phrase, "intent": {"action": action, "value": value}, "created": time.time()})
+    save_json(LEARNED_ALIASES_FILE, data)
+    return jsonify({"success": True, "learned": len(aliases), "message": f"Learned: \"{phrase}\" -> {action} {value}."})
+
+
+@app.route("/api/commands/taught")
+def api_commands_taught():
+    """List the currently learned (user-taught) command aliases."""
+    data = load_json(LEARNED_ALIASES_FILE, {"aliases": []})
+    return jsonify({"success": True, "aliases": data.get("aliases", [])})
+
+
+@app.route("/api/commands/forget", methods=["POST"])
+def api_commands_forget():
+    """Remove a learned alias by phrase."""
+    d = request.get_json(force=True, silent=True) or {}
+    phrase = str(d.get("phrase") or "").strip().lower()
+    data = load_json(LEARNED_ALIASES_FILE, {"aliases": []})
+    data["aliases"] = [a for a in data.get("aliases", []) if str(a.get("phrase") or "").lower() != phrase]
+    save_json(LEARNED_ALIASES_FILE, data)
+    return jsonify({"success": True, "learned": len(data["aliases"])})
+
 def offline_reply(text):
     lo = text.lower().strip()
     lo_norm = lo.replace("i am", "i'm").replace("i dont", "i don't").replace("i cant", "i can't").replace("dont", "don't").replace("cant", "can't").replace("wont", "won't").replace("isnt", "isn't").replace("arent", "aren't").replace("wasnt", "wasn't").replace("wouldnt", "wouldn't")
