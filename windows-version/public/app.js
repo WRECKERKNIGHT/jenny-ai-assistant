@@ -793,8 +793,8 @@ async function fetchAmbientData() {
         body: JSON.stringify({ action: 'network-speed' })
       });
       const d = await res.json();
-      if (d.success && d.speedMbps) {
-        netEl.textContent = `${d.speedMbps} Mbps`;
+      if (d.success && d.speed) {
+        netEl.textContent = d.speed;
       }
       delete netEl.dataset.loading;
     }
@@ -2193,7 +2193,7 @@ function speak(text, onEndCallback) {
   if (!text) return;
   const clean = text.replace(/[*_#`~]/g, '').replace(/https?:\/\/\S+/g, '').replace(/\s+/g, ' ').trim();
   if (!clean) return;
-  const spokenText = clean.slice(0, 500);
+  const spokenText = clean.slice(0, 6000);
   if (typeof setOrbState === 'function') setOrbState('speaking');
   lastSpeakStart = Date.now();
   duckSfx(true);
@@ -2208,26 +2208,20 @@ function speakServer(text) {
   queueServerSpeech(text);
 }
 
-// Segmented server-WAV queue: splits long text into sentences and plays them
-// back-to-back with next-segment prefetch, so output is continuous, low-latency
-// and always uses ONE neural voice (edge-tts on the PC).
+// Segment queue: /api/speak now streams edge-tts continuously, so each queued
+// utterance is ONE streaming request played as a single <audio> — no gaps
+// between sentences, no redundant per-sentence synthesis calls. The queue only
+// exists to serialize utterances (single-voice rule) and prefetch the next one.
 const serverSpeechQ = { items: [], playing: false, currentEl: null, endPending: [] };
-
-function splitSpeechChunks(text) {
-  return text.split(/(?<=[.!?])\s+/)
-    .map(s => s.replace(/[*_#`~]/g, '').trim())
-    .filter(s => s.length > 0)
-    .map(s => s.slice(0, 400));
-}
 
 function queueServerSpeech(text, onEndCallback) {
   if (!text) return;
-  const parts = splitSpeechChunks(text);
-  if (!parts.length) { if (onEndCallback) setTimeout(onEndCallback, 0); return; }
+  const clean = text.replace(/[*_#`~]/g, '').replace(/https?:\/\/\S+/g, '').replace(/\s+/g, ' ').trim();
+  if (!clean) return;
   if (typeof setOrbState === 'function') setOrbState('speaking');
   lastSpeakStart = Date.now();
   duckSfx(true);
-  parts.forEach(p => serverSpeechQ.items.push({ text: p, el: null }));
+  serverSpeechQ.items.push({ text: clean, el: null });
   if (onEndCallback) serverSpeechQ.endPending.push(onEndCallback);
   pumpServerQueue();
 }
@@ -2244,7 +2238,7 @@ function pumpServerQueue() {
   }
   serverSpeechQ.playing = true;
   const speechUrl = (t) => `/api/speak?text=${encodeURIComponent(t)}&fmt=mp3&t=${Date.now()}`;
-  // Prefetch the following segment so there's no gap after the current one ends.
+  // Prefetch the following utterance so there's no gap after the current one ends.
   if (serverSpeechQ.items.length) {
     const nx = serverSpeechQ.items[0];
     const nxt = new Audio(speechUrl(nx.text));
