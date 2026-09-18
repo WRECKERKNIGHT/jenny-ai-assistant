@@ -873,12 +873,18 @@ async function fetchQuota() {
       if (fill) fill.style.width = Math.round((d.bar || 0) * 100) + '%';
       if (pill) pill.classList.toggle('warn', (d.bar || 0) > 0.8);
       if (dot) dot.style.background = 'rgba(52,211,153,0.7)';
-      if (stext) stext.textContent = 'online';
-    } else if (d.key_set) {
+      if (stext) stext.textContent = (health && health.degraded) ? 'degraded' : 'online';
+    } else if (d.key_set || (health && health.key_set)) {
+      // Key exists: the server is up and speaking/chat still work. A slow Groq
+      // probe must NEVER read as OFFLINE - only as "degraded" or "connecting".
       badge.textContent = (d.model || 'groq').toUpperCase();
       badge.classList.add('active');
-      if (dot) dot.style.background = 'rgba(255,170,60,0.8)';
-      if (stext) stext.textContent = health ? 'api unreachable' : 'connecting';
+      if (rpmEl) rpmEl.textContent = d.rpm.current;
+      if (rpmMaxEl) rpmMaxEl.textContent = d.rpm.max;
+      if (fill) fill.style.width = Math.round((d.bar || 0) * 100) + '%';
+      if (dot) dot.style.background = (health && health.degraded) ? 'rgba(255,170,60,0.8)' : 'rgba(255,170,60,0.8)';
+      if (stext) stext.textContent = (health && health.degraded) ? 'degraded' : 'connecting';
+      if (pill) pill.classList.toggle('warn', (d.bar || 0) > 0.8);
     } else {
       badge.textContent = 'OFFLINE';
       badge.classList.remove('active');
