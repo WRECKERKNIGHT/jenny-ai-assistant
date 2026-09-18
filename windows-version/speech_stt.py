@@ -48,10 +48,64 @@ def get_mics() -> list[dict]:
         out = []
         for i, d in enumerate(sd.query_devices()):
             if int(d.get("max_input_channels") or 0) > 0:
-                out.append({"index": i, "name": d.get("name", "Mic")})
+                out.append({"index": i, "name": d.get("name", "Mic"),
+                            "default": i == default_mic_index()})
         return out
     except Exception:
         return []
+
+
+def default_mic_index() -> int | None:
+    """Index of the OS-default input device, if it can be determined."""
+    if sd is None:
+        return None
+    try:
+        info = sd.query_devices(kind="input")
+        return int(info.get("index"))
+    except Exception:
+        try:
+            for i, d in enumerate(sd.query_devices()):
+                if int(d.get("max_input_channels") or 0) > 0:
+                    return i
+        except Exception:
+            pass
+    return None
+
+
+def pick_device(requested=None) -> int | None:
+    """Resolve the device index to actually capture from.
+
+    Prefers the explicit request; otherwise the OS default input; otherwise
+    the first available input device. Returns None when no mic exists.
+    """
+    if requested is not None and isinstance(requested, int):
+        try:
+            d = sd.query_devices(requested)
+            if int(d.get("max_input_channels") or 0) > 0:
+                return requested
+        except Exception:
+            pass
+    dflt = default_mic_index()
+    if dflt is not None:
+        return dflt
+    try:
+        for i, d in enumerate(sd.query_devices()):
+            if int(d.get("max_input_channels") or 0) > 0:
+                return i
+    except Exception:
+        pass
+    return None
+
+
+def peak_level(data, samplerate: int = DEFAULT_SAMPLE_RATE) -> float:
+    """Normalized peak amplitude (0..1) of a raw int16 numpy array."""
+    if np is None or data is None or data.size == 0:
+        return 0.0
+    try:
+        arr = np.asarray(data, dtype=np.float32) / 32768.0
+        return float(np.max(np.abs(arr)))
+    except Exception:
+        return 0.0
 
 
 def record_seconds(seconds: int = 5, samplerate: int = DEFAULT_SAMPLE_RATE,
@@ -60,13 +114,31 @@ def record_seconds(seconds: int = 5, samplerate: int = DEFAULT_SAMPLE_RATE,
     if sd is None or np is None:
         return None
     seconds = max(1, min(int(seconds), 12))
+    dev = pick_device(device)
+    if dev is None:
+        raise RuntimeError("no_mic")
     try:
         data = sd.rec(int(seconds * samplerate), samplerate=samplerate,
-                      channels=DEFAULT_CHANNELS, dtype="int16", device=device)
+                      channels=DEFAULT_CHANNELS, dtype="int16", device=dev)
         sd.wait()
+        level = peak_level(data, samplerate)
+        if level < 0.0005:
+            # Essentially silence - likely the wrong device or mic muted.
+            return None
         return _to_wav(data, samplerate)
-    except Exception:
+    except Exception as e:
+        if _is_device_unavailable(e):
+            raise RuntimeError("device_busy") from e
         return None
+
+
+def _is_device_unavailable(e: Exception) -> bool:
+    s = str(e).lower()
+    for token in ("error opening input", "invalid device", "notfound",
+                  "unavailable", "host api error", "stream error", "portaudio"):
+        if token in s:
+            return True
+    return False
 
 
 def _to_wav(data, samplerate: int) -> bytes:
@@ -138,16 +210,26 @@ def record_and_transcribe(seconds: int = 5, device: int | None = None) -> dict:
     """One-shot microphone capture + transcription (used by the mic button)."""
     if _rec_lock.acquire(blocking=False):
         try:
-            wav = record_seconds(seconds, device=device)
-            if not wav:
+            if not get_mics():
+                return {"success": False, "error": "No microphone detected. Plug one in or check Windows privacy settings."}
+            try:
+                wav = record_seconds(seconds, device=device)
+            except RuntimeError as e:
+                code = str(e)
+                if code == "no_mic":
+                    return {"success": False, "error": "No microphone detected. Check mic privacy settings."}
+                if code == "device_busy":
+                    return {"success": False, "error": "Microphone is busy (another app is using it). Close that app and retry."}
                 return {"success": False, "error": "Microphone capture failed. Check mic privacy settings."}
+            if not wav:
+                return {"success": False, "error": "No speech detected. Please speak louder or choose another mic.", "level": "quiet"}
             text, engine = transcribe(wav)
             if not text:
-                return {"success": False, "error": "Could not recognize speech.", "text": "", "engine": engine}
+                return {"success": False, "error": "Could not recognize speech. Please try again.", "text": "", "engine": engine}
             return {"success": True, "text": text, "engine": engine, "seconds": seconds}
         finally:
             _rec_lock.release()
-    return {"success": False, "error": "Microphone busy."}
+    return {"success": False, "error": "Microphone busy. Try again in a moment."}
 
 
 def capture_transcribe_loop(seconds_per_chunk: int = 4, max_chunks: int = 6) -> list[str]:
@@ -157,9 +239,13 @@ def capture_transcribe_loop(seconds_per_chunk: int = 4, max_chunks: int = 6) -> 
         return []
     texts = []
     for _ in range(max_chunks):
-        wav = record_seconds(seconds_per_chunk)
-        if not wav:
+        try:
+            wav = record_seconds(seconds_per_chunk)
+        except Exception:
             break
+        if not wav:
+            time.sleep(0.4)
+            continue
         text, _engine = transcribe(wav)
         if text:
             texts.append(text)
