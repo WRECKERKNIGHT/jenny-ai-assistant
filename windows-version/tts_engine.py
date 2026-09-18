@@ -229,6 +229,39 @@ def _async_synth(text: str, wav_path: str | Path, voice: str, rate: str, pitch: 
         return False
 
 
+def stream_tts(text: str, voice: str, rate: str, pitch: str = "+0Hz", volume: str = "+0%"):
+    """Yield MP3 audio chunks from edge-tts as they are synthesized.
+
+    Bridges edge-tts's async `Communicate.stream()` into a synchronous
+    iterator so Flask can serve the response chunk-by-chunk — the browser
+    receives the first audio bytes within ~0.5s instead of waiting for the
+    entire sentence to finish synthesizing (the source of the old voice lag).
+    """
+    import edge_tts
+
+    async def _gen():
+        communicate = edge_tts.Communicate(text, voice=voice, rate=rate, pitch=pitch, volume=volume)
+        async for chunk in communicate.stream():
+            if chunk.get("type") == "audio":
+                yield chunk["data"]
+
+    agen = _gen()
+    loop = asyncio.new_event_loop()
+    try:
+        while True:
+            try:
+                data = loop.run_until_complete(agen.__anext__())
+            except StopAsyncIteration:
+                break
+            yield data
+    finally:
+        try:
+            loop.run_until_complete(agen.aclose())
+        except Exception:
+            pass
+        loop.close()
+
+
 def synthesize_wav(text: str, wav_path: str | Path, voice: str | None = None,
                    rate: str | None = None, pitch: str | None = None, volume: str | None = None) -> bool:
     """Synthesize text to WAV; returns True on success."""

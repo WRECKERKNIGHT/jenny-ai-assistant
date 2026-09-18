@@ -97,6 +97,7 @@ gesture_state = {
     "orb_y": 0.0,
     "orb_target_x": 0.0,
     "orb_target_y": 0.0,
+    "cam_error": "",
 }
 
 MODE_ORDER = ["pointer", "windows", "browser", "system", "media"]
@@ -603,6 +604,7 @@ def _draw_hand(frame, lm):
 def run_gesture_loop():
     if not HAS_MEDIAPIPE or landmarker is None:
         print("[ULTRON] MediaPipe not available")
+        gesture_state["active"] = False
         return
 
     global last_heartbeat
@@ -610,19 +612,34 @@ def run_gesture_loop():
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
     gesture_state["active"] = True
+    if not cap.isOpened():
+        gesture_state["cam_error"] = "OPEN_FAILED"
+        gesture_state["active"] = False
+        print("[ULTRON] Camera 0 could not be opened")
+        return
 
     frame_idx = 0
     timestamp_ms = 0
+    no_frame_seconds = 0.0
     try:
         while gesture_state["active"]:
             iter_start = time.time()
 
             success, frame = cap.read()
             if not success:
+                gesture_state["cam_error"] = "NO_FRAME"
+                if no_frame_seconds <= 0:
+                    print("[ULTRON] Camera open but no frame — is another app using it?")
+                no_frame_seconds += 0.05
+                if no_frame_seconds > 10:
+                    gesture_state["cam_error"] = "CAMERA_BUSY"
+                    no_frame_seconds = -1
+                last_heartbeat = time.time()
                 time.sleep(0.05)
                 continue
+            no_frame_seconds = 0.0
+            gesture_state["cam_error"] = ""
 
-            frame = cv2.flip(frame, 1)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             timestamp_ms += int((time.time() - iter_start) * 1000) + 1
             result = landmarker.detect_for_video(
@@ -713,15 +730,13 @@ def run_gesture_loop():
         print(f"[ULTRON] Gesture error: {e}")
     finally:
         cap.release()
-        if landmarker is not None:
-            try:
-                landmarker.close()
-            except Exception:
-                pass
         gesture_state["active"] = False
 
 
 def start_gesture_control():
+    if gesture_state.get("active"):
+        return
+    gesture_state["active"] = True
     t = threading.Thread(target=run_gesture_loop, daemon=True)
     t.start()
 
@@ -747,6 +762,7 @@ def get_gesture_status():
         "history_left": get_gesture_history("left"),
         "has_mediapipe": HAS_MEDIAPIPE,
         "has_pyautogui": HAS_PYAUTOGUI,
+        "cam_error": gesture_state.get("cam_error", ""),
         "last_heartbeat": round(last_heartbeat, 3),
         "heartbeat_age": round(time.time() - last_heartbeat, 3),
     }
