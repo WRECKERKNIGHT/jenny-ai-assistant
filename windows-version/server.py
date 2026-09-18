@@ -1556,23 +1556,51 @@ def api_system_status():
         cpu_count = 1; cpu_model = "Unknown"
     return jsonify({"success": True, "cpu": {"usage": system_cache["cpu"], "cores": cpu_count, "model": cpu_model}, "ram": {"usage": system_cache["ram"], "usedMB": int(float(system_cache["ram_used"]) * 1024), "totalMB": int(float(system_cache["ram_total"]) * 1024)}, "battery": {"level": system_cache["battery"], "charging": system_cache["charging"]}, "disk": {"usage": system_cache["disk"], "free": system_cache["disk_free"] + "GB"}, "net": {"usage": system_cache.get("net_usage", 0), "speed": system_cache["net_speed"], "bytes": system_cache.get("net_bytes", 0)}, "uptime": system_cache["uptime"], "hostname": system_cache["hostname"], "platform": sys.platform})
 
+# Groq reachability probe with short TTL so a single transient timeout is
+# never reported as a hard OFFLINE. A stale "last known good" still counts as
+# online (degraded) rather than offline.
+_GROQ_PROBE = {"ok": None, "latency": None, "ts": 0}
+_GROQ_PROBE_TTL = 30
+_probe_lock = threading.Lock()
+
+def _groq_reachable():
+    """Cached check of Groq API reachability (up to `_GROQ_PROBE_TTL`s)."""
+    key = get_grok_key()
+    if not key:
+        return False, None
+    with _probe_lock:
+        cached = _GROQ_PROBE
+        if cached["ts"] and (time.time() - cached["ts"]) < _GROQ_PROBE_TTL and cached["ok"] is not None:
+            return cached["ok"], cached["latency"]
+    ok = False
+    lat = None
+    try:
+        req = urllib.request.Request("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {key}"}, method="GET")
+        t0 = time.time()
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            ok = resp.status == 200
+            lat = round((time.time() - t0) * 1000)
+    except Exception:
+        ok = False
+    with _probe_lock:
+        # Keep the last known good for 60s even if a probe fails, so the badge
+        # never flips to OFFLINE because of one slow request.
+        if ok:
+            _GROQ_PROBE.update({"ok": True, "latency": lat, "ts": time.time()})
+        else:
+            stale_good = _GROQ_PROBE.get("ok") is True and (time.time() - _GROQ_PROBE.get("ts", 0)) < 60
+            _GROQ_PROBE.update({"ok": True if stale_good else False,
+                                "latency": _GROQ_PROBE.get("latency") if stale_good else None,
+                                "ts": _GROQ_PROBE.get("ts", 0) if stale_good else time.time()})
+    return _GROQ_PROBE["ok"], _GROQ_PROBE["latency"]
+
 @app.route("/api/health")
 def api_health():
     """True end-to-end status so the UI stops showing 'offline' wrongly:
     Groq key present + reachable, neural TTS engine, microphone devices,
     server uptime and the active model."""
     key = get_grok_key()
-    api_ok = False
-    api_latency = None
-    if key:
-        try:
-            req = urllib.request.Request("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {key}"}, method="GET")
-            t0 = time.time()
-            with urllib.request.urlopen(req, timeout=6) as resp:
-                api_ok = resp.status == 200
-                api_latency = round((time.time() - t0) * 1000)
-        except Exception:
-            api_ok = False
+    api_ok, api_latency = _groq_reachable()
     mics = []
     try:
         import sounddevice as sd
@@ -1586,12 +1614,19 @@ def api_health():
         chat = "groq"
     elif get_gemini_key():
         chat = "gemini"
+    # Online = server serving + either a key is set (even if the probe was
+    # momentarily slow) OR chat works. "degraded" tells the UI a key exists
+    # but the last live probe failed - never a hard OFFLINE.
+    key_set = bool(key)
+    online = key_set  # server up + key present; probe latency is status only
+    degraded = key_set and not api_ok
     return jsonify({
         "success": True,
-        "online": bool(key) and api_ok,
+        "online": online,
+        "degraded": degraded,
         "provider": chat or "none",
-        "key_set": bool(key),
-        "api_reachable": api_ok,
+        "key_set": key_set,
+        "api_reachable": bool(api_ok),
         "api_latency_ms": api_latency,
         "model": GROQ_USAGE["model"] if chat == "groq" else "gemini-2.0-flash" if chat == "gemini" else None,
         "tts": {"engine": "edge-tts" if tts_engine.edge_tts_available() else "SAPI-fallback", "speaking": bool(tts_engine.status().get("speaking"))},
