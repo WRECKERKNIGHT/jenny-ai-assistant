@@ -2243,14 +2243,15 @@ function pumpServerQueue() {
     return;
   }
   serverSpeechQ.playing = true;
+  const speechUrl = (t) => `/api/speak?text=${encodeURIComponent(t)}&fmt=mp3&t=${Date.now()}`;
   // Prefetch the following segment so there's no gap after the current one ends.
   if (serverSpeechQ.items.length) {
     const nx = serverSpeechQ.items[0];
-    const nxt = new Audio(`/api/speak?text=${encodeURIComponent(nx.text)}&t=${Date.now()}`);
+    const nxt = new Audio(speechUrl(nx.text));
     nxt.preload = 'auto'; nxt.load();
     nx.el = nxt;
   }
-  const el = next.el || new Audio(`/api/speak?text=${encodeURIComponent(next.text)}&t=${Date.now()}`);
+  const el = next.el || new Audio(speechUrl(next.text));
   serverSpeechQ.currentEl = el;
   window.currentSpeechAudio = el;
   const stepServerQueue = () => { serverSpeechQ.playing = false; serverSpeechQ.currentEl = null; window.currentSpeechAudio = null; pumpServerQueue(); };

@@ -1106,7 +1106,7 @@ function speakResponse(text) {
     // Web Speech (speechSynthesis), which stacked a second, robotic voice on
     // top of the server voice and caused the "two voices at once" bug.
     if (!text) { resolve(); return; }
-    var el = new Audio('/api/speak?text=' + encodeURIComponent(text.slice(0, 500)) + '&t=' + Date.now());
+    var el = new Audio('/api/speak?text=' + encodeURIComponent(text.slice(0, 500)) + '&fmt=mp3&t=' + Date.now());
     var done = function() { isSpeaking = false; setStatus('idle'); resolve(); };
     el.onended = done;
     el.onerror = done;

@@ -2074,21 +2074,30 @@ def api_control():
 @app.route("/api/speak", methods=["GET", "POST"])
 def api_speak():
     text = request.args.get("text", "") or (request.get_json(force=True, silent=True) or {}).get("text", "")
+    fmt = request.args.get("fmt", "wav").lower()
     if not text: return jsonify({"success": False, "message": "Text required"})
     clean = _clean_tts_text(re.sub(r"[#*_`\[\]]", "", text))
     cache_dir = DATA_DIR / "speak_cache"; cache_dir.mkdir(exist_ok=True)
-    h = hashlib.md5(clean.encode()).hexdigest(); wav_path = cache_dir / f"{h}.wav"
-    if wav_path.exists(): return send_from_directory(str(cache_dir), f"{h}.wav", mimetype="audio/wav")
+    ext = "mp3" if fmt == "mp3" else "wav"
+    h = hashlib.md5((ext + ":" + clean).encode()).hexdigest(); wav_path = cache_dir / f"{h}.{ext}"
+    if wav_path.exists() and wav_path.stat().st_size > 0:
+        return send_from_directory(str(cache_dir), f"{h}.{ext}", mimetype=("audio/mpeg" if ext == "mp3" else "audio/wav"))
     mode = get_mode()
+    ok = False
     try:
         voice, rate, pitch, volume = tts_engine.MODE_VOICES.get(mode, (tts_engine.DEFAULT_VOICE, tts_engine.DEFAULT_RATE, tts_engine.DEFAULT_PITCH, tts_engine.DEFAULT_VOLUME))
         ok = tts_engine.synthesize_wav(clean, wav_path, voice, rate, pitch, volume)
     except Exception:
         ok = False
     if not ok:
+        # SAPI fallback only produces WAV; never write WAV bytes into an .mp3.
+        if ext == "mp3":
+            wav_path = cache_dir / f"{h}.wav"
         ok = tts_synthesize(clean, wav_path)
     if ok and wav_path.exists():
-        return send_from_directory(str(cache_dir), f"{h}.wav", mimetype="audio/wav")
+        # Prefer a true streaming-capable response so the browser plays the
+        # first bytes while the rest still download (near-zero latency).
+        return send_from_directory(str(cache_dir), wav_path.name, mimetype=("audio/mpeg" if ext == "mp3" else "audio/wav"))
     return jsonify({"success": False, "message": "Speech failed"})
 
 @app.route("/api/speak/fallback", methods=["POST"])
