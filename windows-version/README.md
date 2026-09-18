@@ -144,11 +144,19 @@ steers the orb instead of the mouse. Configuration is stored in `gesture_config.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/chat` | POST | Send command, get response (`text` + `speech`) |
-| `/api/greeting` | GET | Daily greeting (text + speech + weather) |
-| `/api/speak` | GET/POST | Synthesize text to WAV (neural first, SAPI fallback) |
-| `/api/speak/status` | GET | Live TTS state |
+| `/api/greeting` | GET | Startup greeting — single-source from `data/settings.json` (`"greeting"`), `{mode}` auto-filled per persona |
+| `/api/health` | GET | True end-to-end status: key present, cached Groq reachability (30s / last-good 60s), TTS engine, mic count, uptime — never a false OFFLINE |
+| `/api/speak` | GET/POST | Synthesize text to streaming WAV **or MP3** (`&fmt=mp3`, neural edge-tts first, SAPI fallback) |
+| `/api/speak/status` | GET | Live single-voice-bus TTS state + queue depth |
 | `/api/speak/fallback` | POST | Speak directly on the PC (neural engine) |
 | `/api/speak/stop` | POST | Stop any ongoing speech |
+| `/api/speak/ping` | GET | UI heartbeat — routes server speech to the one browser pipeline |
+| `/api/speak/next` | GET | Pop the next queued utterance from the single voice bus |
+| `/api/stt/mics` | GET | Enumerate microphone devices, mark the OS default |
+| `/api/stt/record` | POST | Record + transcribe 5s (`{seconds, device}`) via Groq whisper-large-v3-turbo (Google fallback) — true error strings (`no_mic`, `device_busy`, quiet) |
+| `/api/commands/teach` | POST | Learn a custom phrase → command intent (case-insensitive forever) |
+| `/api/commands/taught` | GET | List learned aliases |
+| `/api/commands/forget` | POST | Remove a learned alias by phrase |
 | `/api/voice-info` | GET | Active voice + neural engine info per mode |
 | `/api/mode` | GET/POST | Read / switch persona mode |
 | `/api/system-status` | GET | CPU, RAM, disk, battery, network |
@@ -158,18 +166,24 @@ steers the orb instead of the mouse. Configuration is stored in `gesture_config.
 | `/api/crypto` | GET | Crypto prices |
 | `/api/vault` | GET/POST/DELETE | Memory vault |
 | `/api/training` | GET/POST/DELETE | Training hub / macros |
+| `/api/control` | POST | Execute PC actions: volume, mute, brightness, media keys, open/close apps, screenshot, lock, sleep, shutdown/restart, terminal, WiFi, clipboard, processes, browser nav, typing |
 | `/api/gesture/*` | — | Gesture control (see above) |
 
 ## Voice Commands
 
-Just talk naturally to Jenny:
+Just talk naturally to Jenny — 40+ aliases are auto-normalized ("kill firefox" == "close the browser"),
+everything is case-insensitive, and new phrasings can be taught permanently via `/api/commands/teach`:
+
 - "Open Chrome" / "Launch VS Code"
-- "Set volume to 50" / "Mute"
+- "Set volume to 50" / "Mute" / "Volume up" / "Brighter"
 - "What's the weather?"
-- "Search YouTube for music"
+- "Play jazz on YouTube" / "Search the web for Python"
+- "Next song" / "Pause music" / "New tab" / "Refresh the page"
+- "Type hello boss" (keyboard automation)
+- "Open Task Manager" / "Take a screenshot" / "Lock my PC"
 - "Add todo buy groceries"
 - "Remember my wifi password is..."
-- "Take a screenshot" · "Tell me a joke" · "What time is it?"
+- "Tell me a joke" · "What time is it?" · "Shut down the PC"
 - "Convert 100 celsius to fahrenheit" · "Generate password" · "Open Gmail"
 
 ## Project Structure
@@ -177,11 +191,13 @@ Just talk naturally to Jenny:
 ```
 windows-version/
 ├── tray.py               # Tray icon + Mini HUD + launches everything
-├── tts_engine.py         # Neural edge-tts engine + SAPI fallback + cache
+├── tts_engine.py         # Single-voice bus: neural edge-tts + SAPI fallback + cache
+├── speech_stt.py         # STT: mic enumeration, silence/level detection, Groq whisper
 ├── proactive.py          # Talkative mode: boot greeting, idle nudges, alerts
 ├── server.py             # Flask API server with all endpoints
 ├── app.py                # pywebview desktop window
 ├── hud.py                # Transparent always-on-top holographic HUD
+├── pc_actions.py         # Shared PC automation (chat and ULTRON use the same path)
 ├── Jenny.bat             # One-click launcher (menu, auto-deps)
 ├── launch.bat            # Quick tray launch
 ├── requirements.txt      # Python dependencies
@@ -190,7 +206,7 @@ windows-version/
 │   ├── wakeword.py       # Mode-aware wake word detector
 │   ├── startup.py        # Windows auto-start installer
 │   └── extended_commands.py
-└── data/                 # Runtime data (mode, context, settings, speak cache)
+└── data/                 # Runtime data (mode, context, settings, speak cache) — git-ignored
 ```
 
 ## Auto-Start with Windows
