@@ -2343,8 +2343,8 @@ function drainServerVoiceBus() {
     .finally(() => { _voiceBusBusy = false; });
 }
 
-setInterval(pollSpeakStatus, 5000);
-setInterval(drainServerVoiceBus, 8000);
+setInterval(pollSpeakStatus, 3000);
+setInterval(drainServerVoiceBus, 2500);
 
 // ================================================
 // SPEECH RECOGNITION
@@ -3312,7 +3312,14 @@ function showGestureUI() {
   
   const camEl = document.getElementById('gesture-cam');
   if (camEl) {
-    camEl.innerHTML = '<img id="gesture-cam-img" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" src="/api/gesture/frame">';
+    camEl.innerHTML = '<img id="gesture-cam-img" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" src="/api/gesture/frame?t=' + Date.now() + '">';
+    const camImg = document.getElementById('gesture-cam-img');
+    if (gestureActive) {
+      setInterval(() => {
+        if (!gestureActive || document.hidden) return;
+        camImg.src = '/api/gesture/frame?t=' + Date.now();
+      }, 300);
+    }
   }
   
   pollGestureStatus();

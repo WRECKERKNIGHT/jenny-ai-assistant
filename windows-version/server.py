@@ -1947,9 +1947,11 @@ def api_gesture_frame():
     if gesture_controller and hasattr(gesture_controller, 'gesture_state'):
         frame = gesture_controller.gesture_state.get("frame")
         if frame:
-            return Response(frame, mimetype="image/jpeg")
+            resp = Response(frame, mimetype="image/jpeg")
+            resp.headers["Cache-Control"] = "no-store, max-age=0"
+            return resp
     from flask import Response as R
-    return R(b'', mimetype="image/jpeg")
+    return R(b'', mimetype="image/jpeg", headers={"Cache-Control": "no-store"})
 
 @app.route("/api/gesture/config", methods=["GET", "POST"])
 def api_gesture_config():
@@ -2392,6 +2394,31 @@ def api_speak():
     if wav_path.exists() and wav_path.stat().st_size > 0:
         return send_from_directory(str(cache_dir), f"{h}.{ext}", mimetype=("audio/mpeg" if ext == "mp3" else "audio/wav"))
     mode = get_mode()
+    # MP3 -> stream edge-tts live so the browser gets the first audio bytes in
+    # ~0.5s instead of waiting for the whole sentence to synthesize (voice lag fix).
+    # The full result is cached on completion so repeat phrases stay instant.
+    if ext == "mp3" and tts_engine.edge_tts_available():
+        try:
+            voice, rate, pitch, volume = tts_engine.MODE_VOICES.get(mode, (tts_engine.DEFAULT_VOICE, tts_engine.DEFAULT_RATE, tts_engine.DEFAULT_PITCH, tts_engine.DEFAULT_VOLUME))
+        except Exception:
+            voice, rate, pitch, volume = tts_engine.DEFAULT_VOICE, tts_engine.DEFAULT_RATE, tts_engine.DEFAULT_PITCH, tts_engine.DEFAULT_VOLUME
+        def _stream_mp3():
+            buf = bytearray()
+            ok = False
+            try:
+                for chunk in tts_engine.stream_tts(clean, voice, rate, pitch, volume):
+                    buf.extend(chunk)
+                    yield chunk
+                ok = True
+            except Exception:
+                pass
+            finally:
+                try:
+                    if ok and buf and not wav_path.exists():
+                        wav_path.write_bytes(bytes(buf))
+                except Exception:
+                    pass
+        return Response(_stream_mp3(), mimetype="audio/mpeg")
     ok = False
     try:
         voice, rate, pitch, volume = tts_engine.MODE_VOICES.get(mode, (tts_engine.DEFAULT_VOICE, tts_engine.DEFAULT_RATE, tts_engine.DEFAULT_PITCH, tts_engine.DEFAULT_VOLUME))

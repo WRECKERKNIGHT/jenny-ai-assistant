@@ -62,7 +62,7 @@ canvas#orb-canvas{position:fixed;inset:0;z-index:1}
 #pc-toggle-btn:hover{background:rgba(255,62,62,0.14);color:#ff3e3e}
 #gesture-cam{width:100%;height:165px;border-radius:8px;border:1px solid rgba(255,62,62,0.2);object-fit:cover;transform:scaleX(-1);background:#0a0a0a;display:block}
 #cam-label{font-family:'Share Tech Mono',monospace;font-size:8px;color:rgba(255,62,62,0.4);letter-spacing:2px;text-align:center;margin-top:4px}
-#hand-canvas{position:absolute;top:0;left:0;width:100%;height:100%;border-radius:8px;pointer-events:none;transform:scaleX(-1)}
+#hand-canvas{position:absolute;top:0;left:0;width:100%;height:100%;border-radius:8px;pointer-events:none;transform:scaleX(-1);display:none}
 #status-bar{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:200;display:flex;align-items:center;gap:12px;background:rgba(255,62,62,0.04);border:1px solid rgba(255,62,62,0.1);border-radius:20px;padding:6px 20px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 #ctrl-badge{background:none;border:1px solid rgba(255,62,62,0.15);color:rgba(255,62,62,0.5);font-family:'Share Tech Mono',monospace;font-size:8px;padding:4px 10px;border-radius:12px;letter-spacing:2px;cursor:pointer;transition:all 0.3s}
 #ctrl-badge:hover{border-color:rgba(255,62,62,0.5);color:#ff3e3e;background:rgba(255,62,62,0.04)}
@@ -190,8 +190,7 @@ canvas#orb-canvas{position:fixed;inset:0;z-index:1}
 </div>
 <div id="sys-lines"></div>
 <div id="gesture-cam-wrap">
-  <video id="gesture-cam" autoplay playsinline muted></video>
-  <canvas id="hand-canvas"></canvas>
+  <img id="gesture-cam" src="/api/gesture/frame" alt="gesture">
   <div id="cam-label">GESTURE CAM</div>
 </div>
 <button id="pc-toggle-btn">PC CONTROL</button>
@@ -227,7 +226,7 @@ canvas#orb-canvas{position:fixed;inset:0;z-index:1}
   <div class="gesture-label" id="gesture-label">NO HAND</div>
   <div class="gesture-desc">Palm=Move | Pinch=Select | Open=Zoom Out | Fist=Reset | Peace=Zoom In | Point=Drag</div>
 </div>
-<div id="hand-fail-msg">MediaPipe CDN unreachable — using mouse/keyboard controls only</div>
+<div id="hand-fail-msg">Gesture control unavailable — using mouse/keyboard only</div>
 <div id="conv-panel"></div>
 <div id="quick-directives">
   <button class="qd-chip" data-cmd="Run a full system diagnostic">&#9881; DIAGNOSE</button>
@@ -253,9 +252,6 @@ canvas#orb-canvas{position:fixed;inset:0;z-index:1}
 <div id="ai-response"></div>
 <div id="toast"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
 <script>
 (function(){
 'use strict';
@@ -281,8 +277,6 @@ var handCount = 0;
 var currentUtterance = null;
 var voicesReady = false;
 var recognition = null;
-var handsModel = null;
-var camStream = null;
 
 var voiceBtn = null;
 var voiceText = null;
@@ -912,77 +906,76 @@ function processKeyboard() {
 }
 setInterval(processKeyboard, 16);
 
-/* ==================== HAND TRACKING ==================== */
+/* ==================== HAND TRACKING (server-driven) ==================== */
 function initHandTracking() {
-  if (typeof Hands === 'undefined') {
-    handTrackingFailed = true;
-    document.getElementById('hand-fail-msg').style.display = 'block';
-    document.getElementById('cam-label').textContent = 'NO MEDIAPIPE';
-    showToast('Hand tracking unavailable — use mouse/keyboard');
-    return;
-  }
+  var cam = document.getElementById('gesture-cam');
+  var failMsg = document.getElementById('hand-fail-msg');
+  var camLabel = document.getElementById('cam-label');
 
-  var video = document.getElementById('gesture-cam');
-  var handCanvas = document.getElementById('hand-canvas');
-  var handCtx = handCanvas.getContext('2d');
+  fetch('/api/gesture/start', {method: 'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d || !d.success) {
+        handTrackingFailed = true;
+        if (failMsg) failMsg.style.display = 'block';
+        if (camLabel) camLabel.textContent = 'SERVER OFF';
+        showToast('Gesture control unavailable — use mouse/keyboard');
+        return;
+      }
+      handTrackingAvailable = true;
+      handTrackingFailed = false;
+      if (failMsg) failMsg.style.display = 'none';
+      if (camLabel) camLabel.textContent = 'GESTURE CAM';
+      showToast('Gesture tracking active');
 
-  navigator.mediaDevices.getUserMedia({video: {width: 320, height: 240, facingMode: 'user'}})
-    .then(function(stream) {
-      camStream = stream;
-      video.srcObject = stream;
-      video.play().then(function() {
-        handCanvas.width = video.videoWidth || 320;
-        handCanvas.height = video.videoHeight || 240;
-        showToast('Gesture tracking active');
-        handTrackingAvailable = true;
-        startHandDetection(video, handCanvas, handCtx);
-      });
+      cam.src = '/api/gesture/frame';
+      setInterval(function() {
+        if (!handTrackingAvailable) return;
+        if (document.hidden) return;
+        cam.src = '/api/gesture/frame?t=' + Date.now();
+      }, 300);
+
+      pollServerGestures();
     })
     .catch(function() {
       handTrackingFailed = true;
-      document.getElementById('hand-fail-msg').style.display = 'block';
-      document.getElementById('cam-label').textContent = 'CAM DISABLED';
-      showToast('Camera access denied');
+      if (failMsg) failMsg.style.display = 'block';
+      if (camLabel) camLabel.textContent = 'SERVER OFF';
+      showToast('Gesture control unavailable — use mouse/keyboard');
     });
 }
 
-function startHandDetection(video, handCanvas, handCtx) {
-  handsModel = new Hands({locateFile: function(f) { return 'https://cdn.jsdelivr.net/npm/@mediapipe/hands/' + f; }});
-  handsModel.setOptions({maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5});
-
-  var gestureMap = {
-    'NONE': 'NO HAND', 'PINCH': 'PINCH', 'OPEN_PALM': 'OPEN PALM', 'FIST': 'FIST',
-    'POINT': 'POINT', 'PEACE': 'PEACE', 'THUMBS_UP': 'THUMBS UP', 'UNKNOWN': 'UNKNOWN'
-  };
-
-  handsModel.onResults(function(results) {
-    handCtx.clearRect(0, 0, handCanvas.width, handCanvas.height);
-    var list = results.multiHandLandmarks || [];
-    handCount = list.length;
-
-    var left = null, right = null;
-    for (var i = 0; i < list.length; i++) {
-      var lm = list[i];
-      var side = 'right';
-      try {
-        var lbl = results.multiHandedness[i].classification[0].label;
-        if (lbl === 'Left') side = 'left';
-      } catch (e) {}
-      if (typeof drawConnectors === 'function') drawConnectors(handCtx, lm, HAND_CONNECTIONS, {color: 'rgba(255,62,62,0.4)', lineWidth: 1});
-      if (typeof drawLandmarks === 'function') drawLandmarks(handCtx, lm, {color: side === 'left' ? '#00d4ff' : '#ff3e3e', lineWidth: 1, radius: 2});
-      var g = classifyGesture(lm);
-      if (side === 'left') left = {lm: lm, g: g};
-      else right = {lm: lm, g: g};
+function pollServerGestures() {
+  if (!handTrackingAvailable) return;
+  fetch('/api/gesture-status').then(function(r) { return r.json(); }).then(function(s) {
+    if (!s || !s.active) {
+      if (handTrackingAvailable) setTimeout(pollServerGestures, 1000);
+      return;
     }
+    handCount = s.num_hands || 0;
 
-    var navigator = left || right;
-    if (navigator) {
-      var lm = navigator.lm;
-      var palmX = (lm[0].x + lm[5].x + lm[17].x) / 3;
-      var palmY = (lm[0].y + lm[5].y + lm[17].y) / 3;
-      smoothX += (palmX - smoothX) * 0.3;
-      smoothY += (palmY - smoothY) * 0.3;
+    var focusGesture = s.gesture || 'NO_HAND';
+    gestureName = focusGesture;
 
+    var gl = document.getElementById('gesture-label');
+    if (gl) gl.textContent = focusGesture === 'NO_HAND' ? 'NO HAND' : focusGesture;
+
+    var dg = document.getElementById('d-gesture');
+    if (dg) dg.textContent = focusGesture;
+    var dh = document.getElementById('d-hand');
+    if (dh) dh.textContent = String(handCount);
+
+    var left = s.hands && s.hands.left;
+    var right = s.hands && s.hands.right;
+    var dl = document.getElementById('d-lhand');
+    if (dl) dl.textContent = (left && left.gesture) || '--';
+    var dr = document.getElementById('d-rhand');
+    if (dr) dr.textContent = (right && right.gesture) || '--';
+
+    var h = left && left.x !== undefined ? left : (right || {});
+    if (h && h.x !== undefined) {
+      smoothX += (h.x - smoothX) * 0.3;
+      smoothY += (h.y - smoothY) * 0.3;
       if (orbDrive) {
         orbTarget.ry = (smoothX - 0.5) * 6;
         orbTarget.rx = (smoothY - 0.5) * 4;
@@ -990,59 +983,16 @@ function startHandDetection(video, handCanvas, handCtx) {
         orbTarget.ry = (smoothX - 0.5) * 3;
         orbTarget.rx = (smoothY - 0.5) * 2;
       }
-
-      var focusGesture = navigator.g;
-      if (left && right) focusGesture = left.g === right.g ? left.g : left.g + '+' + right.g;
-      gestureName = focusGesture;
-      document.getElementById('gesture-label').textContent = focusGesture;
-      document.getElementById('d-gesture').textContent = gestureMap[focusGesture] || focusGesture;
-      document.getElementById('d-hand').textContent = String(handCount);
-      document.getElementById('d-lhand').textContent = left ? (left.g || '--') : '--';
-      document.getElementById('d-rhand').textContent = right ? (right.g || '--') : '--';
-
-      if (focusGesture === 'PINCH') orbTarget.scale = Math.min(2.5, orbTarget.scale + 0.02);
-      else if (focusGesture === 'OPEN_PALM') orbTarget.scale = Math.max(0.3, orbTarget.scale - 0.02);
-      else if (focusGesture === 'FIST') { orbTarget.scale = 1.0; orbTarget.rx = 0; orbTarget.ry = 0; }
-      else if (focusGesture === 'PEACE') orbTarget.scale = Math.min(2.5, orbTarget.scale + 0.015);
-      else orbTarget.scale += (1.0 - orbTarget.scale) * 0.05;
-    } else {
-      gestureName = 'NONE';
-      document.getElementById('gesture-label').textContent = 'NO HAND';
-      document.getElementById('d-gesture').textContent = 'NONE';
-      document.getElementById('d-hand').textContent = '0';
-      document.getElementById('d-lhand').textContent = '--';
-      document.getElementById('d-rhand').textContent = '--';
     }
+
+    if (focusGesture === 'PINCH') orbTarget.scale = Math.min(2.5, orbTarget.scale + 0.02);
+    else if (focusGesture === 'OPEN_PALM') orbTarget.scale = Math.max(0.3, orbTarget.scale - 0.02);
+    else if (focusGesture === 'FIST') { orbTarget.scale = 1.0; orbTarget.rx = 0; orbTarget.ry = 0; }
+    else if (focusGesture === 'PEACE') orbTarget.scale = Math.min(2.5, orbTarget.scale + 0.015);
+    else orbTarget.scale += (1.0 - orbTarget.scale) * 0.05;
+  }).catch(function() {}).then(function() {
+    if (handTrackingAvailable) setTimeout(pollServerGestures, 400);
   });
-
-  var HAND_FPS = 12;
-  var HAND_INTERVAL = 1000 / HAND_FPS;
-  var handLastTs = 0;
-  function detect(ts) {
-    requestAnimationFrame(detect);
-    if (document.hidden || !handTrackingAvailable) return;   // pause when hidden
-    if (ts - handLastTs < HAND_INTERVAL) return;              // cap hand inference fps
-    handLastTs = ts;
-    if (video.readyState >= 2) {
-      handsModel.send({image: video}).catch(function() {});
-    }
-  }
-  requestAnimationFrame(detect);
-}
-
-function classifyGesture(lm) {
-  var index = lm[8].y < lm[6].y;
-  var middle = lm[12].y < lm[10].y;
-  var ring = lm[16].y < lm[14].y;
-  var pinky = lm[20].y < lm[18].y;
-  var pinch = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y) < 0.06;
-  if (pinch) return 'PINCH';
-  if (index && middle && !ring && !pinky) return 'PEACE';
-  if (index && !middle && !ring && !pinky) return 'POINT';
-  if (index && middle && ring && pinky) return 'OPEN_PALM';
-  if (!index && !middle && !ring && !pinky) return 'FIST';
-  if (lm[4].y < lm[3].y && !index && !middle) return 'THUMBS_UP';
-  return 'UNKNOWN';
 }
 
 /* ==================== VOICE CONVERSATION ==================== */
