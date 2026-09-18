@@ -393,17 +393,22 @@ async function greetAfterBoot() {
   if (!isFresh) return;
   let text = getGreeting();
   let speech = text;
+  let serverSpoke = false;
   try {
     const r = await fetch('/api/greeting', { cache: 'no-store' });
     const d = await r.json();
     if (d.success) {
       text = d.text || text;
       speech = d.speech || speech;
+      serverSpoke = !!d.boot_greeted;
     }
   } catch(e) {}
   if (typeof addAIMessage === 'function') addAIMessage(text);
   if (window.__bootGreeted) return;
   window.__bootGreeted = true;
+  // Single-voice rule: if the server's proactive thread already spoke the
+  // boot greeting, the UI only shows the text - never speaks over it.
+  if (serverSpoke) return;
   setTimeout(() => { if (typeof speak === 'function') speak(speech); }, 500);
 }
 
@@ -2301,6 +2306,10 @@ function speakTrigger(text, minGapMs) {
 }
 
 function pollSpeakStatus() {
+  // UI heartbeat so the server queues (rather than locally speaks) server-
+  // initiated utterances for the single browser voice pipeline.
+  fetch('/api/speak/ping', { cache: 'no-store' }).catch(() => {});
+  drainServerVoiceBus();
   if (typeof orbState !== 'undefined' && orbState === 'speaking') {
     // Safety: if the orb stuck in 'speaking' with no recent speech activity,
     // clear it and stop any server-side speech to avoid a stuck state.
@@ -2312,7 +2321,23 @@ function pollSpeakStatus() {
   }
 }
 
+let _voiceBusBusy = false;
+function drainServerVoiceBus() {
+  if (_voiceBusBusy) return;
+  _voiceBusBusy = true;
+  fetch('/api/speak/next', { cache: 'no-store' })
+    .then(r => r.json())
+    .then(d => {
+      if (d && d.item && d.item.text) {
+        queueServerSpeech(d.item.text + (d.item.text.endsWith('.') ? '' : '.'));
+      }
+    })
+    .catch(() => {})
+    .finally(() => { _voiceBusBusy = false; });
+}
+
 setInterval(pollSpeakStatus, 5000);
+setInterval(drainServerVoiceBus, 8000);
 
 // ================================================
 // SPEECH RECOGNITION

@@ -2078,7 +2078,26 @@ def api_speak_stop():
 def api_speak_status():
     """Live server-side speech state so the UI can show an accurate status."""
     st = tts_engine.status()
+    st["queue"] = tts_engine.ui_queue_depth()
     return jsonify(st)
+
+
+@app.route("/api/speak/ping")
+def api_speak_ping():
+    """UI heartbeat - marks the UI as attached so server-initiated speech is
+    queued for the single browser pipeline instead of playing locally."""
+    tts_engine.mark_ui_activity()
+    return jsonify({"success": True, "ui": tts_engine.ui_client_active(), "queue": tts_engine.ui_queue_depth()})
+
+
+@app.route("/api/speak/next")
+def api_speak_next():
+    """Pop the next queued utterance for the UI to play (single voice bus)."""
+    tts_engine.mark_ui_activity()
+    item = tts_engine.next_ui_item()
+    if item is None:
+        return jsonify({"success": True, "item": None, "queue": 0})
+    return jsonify({"success": True, "item": item, "queue": tts_engine.ui_queue_depth()})
 
 @app.route("/api/weather")
 def api_weather():
@@ -2102,6 +2121,10 @@ def api_greeting():
     """Rich, natural startup greeting: time-of-day + your name + weather +
     live system status, flavored by the active mode. Returns both display text
     and a short spoken line so voice triggers at the perfect moment on boot."""
+    # Single-voice rule: the UI is claiming the boot greeting, so the
+    # proactive server thread must stay silent (see tts_engine voice bus).
+    greeting_handled_by_ui = tts_engine.boot_greeting_claimed()
+    tts_engine.claim_boot_greeting()
     now = datetime.datetime.now(); h = now.hour
     greet = "Good night" if h < 6 else "Good morning" if h < 12 else "Good afternoon" if h < 17 else "Good evening" if h < 21 else "Good night"
     m = get_mode(); mp = MODE_PROFILES[m]
@@ -2141,7 +2164,9 @@ def api_greeting():
     speech_parts.append(weather.strip())
     speech_parts.append(system)
     speech = " ".join(p for p in speech_parts if p).replace("..", ".")
-    return jsonify({"success": True, "text": text, "speech": speech, "mode": m})
+    return jsonify({"success": True, "text": text, "speech": speech, "mode": m,
+                    "boot_greeted": tts_engine.boot_greeting_done(),
+                    "ui_claimed": greeting_handled_by_ui})
 
 @app.route("/api/briefing")
 def api_briefing():

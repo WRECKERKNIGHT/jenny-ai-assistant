@@ -31,6 +31,10 @@ def start_server(port=PORT):
 
 
 def play_startup_sound():
+    # Optional legacy beep melody. Disabled by default: it overlapped with the
+    # voice boot greeting ("two voices at once"). Enable with --startup-sound.
+    if "--startup-sound" not in sys.argv:
+        return
     try:
         import winsound
         notes = [523, 659, 784, 1047, 784, 659, 523, 659, 784, 1047, 1319, 1047, 784, 659, 523]
@@ -66,7 +70,7 @@ def main():
     print(f"  J.E.N.N.Y v2.0 — Starting (page={page}, port={port}, debug={debug})")
     print("=" * 55)
 
-    if "--no-sound" not in argv:
+    if "--startup-sound" in argv:
         music_thread = threading.Thread(target=play_startup_sound, daemon=True)
         music_thread.start()
 
