@@ -313,7 +313,7 @@ def prewarm_voice_engines():
 
 def load_json(p, d=None):
     try:
-        if Path(p).exists(): return json.loads(Path(p).read_text(encoding="utf-8"))
+        if Path(p).exists(): return json.loads(Path(p).read_text(encoding="utf-8-sig"))
     except: pass
     return d if d is not None else {}
 def save_json(p, d):
@@ -474,6 +474,7 @@ def grok_chat(message, history=None):
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {get_grok_key()}",
+                "User-Agent": "Mozilla/5.0",
             },
             method="POST",
         )
@@ -1735,7 +1736,7 @@ def _groq_reachable():
     ok = False
     lat = None
     try:
-        req = urllib.request.Request("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {key}"}, method="GET")
+        req = urllib.request.Request("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {key}", "User-Agent": "Mozilla/5.0"}, method="GET")
         t0 = time.time()
         with urllib.request.urlopen(req, timeout=6) as resp:
             ok = resp.status == 200
@@ -2227,6 +2228,70 @@ def api_control():
     if lo == "network-speed": return jsonify({"success": True, "speed": system_cache["net_speed"]})
     if lo == "disk-usage":
         try: r = subprocess.run(["wmic", "logicaldisk", "get", "size,freespace,caption"], capture_output=True, text=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW); return jsonify({"success": True, "text": r.stdout[:2000]})
+        except: return jsonify({"success": False})
+    if lo == "volume-down":
+        try:
+            from ctypes import cast, POINTER; from comtypes import CLSCTX_ALL
+            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+            spk = AudioUtilities.GetSpeakers(); iface = spk.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            vol = cast(iface, POINTER(IAudioEndpointVolume))
+            vol.SetMasterVolumeLevelScalar(max(0.0, vol.GetMasterVolumeLevelScalar() - 0.1), None)
+            return jsonify({"success": True, "message": f"Volume at {round(vol.GetMasterVolumeLevelScalar()*100)}%."})
+        except: return jsonify({"success": False, "error": "Volume control failed"})
+    if lo == "volume-up":
+        try:
+            from ctypes import cast, POINTER; from comtypes import CLSCTX_ALL
+            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+            spk = AudioUtilities.GetSpeakers(); iface = spk.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            vol = cast(iface, POINTER(IAudioEndpointVolume))
+            vol.SetMasterVolumeLevelScalar(min(1.0, vol.GetMasterVolumeLevelScalar() + 0.1), None)
+            return jsonify({"success": True, "message": f"Volume at {round(vol.GetMasterVolumeLevelScalar()*100)}%."})
+        except: return jsonify({"success": False, "error": "Volume control failed"})
+    if lo == "mute":
+        try:
+            from ctypes import cast, POINTER; from comtypes import CLSCTX_ALL
+            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+            spk = AudioUtilities.GetSpeakers(); iface = spk.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            cast(iface, POINTER(IAudioEndpointVolume)).SetMute(1, None)
+            return jsonify({"success": True, "message": "Muted."})
+        except: return jsonify({"success": False})
+    if lo == "unmute":
+        try:
+            from ctypes import cast, POINTER; from comtypes import CLSCTX_ALL
+            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+            spk = AudioUtilities.GetSpeakers(); iface = spk.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            cast(iface, POINTER(IAudioEndpointVolume)).SetMute(0, None)
+            return jsonify({"success": True, "message": "Unmuted."})
+        except: return jsonify({"success": False})
+    if lo == "brightness":
+        target = str(value).lower()
+        pct = None
+        if target in ("up", "down"):
+            try:
+                r = subprocess.run(["powershell", "-command",
+                    "(Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness).CurrentBrightness"],
+                    capture_output=True, text=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
+                cur = int(float(r.stdout.strip() or 50))
+                pct = min(100, max(0, cur + (10 if target == "up" else -10)))
+            except Exception:
+                pct = 50
+        else:
+            try: pct = min(100, max(0, int(str(value).replace("%", ""))))
+            except: pct = None
+        if pct is None:
+            return jsonify({"success": False, "error": "Invalid brightness value"})
+        try:
+            subprocess.run(["powershell", "-command",
+                f"(Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods).WmiSetBrightness(1,{pct})"],
+                capture_output=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
+            return jsonify({"success": True, "message": f"Brightness at {pct}%."})
+        except:
+            return jsonify({"success": False, "error": "Brightness control failed"})
+    if lo == "media":
+        media = {"playpause": 0xB3, "next": 0xB0, "previous": 0xB1, "play": 0xFA, "pause": 0xB3, "stop": 0xB2}.get(str(value).lower(), 0xB3)
+        try:
+            ctypes.windll.user32.keybd_event(media, 0, 0, 0); ctypes.windll.user32.keybd_event(media, 0, 2, 0)
+            return jsonify({"success": True, "message": f"Media {value}."})
         except: return jsonify({"success": False})
     return jsonify({"success": False, "error": f"Unknown action: {action}"})
 
