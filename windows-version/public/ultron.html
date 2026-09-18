@@ -1101,19 +1101,18 @@ function speakWhenReady(text) {
 
 function speakResponse(text) {
   return new Promise(function(resolve) {
-    if (typeof speechSynthesis === 'undefined') { resolve(); return; }
-    speechSynthesis.cancel();
-    var u = new SpeechSynthesisUtterance(text.slice(0, 500));
-    u.rate = 0.85;
-    u.pitch = 0.5;
-    u.volume = 1.0;
-    var v = getDeepVoice();
-    if (v) u.voice = v;
-    u.onend = function() { isSpeaking = false; setStatus('idle'); resolve(); };
-    u.onerror = function() { isSpeaking = false; setStatus('idle'); resolve(); };
+    // Single-voice rule: route ULTRON speech through the SAME neural engine
+    // (/api/speak -> edge-tts) the main dashboard uses. The old path used raw
+    // Web Speech (speechSynthesis), which stacked a second, robotic voice on
+    // top of the server voice and caused the "two voices at once" bug.
+    if (!text) { resolve(); return; }
+    var el = new Audio('/api/speak?text=' + encodeURIComponent(text.slice(0, 500)) + '&t=' + Date.now());
+    var done = function() { isSpeaking = false; setStatus('idle'); resolve(); };
+    el.onended = done;
+    el.onerror = done;
     isSpeaking = true;
     setStatus('speaking');
-    speechSynthesis.speak(u);
+    el.play().catch(done);
   });
 }
 

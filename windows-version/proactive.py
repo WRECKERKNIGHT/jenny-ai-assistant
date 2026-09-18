@@ -123,6 +123,11 @@ def _boot_greeting():
         return
     if not proactive_enabled():
         return
+    # Single-voice coordination: if the UI already claimed the greeting
+    # (frontend called /api/greeting), we stay silent - otherwise the
+    # server would speak over the browser's greeting (the two-voices bug).
+    if tts_engine.boot_greeting_claimed():
+        return
     mode = read_mode()
     mp = {
         "friday": "Hey Boss! Hope you're having a great day! I've got everything ready for you. What are we diving into today?",
@@ -137,6 +142,7 @@ def _boot_greeting():
     # First interaction of the day — include the time-of-day opener too.
     line = f"{period_greet}. {mp.get(mode, mp['friday'])}"
     _speak(line)
+    tts_engine.mark_boot_greeting_done()
 
 
 def _idle_nudges():

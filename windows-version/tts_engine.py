@@ -68,6 +68,82 @@ _engine_online = False
 _engine_probed = False
 
 # ---------------------------------------------------------------------------
+# Voice bus - single-voice coordinator
+#
+# The "two voices at once" bug came from several independent audio paths
+# playing simultaneously (server winsound + browser <audio> + Web Speech).
+# This module is now the ONE place that decides who plays what:
+#
+#   * UI attached (dashboard/browser polls /api/speak/ping) -> server speech
+#     is QUEUED and the UI drains it through the SAME browser audio
+#     pipeline used for chat replies, so nothing can ever overlap.
+#   * No UI attached (headless tray) -> the server speaks locally.
+#
+# The boot greeting uses two flags so proactive.py and /api/greeting can
+# never both speak: whoever claims first wins, the other stays silent.
+# ---------------------------------------------------------------------------
+
+VOICE_BUS = []
+_bus_lock = threading.Lock()
+_ui_last_seen = 0.0
+_boot_greeting_claimed = False
+_boot_greeting_done = False
+
+
+def mark_ui_activity() -> None:
+    """Record that a UI client is attached (called on frontend polls)."""
+    global _ui_last_seen
+    _ui_last_seen = time.time()
+
+
+def ui_client_active() -> bool:
+    """True when a UI client has pinged within the last 30 seconds."""
+    return (time.time() - _ui_last_seen) < 30.0
+
+
+def boot_greeting_claimed() -> bool:
+    return _boot_greeting_claimed
+
+
+def claim_boot_greeting() -> None:
+    global _boot_greeting_claimed
+    _boot_greeting_claimed = True
+
+
+def boot_greeting_done() -> bool:
+    return _boot_greeting_done
+
+
+def mark_boot_greeting_done() -> None:
+    global _boot_greeting_done
+    _boot_greeting_done = True
+
+
+def queue_for_ui(text: str, mode: str | None, use_chime: bool) -> None:
+    """Queue text for the UI to play through its single audio pipeline."""
+    if not text:
+        return
+    with _bus_lock:
+        VOICE_BUS.append({
+            "text": text,
+            "mode": mode or "friday",
+            "chime": bool(use_chime),
+            "ts": time.time(),
+        })
+
+
+def next_ui_item() -> dict | None:
+    """Pop and return the next queued utterance for the UI (FIFO)."""
+    with _bus_lock:
+        return VOICE_BUS.pop(0) if VOICE_BUS else None
+
+
+def ui_queue_depth() -> int:
+    with _bus_lock:
+        return len(VOICE_BUS)
+
+
+# ---------------------------------------------------------------------------
 # Edge-tts availability + prewarm
 # ---------------------------------------------------------------------------
 
@@ -332,8 +408,17 @@ def _speak_worker(text: str, mode: str | None, use_chime: bool) -> None:
 
 
 def speak(text: str, mode: str | None = None, use_chime: bool = False) -> None:
-    """Enqueue speech in a background thread (non-blocking)."""
+    """Enqueue speech in a background thread (non-blocking).
+
+    Single-voice rule: when a UI client is attached the utterance goes onto
+    the voice bus so the browser's one audio pipeline plays it - the server
+    never speaks over the UI and vice-versa. Only speak locally (winsound /
+    SAPI) when running headless.
+    """
     if not text:
+        return
+    if ui_client_active():
+        queue_for_ui(text, mode, use_chime)
         return
     threading.Thread(
         target=_speak_worker,
