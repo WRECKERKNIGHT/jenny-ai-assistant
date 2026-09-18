@@ -2457,34 +2457,60 @@ async function startListening() {
   dictationTranscript = '';
   if (orbClick) orbClick.classList.add('active');
   setOrbState('listening');
-  try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); startSpeechWaves(micStream); } catch {}
+  // Do NOT grab the browser mic before server capture - requesting
+  // getUserMedia can lock the device so the PC's own STT engine cannot
+  // capture (the "mic not working" bug). The server owns the mic.
+  let micDeviceIndex = null;
+  try {
+    const mi = await fetch('/api/stt/mics', { cache: 'no-store' });
+    const md = await mi.json();
+    const mics = (md && md.mics) || [];
+    if (mics.length === 1) micDeviceIndex = mics[0].index;
+    else if (mics.length > 1) {
+      const def = mics.find(m => m.default) || mics[0];
+      micDeviceIndex = def.index;
+    }
+  } catch {}
 
   // PRIORITY: the PC's own STT engine (Groq Whisper + Google fallback) works in
   // pywebview/Chromium reliably. Browser Web Speech is only used as a fallback.
-  try {
-    const res = await fetch('/api/stt/record', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({seconds: 5}),
-    });
-    const d = await res.json();
-    stopListening();
-    if (d && d.success && d.text) {
-      const heard = d.text.trim();
-      toast('Heard: ' + heard.slice(0, 60), 'ok');
-      sendMessage(heard);
-    } else if (d && d.error) {
-      toast('Mic: ' + d.error, 'err');
-    } else {
-      toast('No speech heard, Boss.', 'info');
+  let heardText = null;
+  let retried = false;
+  while (true) {
+    try {
+      const res = await fetch('/api/stt/record', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({seconds: 5, device: micDeviceIndex}),
+      });
+      const d = await res.json();
+      if (d && d.success && d.text) {
+        heardText = d.text.trim();
+        toast('Heard: ' + heardText.slice(0, 60), 'ok');
+        break;
+      } else if (d && d.error) {
+        // Quiet capture often means speak-start latency: retry once quickly.
+        if (!retried && (String(d.error).toLowerCase().includes('no speech') || d.level === 'quiet')) {
+          retried = true;
+          toast('Listening again...', 'info');
+          continue;
+        }
+        toast('Mic: ' + d.error, 'err');
+        break;
+      } else {
+        toast('No speech heard, Boss.', 'info');
+        break;
+      }
+    } catch {
+      // Server STT unavailable -> browser fallback.
+      if (!recognition) recognition = initRecognition();
+      if (!recognition) { stopListening(); toast('Speech recognition not supported', 'err'); return; }
+      try { recognition.start(); } catch {}
+      break;
     }
-    return;
-  } catch {
-    // Server STT unavailable -> browser fallback.
-    if (!recognition) recognition = initRecognition();
-    if (!recognition) { stopListening(); toast('Speech recognition not supported', 'err'); return; }
-    try { recognition.start(); } catch {}
   }
+  stopListening();
+  if (heardText) sendMessage(heardText);
 }
 
 function stopListening() {
