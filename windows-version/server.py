@@ -1282,6 +1282,44 @@ def local_command_router(msg):
         pct = min(100, max(0, int(m.group(1))))
         return {"text": f"Brightness set to {pct}%, {boss}!", "speech": f"Brightness set to {pct} percent.", "command": {"action": "brightness", "value": str(pct)}}
 
+    # BROWSER / SEARCH
+    m = re.search(r"(?:play|search for|search|find)\s+(.+?)\s+(?:on|in)\s+youtube\b", lo)
+    if m:
+        q = m.group(1).strip()
+        return {"text": f"Playing **{q}** on YouTube, {boss}!", "speech": f"Playing {q} on YouTube.", "command": {"action": "browser-search", "value": f"youtube {q}"}}
+    m = re.search(r"(?:open|go to|launch)\s+(?:on|in)\s+youtube\b|(?:^|\s)youtube\s+(.+)", lo)
+    if m:
+        q = (m.group(1) or "").strip()
+        q = re.sub(r"^(and\s+)?(?:play|search|find)\s+", "", q)
+        return {"text": f"Opening YouTube, {boss}!", "speech": "Opening YouTube.", "command": {"action": "browser-search", "value": f"youtube {q}".strip()}}
+    m = re.search(r"(?:search for|search|google|look up|find)\s+(.+)", lo)
+    if m:
+        q = m.group(1).strip()
+        if q and not any(x in lo for x in ["search for my ", "search files", "search the disk"]):
+            return {"text": f"Searching the web for **{q}**, {boss}!", "speech": f"Searching for {q}.", "command": {"action": "browser-search", "value": q}}
+    if any(w in lo for w in ["new tab", "open new tab", "open a new tab"]):
+        return {"text": f"New tab, {boss}!", "speech": "New tab.", "command": {"action": "browser-new-tab", "value": ""}}
+    if any(w in lo for w in ["refresh page", "reload page", "refresh the page", "reload the page"]):
+        return {"text": f"Refreshing, {boss}!", "speech": "Refreshing.", "command": {"action": "browser-refresh", "value": ""}}
+    if any(w in lo for w in ["go back", "browser back", "previous page"]):
+        return {"text": f"Going back, {boss}!", "speech": "Going back.", "command": {"action": "browser-back", "value": ""}}
+    if any(w in lo for w in ["go forward", "browser forward", "next page"]):
+        return {"text": f"Going forward, {boss}!", "speech": "Going forward.", "command": {"action": "browser-forward", "value": ""}}
+    if any(w in lo for w in ["fullscreen", "full screen"]):
+        return {"text": f"Fullscreen, {boss}!", "speech": "Fullscreen.", "command": {"action": "browser-fullscreen", "value": ""}}
+    if any(w in lo for w in ["close tab", "close this tab"]):
+        return {"text": f"Closing tab, {boss}!", "speech": "Closing tab.", "command": {"action": "browser-close-tab", "value": ""}}
+
+    # KEYBOARD TYPING (full slash-command style PC control)
+    m = re.search(r"(?:type|type out|keyboard type)\s+(.+)", lo)
+    if m:
+        txt = m.group(1).strip()
+        return {"text": f"Typing: **{txt[:60]}**", "speech": "Typing it out.", "command": {"action": "type-text", "value": txt}}
+    if any(w in lo for w in ["clipboard", "copy that", "copied to clipboard"]):
+        return {"text": f"Reading clipboard, {boss}!", "speech": "Reading clipboard.", "command": {"action": "clipboard-read", "value": ""}}
+    if any(w in lo for w in ["open task manager", "task manager", "show task manager"]):
+        return {"text": f"Opening Task Manager, {boss}!", "speech": "Opening Task Manager.", "command": {"action": "task-manager", "value": ""}}
+
     # DETERMINISTIC MATH
     if re.match(r"^[\d\s\+\-\*\/\%\.\(\)x]+$", lo):
         try:
@@ -2293,6 +2331,52 @@ def api_control():
             ctypes.windll.user32.keybd_event(media, 0, 0, 0); ctypes.windll.user32.keybd_event(media, 0, 2, 0)
             return jsonify({"success": True, "message": f"Media {value}."})
         except: return jsonify({"success": False})
+
+    # PC Automation actions that proxy into the shared pc_actions library so
+    # the chat CI and ULTRON gestures execute identical code paths.
+    _pc_map = {
+        "browser-search": ("browser_search", value),
+        "browser-new-tab": ("browser_new_tab", None),
+        "browser-close-tab": ("browser_close_tab", None),
+        "browser-back": ("browser_back", None),
+        "browser-forward": ("browser_forward", None),
+        "browser-refresh": ("browser_refresh", None),
+        "browser-fullscreen": ("browser_fullscreen", None),
+        "task-manager": ("task_manager", None),
+    }
+    _entry = _pc_map.get(lo)
+    if _entry:
+        try:
+            import pc_actions
+        except Exception:
+            pc_actions = None
+        fn_name, arg = _entry
+        fn = getattr(pc_actions, fn_name, None) if pc_actions else None
+        if fn:
+            try:
+                ok = fn(arg) if arg is not None else fn()
+            except Exception:
+                ok = False
+        else:
+            ok = False
+        message = {"success": bool(ok), "action": lo}
+        if ok:
+            message["message"] = f"{lo.replace('-', ' ')} done."
+        return jsonify(message)
+    if lo == "type-text":
+        txt = str(value)
+        try:
+            try:
+                import pyautogui
+                pyautogui.typewrite(txt, interval=0.01)
+            except Exception:
+                safe = txt.replace("'", "''")
+                subprocess.run(["powershell", "-command",
+                    f"$ws=New-Object -ComObject WScript.Shell; $ws.SendKeys('{safe}')"],
+                    capture_output=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW)
+            return jsonify({"success": True, "message": "Typed."})
+        except Exception:
+            return jsonify({"success": False, "error": "Typing failed"})
     return jsonify({"success": False, "error": f"Unknown action: {action}"})
 
 
