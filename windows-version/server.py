@@ -1258,9 +1258,9 @@ def local_command_router(msg):
     if m:
         return {"text": f"Volume set to {m.group(1)}%, {boss}!", "speech": f"Volume set to {m.group(1)} percent.", "command": {"action": "volume", "value": m.group(1)}}
     if any(w in lo for w in ["mute", "volume mute"]):
-        return {"text": "Muted, {boss}.", "speech": "Muted.", "command": {"action": "volume", "value": "mute"}}
+        return {"text": f"Muted, {boss}.", "speech": "Muted.", "command": {"action": "volume", "value": "mute"}}
     if any(w in lo for w in ["unmute", "unmuted"]):
-        return {"text": "Unmuted, {boss}.", "speech": "Unmuted.", "command": {"action": "volume", "value": "unmute"}}
+        return {"text": f"Unmuted, {boss}.", "speech": "Unmuted.", "command": {"action": "volume", "value": "unmute"}}
     if any(w in lo for w in ["volume up", "louder", "increase volume"]):
         return {"text": f"Volume up, {boss}!", "speech": "Volume up.", "command": {"action": "volume-up", "value": ""}}
     if any(w in lo for w in ["volume down", "quieter", "lower volume"]):

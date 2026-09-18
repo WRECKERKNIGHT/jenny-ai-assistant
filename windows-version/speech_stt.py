@@ -158,7 +158,7 @@ def _groq_key() -> str:
         return k
     try:
         import json
-        keys = json.loads((BASE_DIR / "data" / "keys.json").read_text(encoding="utf-8"))
+        keys = json.loads((BASE_DIR / "data" / "keys.json").read_text(encoding="utf-8-sig"))
         return str(keys.get("grok_api_key") or keys.get("groq_api_key") or "")
     except Exception:
         return ""

@@ -23,10 +23,12 @@ except ImportError:
     sys.exit(1)
 
 SERVER_URL = "http://localhost:3005"
-WAKE_WORDS = ["hey friday", "hello friday", "hey jarvis", "hello jarvis",
+WAKE_WORDS = ["hey jenny", "hello jenny", "jenny",
+              "hey friday", "hello friday", "hey jarvis", "hello jarvis",
               "hey ultron", "hello ultron",
               "friday", "jarvis", "ultron"]
 WAKE_TO_MODE = {
+    "hey jenny": "friday", "hello jenny": "friday", "jenny": "friday",
     "hey friday": "friday", "hello friday": "friday", "friday": "friday",
     "hey jarvis": "jarvis", "hello jarvis": "jarvis", "jarvis": "jarvis",
     "hey ultron": "ultron", "hello ultron": "ultron", "ultron": "ultron",
