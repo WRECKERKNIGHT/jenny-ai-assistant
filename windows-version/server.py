@@ -1205,7 +1205,8 @@ def local_command_router(msg):
         target = m.group(1)
         set_mode(target)
         tmp = MODE_PROFILES[target]
-        line = f"Mode switched to **{target.upper()}**. {tmp['greeting'].format(period=get_time_period())}"
+        line = (f"Mode switched to **{target.upper()}**. All systems green. "
+                f"Here I am, {target.upper()} mode.")
         return {"text": line, "speech": line, "command": {"action": "mode", "value": target}}
 
     # TODO: add/remove/edit/complete/list always local
@@ -1478,7 +1479,10 @@ def offline_reply(text):
         return {"text": f"I can:\n\n**System:** Open/close apps, volume, lock, screenshot, system info\n**Knowledge:** Definitions, conversions, math, trivia\n**Fun:** Jokes, quotes, facts, riddles\n**Info:** Weather, news, crypto\n**Productivity:** Timers, clipboard, file management\n**Chat:** Natural conversation!\n\nMode: **{mode.upper()}**, {boss}!", "speech": f"I can control your system, answer questions, tell jokes, and chat with you, {boss}."}
 
     if any(w in lo for w in ["hello", "hi ", "hey", "sup", "what's up", "howdy", "greetings"]):
-        greet = mp["greeting"].format(period=get_time_period())
+        settings = load_json(DATA_DIR / "settings.json", {})
+        greet = (settings.get("greeting") or "").format(mode="online Boss", name="", time=get_time_period())
+        if not greet.strip():
+            greet = mp["greeting"].format(period=get_time_period())
         return {"text": greet, "speech": greet}
     if any(w in lo for w in ["thank", "thanks", "thx", "ty"]):
         return {"text": random.choice([f"Happy to help, {boss}!", f"Anything for you, {boss}!", f"You're welcome, {boss}!"]), "speech": "Happy to help, boss!"}
@@ -2331,40 +2335,20 @@ def api_greeting():
     settings = load_json(DATA_DIR / "settings.json", {"latitude": 26.8467, "longitude": 80.9462, "cityName": "Lucknow"})
     name = settings.get("name", "") or ""
     boss_phrase = f", {name}" if name else f", {mp['boss'].lower()}"
-    weather = ""
-    try:
-        import requests as _req
-        r = _req.get(f"https://api.open-meteo.com/v1/forecast?latitude={settings.get('latitude',26.8467)}&longitude={settings.get('longitude',80.9462)}&current_weather=true&temperature_unit=celsius&timezone=auto", timeout=6)
-        if r.status_code == 200:
-            cw = r.json().get("current_weather", {})
-            wmo = {0: "clear", 1: "mainly clear", 2: "partly cloudy", 3: "overcast", 45: "foggy", 61: "light rain", 63: "rain", 65: "heavy rain", 71: "snow", 80: "showers", 95: "thunderstorm"}
-            temp = cw.get("temperature", 0)
-            cond = wmo.get(cw.get("weathercode", 0), "clear")
-            weather = f"In {settings.get('cityName','your city')}, it's {round(temp)} degrees and {cond}. "
-    except Exception:
-        pass
-    system = f"System is at CPU {system_cache['cpu']} percent, RAM {system_cache['ram']} percent."
-    charter = {"friday": "FRIDAY online and ready to help, Boss.",
-               "jarvis": "How may I assist you today, Sir?",
-               "ultron": "ULTRON online. Gesture control is ready. Show me your hands, Boss."}
-    text = f"{greet}{boss_phrase}.\n\n{charter[m]}\n{weather}{system}"
-    if m == "jarvis":
-        try:
-            st = agency_client.agency_state()
-            if st:
-                s = agency_client.summarize_state(st)
-                text += f"\nYour Agency OS has {s['agents_online']} agents online and {s['leads_today']} leads today."
-        except Exception:
-            pass
-    speech_parts = []
-    if m == "ultron":
-        speech_parts.append(charter["ultron"])
+
+    # Greeting is single-sourced from settings.json so the user can change it
+    # anytime. The {mode} placeholder is filled per active persona.
+    mode_word = {"friday": "in FRIDAY mode, Boss",
+                 "jarvis": "in JARVIS mode, Sir",
+                 "ultron": "in ULTRON mode, Boss"}.get(m, "Boss")
+    custom_greet = (settings.get("greeting") or "").strip()
+    if custom_greet:
+        text = custom_greet.format(mode=mode_word, name=name, time=greet)
     else:
-        speech_parts.append(f"{greet}{boss_phrase}.")
-    speech_parts.append(weather.strip())
-    speech_parts.append(system)
-    speech = " ".join(p for p in speech_parts if p).replace("..", ".")
-    return jsonify({"success": True, "text": text, "speech": speech, "mode": m,
+        text = (f"Hello Boss, I am JENNY. Hope you're doing fine. All systems green "
+                f"and ready for your instructions. Here I am, {mode_word}.\n\n"
+                f"{mp['charter_line'] if 'charter_line' in mp else ''}")
+    return jsonify({"success": True, "text": text, "speech": text, "mode": m,
                     "boot_greeted": tts_engine.boot_greeting_done(),
                     "ui_claimed": greeting_handled_by_ui})
 
