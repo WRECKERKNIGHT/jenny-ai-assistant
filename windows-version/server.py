@@ -270,7 +270,7 @@ def _voice_desc(mode=None):
             desc = voice.GetDescription()
         except Exception:
             desc = ", ".join(_mode_tts_profile(m)[0]) or "default"
-        rate = _mode_tts_profile(m)[1]
+        rate = _mode_tts_profile(m)[2]
         result[m] = {"voice": desc, "rate": rate, "keywords": _mode_tts_profile(m)[0]}
     return result
 
@@ -319,6 +319,17 @@ def load_json(p, d=None):
     return d if d is not None else {}
 def save_json(p, d):
     Path(p).write_text(json.dumps(d, indent=2, ensure_ascii=False), encoding="utf-8")
+
+def _save_vault_entry(text):
+    """Append a note to the memory vault (used by local intents + APIs)."""
+    vault = load_json(DATA_DIR / "vault.json", {"entries": []})
+    text = (text or "").strip()
+    if not text:
+        return None
+    entry = {"id": str(int(time.time() * 1000)), "text": text, "date": datetime.datetime.now().strftime("%b %d, %Y")}
+    vault.setdefault("entries", []).append(entry)
+    save_json(DATA_DIR / "vault.json", vault)
+    return entry
 
 MODE_PROFILES = {
     "jarvis": {
@@ -993,12 +1004,17 @@ def parse_todo_intent(text):
             return ("add", task_text)
     
     # COMPLETE/MARK DONE: "complete task 2", "mark task 2 done", "finish task X", "done with X", "cross off X"
-    m = re.search(r"(?:complete|mark|finish|cross\s*off|check\s*(?:off)?)\s+(?:task\s+)?(\d+)", lo)
+    m = re.search(r"(?:complete|mark|finish|cross\s*off|check\s*(?:off)?)\s+(?:task\s+)?\s*#?(\d+)", lo)
     if m:
         return ("complete", int(m.group(1)))
     m = re.search(r"(?:complete|mark|finish|done\s+with)\s+(.+)", lo)
     if m:
         return ("complete_text", m.group(1).strip())
+
+    # "#1 / #2" shorthand (e.g. "finish #2", "complete #1", "mark #1 done")
+    m = re.match(r"(?:complete|mark|finish|done|cross\s*off|check(?:\s*off)?)\s*#?(\d+)", lo)
+    if m:
+        return ("complete", int(m.group(1)))
     
     # REMOVE/DELETE: "remove task 2", "delete task X", "drop task X"
     m = re.search(r"(?:remove|delete|drop|erase|cancel)\s+(?:task\s+)?(\d+)", lo)
@@ -1215,6 +1231,19 @@ def local_command_router(msg):
     res = handle_todo_intent(lo, boss)
     if res:
         return res
+
+    # MEMORY VAULT: "remember X", "save a memory", "store that X", "don't forget X",
+    # "note this down", "save X to vault". Fully local so memory works offline.
+    vmem = re.search(r"(?:remember|memorize|store|save|note(?: it)? down|put in memory|keep in mind)\s+(?:that\s+|this\s+|the fact that\s+)?(.+)$", lo)
+    if not vmem:
+        vmem = re.search(r"(?:remember|memorize|note|store|save)\s+(?:a\s+)?(?:memory|note|fact|item)\s*[:\-]\s*(.+)$", lo)
+    if not vmem:
+        vmem = re.search(r"(?:don'?t\s+forget|do not forget)\s+(?:(?:to|about|that)\s+)?(.+)$", lo)
+    if vmem:
+        note = vmem.group(1).strip(" :,.;")
+        note = re.sub(r"\s+(?:in|to|into)\s+(?:my\s+)?(?:memory|vault|notes|brain)\s*$", "", note).strip()
+        if note:
+            return {"text": f"Saved to the memory vault: **{note}**, {boss}.", "speech": f"Saved to memory: {note}.", "command": {"action": "vault-save", "value": {"text": note}}}
 
     # APP INTEGRATIONS (Spotify / Telegram / WhatsApp / Discord / VS Code / Chrome deep)
     # run BEFORE generic "open <app>" and master-volume handlers so integrations win.
@@ -1754,12 +1783,67 @@ def offline_reply(text):
     if any(w in lo for w in ["clipboard", "what's on my clipboard"]):
         return {"text": f"Reading clipboard, {boss}!", "speech": "Reading clipboard.", "command": {"action": "clipboard-read", "value": ""}}
 
+    # Fuzzy, typo-tolerant fallback BEFORE the catch-all: match user intent to a
+    # known command keyword even when casing/typos/spacing are off, so commands
+    # still get understood while the AI API is unreachable.
+    fuzzy = _fuzzy_match_command(lo, boss)
+    if fuzzy:
+        return fuzzy
+
     # Offline catch-all: acknowledge, name the limitation, and steer to what still works.
-    detail = "Right now I'm running in **offline/simulation mode**, so I can't reach my brain (the AI API)." if not get_gemini_key() else "I couldn't reach the AI API just now, so I'm answering from my offline knowledge."
+    detail = ("I'm in offline mode right now, so I can't reach the online AI brain."
+              if not get_gemini_key() else
+              "The AI service is temporarily busy, so I'm answering from my built-in offline knowledge.")
     recall = ""
     if mem_topics and mem_count > 2:
         recall = f"\n\nJust to keep us on track — earlier we were talking about *{mem_topics}*. Want to pick any of those back up, {boss}?"
-    return {"text": f"{detail}\n\nYou can still ask me to:\n• **Control the PC** — open apps, lock, screenshot, timers, clipboard\n• **Read your system** — CPU, RAM, battery, disk, processes, uptime\n• **Do math** — calculators, conversions, percentages, primes, factorials\n• **Enjoy content** — jokes, quotes, facts, riddles, weather, time\n• **Talk about tech** — AI, Python, CPU, RAM, encryption and more offline{recall}\n\nTry one of those, or ask me about your **Agency OS** / business, {boss}!", "speech": f"I'm in offline mode, so I can't use the online AI. But I can still control your PC, read your system, do math, tell jokes, and remember what we've been talking about, {boss}."}
+    return {"text": f"{detail}\n\nYou can still ask me to:\n• **Control the PC** — open apps, lock, screenshot, timers, clipboard\n• **Read your system** — CPU, RAM, battery, disk, processes, uptime\n• **Do math** — calculators, conversions, percentages, primes, factorials\n• **Enjoy content** — jokes, quotes, facts, riddles, weather, time\n• **Talk about tech** — AI, Python, CPU, RAM, encryption and more offline{recall}\n\nTry one of those, or ask me about your **Agency OS** / business, {boss}!", "speech": "I can't reach the online AI right now, but I can still control your PC, read your system, do math, tell jokes, and remember what we've been talking about, {boss}."}
+
+
+_FUZZY_EVALS = {
+    "cpu usage": "CPU", "cpu": "CPU", "processor": "CPU",
+    "ram usage": "RAM", "memory": "RAM", "memory usage": "RAM",
+    "battery": "battery", "battery status": "battery", "battery level": "battery",
+    "disk": "disk", "disk usage": "disk", "storage": "disk", "free space": "disk",
+    "uptime": "uptime", "wifi": "wifi", "system info": "system-info", "system": "system-info",
+}
+
+def _fuzzy_match_command(lo, boss):
+    """Rough fuzzy intent match for offline mode: helps when the user types a
+    command slightly differently than an exact router phrase (typos, extra
+    casing, missing 'the', etc.). Returns a reply dict or None."""
+    if not lo or len(lo) < 3:
+        return None
+    try:
+        import difflib
+    except Exception:
+        return None
+
+    best_ratio = 0.72
+    best_key = None
+    for key in _FUZZY_EVALS:
+        r = difflib.SequenceMatcher(None, lo, key).ratio()
+        if r > best_ratio:
+            best_ratio = r
+            best_key = key
+    if not best_key:
+        return None
+    target = _FUZZY_EVALS[best_key]
+    if target == "CPU":
+        return {"text": f"CPU: **{system_cache['cpu']}%**, {platform.processor() or 'Unknown'}, **{psutil.cpu_count()}** cores, {boss}.", "speech": f"CPU is at {system_cache['cpu']} percent, {boss}."}
+    if target == "RAM":
+        return {"text": f"RAM: **{system_cache['ram']}%** used, **{system_cache['ram_used']}/{system_cache['ram_total']} GB**, {boss}.", "speech": f"RAM is {system_cache['ram']} percent, {boss}."}
+    if target == "battery":
+        ch = "charging" if system_cache["charging"] else "on battery"
+        return {"text": f"Battery: **{system_cache['battery']}%** ({ch}), {boss}.", "speech": f"Battery at {system_cache['battery']} percent, {ch}, {boss}."}
+    if target == "disk":
+        return {"text": f"Disk: **{system_cache['disk']}%** used, **{system_cache['disk_free']} GB** free of **{system_cache['disk_total']} GB**, {boss}.", "speech": f"Disk is {system_cache['disk']} percent, {boss}."}
+    if target == "uptime":
+        up = system_cache["uptime"]; hrs, rem = divmod(up, 3600); mins, secs = divmod(rem, 60)
+        return {"text": f"Uptime: **{hrs}h {mins}m {secs}s**, {boss}.", "speech": f"Up for {hrs} hours and {mins} minutes, {boss}."}
+    if target == "system-info":
+        return {"text": f"OS: **{platform.system()} {platform.release()}**\nCPU: **{platform.processor() or 'Unknown'}**\nRAM: **{system_cache['ram_used']}/{system_cache['ram_total']} GB**\nHostname: **{platform.node()}**\nBattery: **{system_cache['battery']}%**", "speech": f"Running {platform.system()} {platform.release()}."}
+    return None
 
 
 _last_net = {"bytes": 0, "time": 0}
@@ -2233,6 +2317,8 @@ def api_chat():
                 msg = f"[User asked to launch a mission but Agency OS is offline on :3200. Explain it's offline.] User says: {msg}"
     local = local_command_router(msg)
     if local:
+        if local.get("command", {}).get("action") == "vault-save":
+            _save_vault_entry((local.get("command", {}).get("value", {}) or {}).get("text", ""))
         chatHistory.append({"role": "user", "content": msg})
         chatHistory.append({"role": "assistant", "content": local.get("text", "")})
         if len(chatHistory) > 20:
@@ -2244,6 +2330,8 @@ def api_chat():
         reply = gemini_chat(msg, chatHistory)
     if not reply:
         reply = offline_reply(msg) or {"text": "I'm offline, Boss.", "speech": "I'm offline, Boss."}
+    if reply.get("command", {}).get("action") == "vault-save":
+        _save_vault_entry((reply.get("command", {}).get("value", {}) or {}).get("text", ""))
     chatHistory.append({"role": "user", "content": msg})
     chatHistory.append({"role": "assistant", "content": reply.get("text", "")})
     if len(chatHistory) > 20:
@@ -2843,7 +2931,20 @@ def api_local_ip():
 def api_remote_status(): return jsonify({"success": True, "remoteMode": False, "hostname": platform.node()})
 
 @app.route("/api/devices")
-def api_devices(): return jsonify({"success": True, "devices": list(activeDevices.values())})
+def api_devices():
+    now = datetime.datetime.now()
+    out = []
+    for d in activeDevices.values():
+        dev = dict(d)
+        last = dev.get("lastActive", "")
+        try:
+            last_dt = datetime.datetime.fromisoformat(last) if last else None
+        except Exception:
+            last_dt = None
+        alive = last_dt is not None and (now - last_dt).total_seconds() < 45
+        dev["connected"] = bool(alive) and dev.get("status") == "approved"
+        out.append(dev)
+    return jsonify({"success": True, "devices": out})
 
 @app.route("/api/mobile-stats")
 def api_mobile_stats():
