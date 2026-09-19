@@ -366,6 +366,81 @@ def list_app_volumes():
 
 
 # =====================================================================
+# RUNNING APPS / WINDOW QUERY
+# =====================================================================
+
+_FRIENDLY = {
+    "chrome.exe": "Chrome", "msedge.exe": "Edge", "Spotify.exe": "Spotify",
+    "Code.exe": "VS Code", "powershell.exe": "PowerShell", "cmd.exe": "Terminal",
+    "explorer.exe": "File Explorer", "Telegram.exe": "Telegram",
+    "Discord.exe": "Discord", "WhatsApp.exe": "WhatsApp", "notepad.exe": "Notepad",
+    "calc.exe": "Calculator", "WINWORD.EXE": "Word", "EXCEL.EXE": "Excel",
+    "POWERPNT.EXE": "PowerPoint", "OUTLOOK.EXE": "Outlook", "Teams.exe": "Teams",
+    "python.exe": "Python", "pythonw.exe": "Python", "node.exe": "Node",
+    "git-bash.exe": "Git Bash", "WindowsTerminal.exe": "Windows Terminal",
+}
+
+_SKIP = {
+    "svchost.exe", "dllhost.exe", "conhost.exe", "csrss.exe", "winlogon.exe",
+    "lsass.exe", "services.exe", "smss.exe", "fontdrvhost.exe", "searchhost.exe",
+    "sihost.exe", "startmenuexperiencehost.exe", "runtimebroker.exe",
+    "textinputhost.exe", "shellexperiencehost.exe", "securityhealthsystray.exe",
+    "registry.exe", "memory compression", "system", "idle", "system idle process",
+    "aggregatorhost.exe", "gamebar.exe", "gamebarpresencewriter.exe",
+    "ctfmon.exe", "taskhostw.exe", "wmiprvse.exe",
+    "msedgewebview2.exe", "backgroundtaskhost.exe",
+    "compattelrunner.exe", "tiworker.exe", "onedrive.exe", "msmpeng.exe",
+    "spoolsv.exe", "dwm.exe", "audiodg.exe", "nissrv.exe",
+    "securityhealthservice.exe", "microsoftedgeupdate.exe", "googleupdate.exe",
+    "systemsettings.exe", "lockapp.exe", "applicationframehost.exe",
+    "dashost.exe", "gamingservices.exe", "gamingservicesnet.exe",
+    "gameinputredistservice.exe", "gameinputsvc.exe", "etdcrtl.exe",
+    "etdctrl.exe", "etdctrlhelper.exe", "etdservice.exe", "etdtouch.exe",
+    "lms.exe", "ibtsiva.exe", "esif_uf.exe", "filecoauth.exe",
+    "apfs for windows by paragon software.exe", "freellmapi.exe",
+    "ddv.exe", "desktophotkeys.exe", "srtservice.exe",
+    "igfxcuiservice.exe", "igfxem.exe", "intelcphdcpsvc.exe", "intelcphecisvc.exe",
+    "jhi_service.exe", "locationnotificationwindows.exe", "mousocoreworker.exe",
+    "mpdefendercoreservice.exe", "oneapp.igcc.winservice.exe",
+    "onedrive.sync.service.exe", "owcfseventsservice.exe", "paragon_service.exe",
+    "phoneexperiencehost.exe", "memcompression", "dwm.exe",
+    "registry.exe", "systemsettingsbroker.exe", "searchindexer.exe",
+    "rtkaudioservice64.exe", "rtlservice.exe", "rtwlan.exe", "runsw.exe",
+    "swusb.exe", "edgegameassist.exe", "ts_prod.exe", "tss2ctss.exe",
+    "uhssvc.exe", "useroobebroker.exe", "widgets.exe", "widgetservice.exe",
+    "wininit.exe", "wudfhost.exe", "xboxpcappft.exe", "windowsterminal.exe",
+    "opencdaccessservice.exe", "opencloseprevention.exe", "sdclt.exe",
+    "jdproc.exe", "prime95.exe", "samsvcp.exe", "bthserv.exe",
+}
+
+_SKIP_LOWER = {s.removesuffix(".exe") for s in _SKIP}
+
+
+def list_open_apps(limit: int = 20) -> tuple[bool, str]:
+    """Unique visible app names from the running process list (friendly labels)."""
+    if psutil is None:
+        return False, "psutil missing"
+    seen: dict[str, str] = {}
+    try:
+        for p in psutil.process_iter(["name"]):
+            try:
+                name = (p.info.get("name") or "").strip()
+                stem = name.lower().removesuffix(".exe")
+                if not name or stem in _SKIP_LOWER or name.lower() in _SKIP_LOWER:
+                    continue
+                label = _FRIENDLY.get(name.lower(), name.replace(".exe", "").title())
+                seen.setdefault(name.lower(), label)
+            except Exception:
+                continue
+    except Exception:
+        pass
+    if not seen:
+        return False, "Could not enumerate running apps"
+    labels = sorted(set(seen.values()))
+    return True, ", ".join(labels[:limit])
+
+
+# =====================================================================
 # DISPATCH
 # =====================================================================
 
@@ -404,6 +479,8 @@ def run(name: str, value=""):
             return app_volume(str(value), pct)
         if name == "list-app-volumes":
             return True, ", ".join(f"{v['app']}={v['volume']}%" for v in list_app_volumes()) or "No audio sessions"
+        if name == "list-open-apps":
+            return list_open_apps()
         if name == "foreground-window":
             t = foreground_shot()
             return (True, f"Foreground window: {t}") if t else (False, "No foreground window")
