@@ -2874,7 +2874,9 @@ async function pollDevices() {
       linkedStage.classList.remove('hidden');
 
       document.getElementById('linked-device-name').textContent = approved.os;
-      document.getElementById('linked-device-meta').textContent = `${approved.browser} · ${approved.ip}`;
+      const batTxt = approved.battery != null ? ` · 🔋 ${approved.battery}%` : '';
+      const sigTxt = approved.signal ? ` · ${approved.signal}` : '';
+      document.getElementById('linked-device-meta').textContent = `${approved.browser} · ${approved.ip}${batTxt}${sigTxt}`;
       document.getElementById('linked-revoke-btn').dataset.deviceId = approved.deviceId;
 
       const systemPing = document.getElementById('ambient-ping-text')?.textContent || '12ms';

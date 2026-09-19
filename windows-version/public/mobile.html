@@ -851,12 +851,34 @@
         if (data.success) {
           updateAuthUI(data.status);
           if (data.status === 'approved') {
+            sendPhoneHeartbeat();
             await pollDeviceCommands();
           }
         }
       } catch (e) {
         console.error('[DeviceAuth] Polling status failed', e);
       }
+    }
+
+    async function sendPhoneHeartbeat() {
+      const deviceId = getDeviceId();
+      let battery = null, net = null;
+      try {
+        if (navigator.getBattery) {
+          const b = await navigator.getBattery();
+          battery = Math.round(b.level * 100);
+        }
+      } catch (e) {}
+      try {
+        if (navigator.connection && navigator.connection.effectiveType) net = navigator.connection.effectiveType;
+      } catch (e) {}
+      try {
+        await fetch(`${serverUrl}/api/device/status/${deviceId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ battery, signal: net })
+        });
+      } catch (e) {}
     }
 
     async function pollDeviceCommands() {
