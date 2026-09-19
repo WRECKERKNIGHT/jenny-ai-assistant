@@ -473,6 +473,25 @@
     .call-hold-btn.pressed { transform: scale(1.12); background: radial-gradient(circle, rgba(255,59,48,0.5), rgba(0,0,0,0.8) 70%); border-color: #ff3b30; color: #ff3b30; box-shadow: 0 0 60px rgba(255,59,48,0.6); }
     .call-hold-hint { font-size: 9px; color: var(--silver); letter-spacing: 2px; margin-top: 8px; text-transform: uppercase; text-align: center; }
 
+    .call-typer {
+      display: flex; align-items: center; gap: 8px; width: 100%; max-width: 340px;
+      padding: 6px 8px 6px 12px; margin-top: 10px;
+      background: rgba(0,212,230,0.06); border: 1px solid rgba(0,212,230,0.25);
+      border-radius: 24px;
+    }
+    .call-typer.hidden { display: none; }
+    .call-typer input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: #fff; font-size: 14px; letter-spacing: 0.5px;
+    }
+    .call-typer input::placeholder { color: rgba(255,255,255,0.35); }
+    .call-type-send {
+      width: 34px; height: 34px; border-radius: 50%; flex: 0 0 auto;
+      background: rgba(0,212,230,0.2); border: 1px solid #00d4e6; color: #00d4e6;
+      font-size: 13px; display: flex; align-items: center; justify-content: center;
+    }
+    .call-type-send:active { transform: scale(0.92); }
+
     .call-end-row { margin-top: 14px; display: flex; gap: 20px; align-items: center; }
     .call-end-btn {
       width: 62px; height: 62px; border-radius: 50%;
@@ -544,6 +563,11 @@
 
     <div class="call-hold-btn" id="call-hold-btn"><i class="fa-solid fa-microphone"></i></div>
     <div class="call-hold-hint" id="call-hold-hint">HOLD TO TALK TO JENNY</div>
+
+    <div class="call-typer hidden" id="call-typer">
+      <input type="text" id="call-type-input" placeholder="Type to JENNY..." autocomplete="off" enterkeyhint="send">
+      <button class="call-type-send" id="call-type-send"><i class="fa-solid fa-arrow-up"></i></button>
+    </div>
 
     <div class="call-end-row">
       <button class="call-mini-btn" id="call-pcview" title="Peek at the PC screen"><i class="fa-solid fa-desktop"></i></button>
@@ -1391,6 +1415,10 @@
       callTimerEl.textContent = '00:00';
       callOverlay.classList.add('hidden');
       incomingCall.classList.add('hidden');
+      const t = document.getElementById('call-typer');
+      const keyBtn = document.getElementById('call-keypad');
+      if (t) t.classList.add('hidden');
+      if (keyBtn) { keyBtn.style.color = ''; keyBtn.style.borderColor = ''; }
       try { await fetch(serverUrl + '/api/call/hangup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deviceId: getDeviceId() }) }); } catch (e) {}
     }
 
@@ -1457,6 +1485,43 @@
       }
     }
 
+    async function sendCallText() {
+      const inp = document.getElementById('call-type-input');
+      const raw = (inp.value || '').trim();
+      if (!callActive) { inp.value = ''; return; }
+      if (!raw) return;
+      inp.value = '';
+      callAddBubble('you', raw);
+      callHoldHint.textContent = 'JENNY IS THINKING...';
+      callWaveFX('speaking');
+      try {
+        var r = await fetch(serverUrl + '/api/call/talk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId: getDeviceId(), text: raw })
+        });
+        var d = await r.json();
+        if (d.reply) {
+          var txt = d.reply.text || d.reply.speech || '';
+          if (txt) callAddBubble('jenny', txt);
+        }
+        if (d.speechAudio) {
+          callHoldHint.textContent = 'JENNY IS SPEAKING...';
+          callAudio = new Audio(d.speechAudio);
+          callAudio.onended = function() { callHoldHint.textContent = 'HOLD TO TALK TO JENNY'; callWaveFX(null); };
+          callAudio.onerror = function() { callHoldHint.textContent = 'HOLD TO TALK TO JENNY'; callWaveFX(null); };
+          callAudio.play().catch(function() { callHoldHint.textContent = 'HOLD TO TALK TO JENNY'; callWaveFX(null); });
+        } else {
+          if (!d.success && d.error) callAddBubble('jenny', d.error);
+          callHoldHint.textContent = 'HOLD TO TALK TO JENNY';
+          callWaveFX(null);
+        }
+      } catch (e) {
+        callHoldHint.textContent = 'LINK ERROR - TRY AGAIN';
+        callWaveFX(null);
+      }
+    }
+
     async function pollCallStatus() {
       if (!callActive) return;
       try {
@@ -1477,6 +1542,25 @@
     callHoldBtn.addEventListener('mouseleave', stopTalk);
 
     document.getElementById('call-end-btn').addEventListener('click', hangupCall);
+    document.getElementById('call-keypad').addEventListener('click', function() {
+      const t = document.getElementById('call-typer');
+      const inp = document.getElementById('call-type-input');
+      const keyBtn = this;
+      t.classList.toggle('hidden');
+      if (!t.classList.contains('hidden')) {
+        keyBtn.style.color = '#00d4e6';
+        keyBtn.style.borderColor = '#00d4e6';
+        setTimeout(function() { inp.focus(); }, 60);
+      } else {
+        keyBtn.style.color = '';
+        keyBtn.style.borderColor = '';
+        inp.blur();
+      }
+    });
+    document.getElementById('call-type-send').addEventListener('click', sendCallText);
+    document.getElementById('call-type-input').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); sendCallText(); }
+    });
     document.getElementById('call-pcview').addEventListener('click', async function() {
       try {
         var res = await fetch(serverUrl + '/api/screenshot-base64');
