@@ -1532,3 +1532,26 @@ body.mode-ultron .call-widget { animation-name: call-widget-glow-red; }
   0%, 100% { box-shadow: 0 0 8px rgba(255,62,62,0.1); }
   50% { box-shadow: 0 0 20px rgba(255,62,62,0.3); }
 }
+
+/* Phone panel glows & the whole page gets a call-in-progress vibe */
+body.pc-call-active .phone-link-panel {
+  border-color: rgba(0, 212, 230, 0.65);
+  box-shadow: 0 0 28px rgba(0, 212, 230, 0.25), inset 0 0 24px rgba(0, 212, 230, 0.05);
+  transition: all 0.4s ease;
+}
+body.mode-ultron.pc-call-active .phone-link-panel {
+  border-color: rgba(255, 62, 62, 0.65);
+  box-shadow: 0 0 28px rgba(255, 62, 62, 0.25), inset 0 0 24px rgba(255, 62, 62, 0.05);
+}
+body.pc-call-active .phone-badge { color: #00d4e6; }
+body.mode-ultron.pc-call-active .phone-badge { color: #ff3e3e; }
+body.pc-call-active .call-phone-btn { animation: call-btn-breathe 1.6s ease-in-out infinite; }
+body.mode-ultron.pc-call-active .call-phone-btn { animation-name: call-btn-breathe-red; }
+@keyframes call-btn-breathe {
+  0%, 100% { box-shadow: 0 0 12px rgba(0, 212, 230, 0.15); }
+  50% { box-shadow: 0 0 26px rgba(0, 212, 230, 0.45); }
+}
+@keyframes call-btn-breathe-red {
+  0%, 100% { box-shadow: 0 0 12px rgba(255, 62, 62, 0.15); }
+  50% { box-shadow: 0 0 26px rgba(255, 62, 62, 0.45); }
+}
