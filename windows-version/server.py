@@ -2832,8 +2832,22 @@ def api_device_register():
     if did not in activeDevices: activeDevices[did] = {"deviceId": did, "os": d.get("os", "Unknown"), "browser": d.get("browser", "Unknown"), "ip": request.remote_addr, "status": "pending", "lastActive": datetime.datetime.now().isoformat()}
     return jsonify({"success": True, "device": activeDevices[did]})
 
-@app.route("/api/device/status/<did>")
-def api_device_status(did): return jsonify({"success": True, "status": activeDevices.get(did, {}).get("status", "unknown")})
+@app.route("/api/device/status/<did>", methods=["GET", "POST"])
+def api_device_status(did):
+    if request.method == "POST":
+        d = request.get_json(force=True, silent=True) or {}
+        dev = activeDevices.get(did)
+        if dev:
+            dev["lastActive"] = datetime.datetime.now().isoformat()
+            if d.get("battery") is not None:
+                dev["battery"] = round(min(100, max(0, int(d["battery"]))))
+            if d.get("signal") is not None:
+                dev["signal"] = str(d["signal"])[:40]
+            if d.get("network") is not None:
+                dev["network"] = str(d["network"])[:40]
+        return jsonify({"success": True, "status": dev.get("status", "unknown") if dev else "unknown"})
+    dev = activeDevices.get(did, {})
+    return jsonify({"success": True, "status": dev.get("status", "unknown"), "os": dev.get("os", ""), "browser": dev.get("browser", ""), "ip": dev.get("ip", ""), "battery": dev.get("battery"), "signal": dev.get("signal"), "lastActive": dev.get("lastActive", "")})
 
 @app.route("/api/device/approve", methods=["POST"])
 def api_device_approve():
