@@ -169,21 +169,54 @@ def transcribe_groq(wav_bytes: bytes) -> str | None:
     return transcribe_groq_file(wav_bytes, "audio.wav", "audio/wav")
 
 
-def transcribe_groq_file(data: bytes, filename: str, mime: str) -> str | None:
+# Speech language is deliberately restricted to English + Hindi so the
+# recognizer never misdetects Russian or other languages. Persisted in
+# data/settings.json under "stt_language" ("en" | "hi").
+ALLOWED_STT_LANGS = {"en": "en", "hi": "hi"}
+GROQ_LANG = {"en": "en", "hi": "hi"}
+GOOGLE_LANG = {"en": "en-US", "hi": "hi-IN"}
+
+
+def get_stt_language() -> str:
+    """Resolve the configured STT language (default en), clamped to EN/HI."""
+    try:
+        import json
+        from pathlib import Path
+        s = json.loads((Path(__file__).parent / "data" / "settings.json").read_text(encoding="utf-8-sig"))
+        lang = str(s.get("stt_language", "en")).lower().strip()
+        if lang in ALLOWED_STT_LANGS:
+            return ALLOWED_STT_LANGS[lang]
+    except Exception:
+        pass
+    return "en"
+
+
+def transcribe_groq(wav_bytes: bytes, language: str = "en") -> str | None:
+    """Transcribe WAV bytes with Groq Whisper (whisper-large-v3-turbo)."""
+    return transcribe_groq_file(wav_bytes, "audio.wav", "audio/wav", language)
+
+
+def transcribe_groq_file(data: bytes, filename: str, mime: str, language: str = "") -> str | None:
     """Transcribe arbitrary audio bytes (wav/webm/ogg/mp3...) with Groq Whisper.
 
     Used by the phone-call bridge, which uploads browser MediaRecorder output
-    (webm/opus) instead of PC-side WAV captures.
+    (webm/opus) instead of PC-side WAV captures. `language` is pinned to the
+    allowed EN/HI set so the model never drifts into Russian/other; an empty
+    value falls back to the configured STT language.
     """
     key = _groq_key()
     if not key:
         return None
+    lang = (language or "").lower().strip()
+    if lang not in ALLOWED_STT_LANGS:
+        lang = get_stt_language()
     try:
         from groq import Groq
         client = Groq(api_key=key)
         tr = client.audio.transcriptions.create(
             model="whisper-large-v3-turbo",
             file=(filename or "audio.webm", data, mime or "audio/webm"),
+            language=GROQ_LANG[lang],
         )
         text = (getattr(tr, "text", "") or "").strip()
         return text or None
@@ -191,31 +224,36 @@ def transcribe_groq_file(data: bytes, filename: str, mime: str) -> str | None:
         return None
 
 
-def transcribe_google(wav_bytes: bytes, samplerate: int = DEFAULT_SAMPLE_RATE) -> str | None:
+def transcribe_google(wav_bytes: bytes, samplerate: int = DEFAULT_SAMPLE_RATE,
+                      language: str = "") -> str | None:
     """Free fallback: Google Web Speech via SpeechRecognition (no pyaudio)."""
     try:
         import speech_recognition as sr
         r = sr.Recognizer()
         audio = sr.AudioData(wav_bytes, samplerate, DEFAULT_CHANNELS * 2)
-        return r.recognize_google(audio)
+        lang = (language or "").lower().strip()
+        if lang not in ALLOWED_STT_LANGS:
+            lang = get_stt_language()
+        kw = {"language": GOOGLE_LANG[lang]} if lang in GOOGLE_LANG else {}
+        return r.recognize_google(audio, **kw)
     except Exception:
         return None
 
 
-def transcribe(wav_bytes: bytes) -> tuple[str, str]:
+def transcribe(wav_bytes: bytes, language: str = "") -> tuple[str, str]:
     """Try Groq Whisper first, then Google. Returns (text, engine)."""
     if not wav_bytes:
         return ("", "none")
-    text = transcribe_groq(wav_bytes)
+    text = transcribe_groq(wav_bytes, language)
     if text:
         return (text, "groq-whisper")
-    text = transcribe_google(wav_bytes)
+    text = transcribe_google(wav_bytes, language)
     if text:
         return (text, "google")
     return ("", "none")
 
 
-def record_and_transcribe(seconds: int = 5, device: int | None = None) -> dict:
+def record_and_transcribe(seconds: int = 5, device: int | None = None, language: str = "") -> dict:
     """One-shot microphone capture + transcription (used by the mic button)."""
     if _rec_lock.acquire(blocking=False):
         try:
@@ -232,10 +270,10 @@ def record_and_transcribe(seconds: int = 5, device: int | None = None) -> dict:
                 return {"success": False, "error": "Microphone capture failed. Check mic privacy settings."}
             if not wav:
                 return {"success": False, "error": "No speech detected. Please speak louder or choose another mic.", "level": "quiet"}
-            text, engine = transcribe(wav)
+            text, engine = transcribe(wav, language)
             if not text:
                 return {"success": False, "error": "Could not recognize speech. Please try again.", "text": "", "engine": engine}
-            return {"success": True, "text": text, "engine": engine, "seconds": seconds}
+            return {"success": True, "text": text, "engine": engine, "seconds": seconds, "language": get_stt_language() if not language else language}
         finally:
             _rec_lock.release()
     return {"success": False, "error": "Microphone busy. Try again in a moment."}

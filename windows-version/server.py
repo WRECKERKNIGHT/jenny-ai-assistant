@@ -2923,8 +2923,31 @@ def api_dictionary():
 
 @app.route("/api/local-ip")
 def api_local_ip():
-    try: s = __import__("socket").socket(__import__("socket").AF_INET, __import__("socket").SOCK_DGRAM); s.connect(("8.8.8.8", 80)); ip = s.getsockname()[0]; s.close()
-    except: ip = "127.0.0.1"
+    """Best-effort LAN IP. Tries the UDP socket trick, then the hostname's
+    primary IPv4, then a plain 127.0.0.1 fallback. Returns the mobile URL the
+    phone should open (plain http, same port)."""
+    ip = None
+    try:
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        ip = None
+    if not ip or ip.startswith("127."):
+        try:
+            import socket as _sk
+            host = _sk.gethostname()
+            for info in _sk.getaddrinfo(host, None, _sk.AF_INET):
+                addr = info[4][0]
+                if not addr.startswith("127."):
+                    ip = addr
+                    break
+        except Exception:
+            pass
+    if not ip:
+        ip = "127.0.0.1"
     return jsonify({"success": True, "ip": ip, "mobileUrl": f"http://{ip}:3005/mobile.html"})
 
 @app.route("/api/remote-status")
@@ -3288,8 +3311,9 @@ def api_stt_mics():
 @app.route("/api/stt/record", methods=["POST"])
 def api_stt_record():
     """Record the microphone for N seconds and transcribe it.
-    Body: {seconds, device?}. Returns {text, engine} so the UI never has to
-    rely on the flaky browser Web Speech recognizer."""
+    Body: {seconds, device?, language?}. Returns {text, engine} so the UI
+    never has to rely on the flaky browser Web Speech recognizer. Language is
+    pinned to English or Hindi only."""
     import speech_stt
     d = request.get_json(force=True, silent=True) or {}
     seconds = max(1, min(int(d.get("seconds", 5)), 12))
@@ -3299,8 +3323,25 @@ def api_stt_record():
             device = int(device)
         except (TypeError, ValueError):
             device = None
-    result = speech_stt.record_and_transcribe(seconds, device=device)
+    language = str(d.get("language", "") or "").lower().strip()
+    result = speech_stt.record_and_transcribe(seconds, device=device, language=language)
     return jsonify(result)
+
+@app.route("/api/stt/language", methods=["GET", "POST"])
+def api_stt_language():
+    """Get or set the speech-recognition language (en | hi only)."""
+    import speech_stt
+    settings = load_json(DATA_DIR / "settings.json", {})
+    if request.method == "POST":
+        d = request.get_json(force=True, silent=True) or {}
+        lang = str(d.get("language", "") or "").lower().strip()
+        if lang not in speech_stt.ALLOWED_STT_LANGS:
+            return jsonify({"success": False, "error": "Language must be 'en' or 'hi'"}), 400
+        settings["stt_language"] = lang
+        save_json(DATA_DIR / "settings.json", settings)
+        return jsonify({"success": True, "language": lang})
+    return jsonify({"success": True, "language": speech_stt.get_stt_language(),
+                    "allowed": list(speech_stt.ALLOWED_STT_LANGS)})
 
 @app.route("/api/stt/status")
 def api_stt_status():
