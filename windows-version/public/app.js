@@ -2982,6 +2982,10 @@ async function callPhone() {
     toast('No phone currently linked, BOSS.', 'err');
     return;
   }
+  if (window.__callActive || callStartedAt) {
+    toast('Call is already active, BOSS.', 'err');
+    return;
+  }
   try {
     const res = await fetch('/api/device/command/send', {
       method: 'POST',
@@ -3073,6 +3077,7 @@ async function pollCallWidget() {
     const res = await fetch('/api/call/status');
     const d = await res.json();
     if (d.success && d.call && d.call.active) {
+      document.body.classList.add('pc-call-active');
       if (!callStartedAt) {
         callStartedAt = Date.now();
         const w = document.getElementById('call-widget');
@@ -3100,7 +3105,16 @@ async function pollCallWidget() {
           }
         }
       }
+      // speaking indicator: idle under ~4s means JENNY is mid-utterance
+      const speaking = d.call.idle != null && d.call.idle < 4 && last && last.role === 'jenny';
+      const lbl = document.getElementById('call-widget-label');
+      if (speaking && lbl && lbl.textContent !== 'JENNY SPEAKING...') {
+        lbl.textContent = 'JENNY SPEAKING...';
+      } else if (!speaking && lbl && lbl.textContent === 'JENNY SPEAKING...') {
+        lbl.textContent = 'LIVE CALL WITH PHONE';
+      }
     } else {
+      document.body.classList.remove('pc-call-active');
       if (callStartedAt) {
         callStartedAt = 0;
         hideCallWidget();
