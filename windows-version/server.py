@@ -1272,6 +1272,12 @@ def local_command_router(msg):
     if m and "app volume" in lo:
         appn = m.group(1).strip(); lev = m.group(2)
         return {"text": f"Setting {appn} volume to {lev}%, {boss}!", "speech": f"{appn} volume to {lev} percent.", "command": {"action": "app-volume", "value": {"app": appn, "level": int(lev)}}}
+    m = re.search(r"(?:what'?s|check|show|tell me)\s+(?:the\s+)?([a-zA-Z0-9 _\-]{2,30})\s+(?:app\s+)?volume", lo)
+    if m and "volume" in lo:
+        appn = m.group(1).strip()
+        return {"text": f"Checking {appn} volume, {boss}!", "speech": f"Checking {appn} volume.", "command": {"action": "app-volume", "value": {"app": appn}}}
+    if any(w in lo for w in ["what apps are open", "which apps are open", "list open apps", "what's open", "open applications", "running apps"]):
+        return {"text": f"Scanning running apps, {boss}!", "speech": "Scanning running apps.", "command": {"action": "list-open-apps", "value": ""}}
     m = re.search(r"(?:open|launch|start|run)\s+(.+)", lo)
     if m:
         app_name = m.group(1).strip()
@@ -2422,7 +2428,7 @@ def api_control():
     # App integrations & Chrome deep control proxy into app_integrations / chrome_bridge
     if lo in ("spotify-search", "spotify-action", "telegram-send", "whatsapp-open",
               "discord-open", "open-project", "terminal-project", "focus-window",
-              "app-volume", "list-app-volumes", "foreground-window"):
+              "app-volume", "list-app-volumes", "foreground-window", "list-open-apps"):
         try:
             import app_integrations
             ok, msg = app_integrations.run(lo, value)
