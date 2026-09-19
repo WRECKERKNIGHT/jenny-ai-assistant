@@ -144,31 +144,70 @@ html,body { height:100%; background:var(--bg); color:var(--txt); font-family:var
 .quota-pill.warn .quota-fill { background:linear-gradient(90deg, #f59e0b, #ef4444); }
 #quota-provider { color:var(--gold); letter-spacing:1px; font-weight:700; }
 
-/* JARVIS COMMAND DECK — academic/business briefing strip */
-.jarvis-deck { position:relative; z-index:2; flex:0 0 auto; padding:12px 18px; display:flex; flex-direction:column; gap:10px; border-bottom:1px solid rgba(0,212,255,0.15); background:linear-gradient(180deg, rgba(0,60,120,0.12), rgba(0,212,255,0.03)); overflow:hidden; }
-.jarvis-deck::after { content:""; position:absolute; left:0; right:0; bottom:0; height:2px; background:linear-gradient(90deg, transparent, #00d4ff, transparent); opacity:0.35; }
-body.mode-jarvis .holo-header { border-bottom-color: rgba(0,212,255,0.12); }
-.jdeck-head { display:flex; align-items:center; justify-content:space-between; font-family:var(--mono); font-size:9px; letter-spacing:1.5px; color:#00d4ff; }
-.jdeck-title { display:flex; align-items:center; gap:6px; font-weight:800; text-shadow:0 0 12px rgba(0,212,255,0.4); }
-.jdeck-title i { font-size:10px; }
-.jdeck-mode { display:flex; align-items:center; gap:5px; color:rgba(0,212,255,0.6); }
-.jdeck-brief { font-family:var(--mono); font-size:10px; line-height:1.5; color:rgba(220,245,255,0.9); }
-.jdeck-stats { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
-.jdeck-stat { background:rgba(0,212,255,0.06); border:1px solid rgba(0,212,255,0.2); border-radius:10px; padding:8px 10px; display:flex; flex-direction:column; gap:2px; transition:all 0.25s ease; }
-.jdeck-stat:hover { border-color:#00d4ff; background:rgba(0,212,255,0.12); box-shadow:0 0 14px rgba(0,212,255,0.15); }
-.jdeck-stat .js-val { font-family:var(--orbitron); font-size:16px; font-weight:900; color:#ffffff; text-shadow:0 0 10px rgba(0,212,255,0.35); }
-.jdeck-stat .js-lbl { font-family:var(--mono); font-size:8px; letter-spacing:1px; color:rgba(0,212,255,0.7); text-transform:uppercase; }
-.jdeck-actions { display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; }
-.jdeck-btn { display:flex; flex-direction:column; align-items:center; gap:4px; background:rgba(0,212,255,0.04); border:1px solid rgba(0,212,255,0.18); border-radius:8px; padding:7px 4px 6px; color:rgba(0,212,255,0.85); font-family:var(--mono); font-size:7.5px; letter-spacing:0.5px; cursor:pointer; transition:all 0.2s ease; }
-.jdeck-btn:hover { color:#ffffff; border-color:#00d4ff; background:rgba(0,212,255,0.15); box-shadow:0 0 12px rgba(0,212,255,0.2); transform:translateY(-1px); }
-.jdeck-btn:active { transform:translateY(0); }
-.jdeck-btn i { font-size:12px; }
-.jdeck-memory { font-family:var(--mono); font-size:9px; color:rgba(0,212,255,0.65); line-height:1.6; }
-.jdeck-memory b { color:#00d4ff; font-weight:700; }
-.jdeck-memory .jmem-row { display:flex; gap:6px; align-items:flex-start; padding:4px 2px; border-bottom:1px dashed rgba(0,212,255,0.12); }
-.jdeck-memory .jmem-row:last-child { border-bottom:none; }
-.jdeck-memory .jmem-row i { font-size:8px; margin-top:2px; color:rgba(0,212,255,0.5); }
-.jdeck-empty { color:rgba(0,212,255,0.4); }
+/* ============================================================
+   JARVIS EXECUTIVE COMMAND CENTER — a completely separate
+   dashboard for Jarvis mode only. Fills the left panel instead
+   of the shared sys-monitor + orb. Distinct cyber-navy look.
+   ============================================================ */
+#jarvis-dashboard {
+  position:relative; z-index:2;
+  flex:1; display:flex; flex-direction:column; gap:12px;
+  padding:14px 18px 10px; min-height:0; overflow-y:auto;
+}
+body:not(.mode-jarvis) #jarvis-dashboard { display:none; }
+
+.jd-top { display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid rgba(0,212,255,0.18); }
+.jd-identity { display:flex; align-items:center; gap:10px; }
+.jd-mark { width:38px; height:38px; border-radius:8px; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg, rgba(0,212,255,0.18), rgba(0,60,120,0.1)); border:1px solid rgba(0,212,255,0.35); box-shadow:0 0 16px rgba(0,212,255,0.25), inset 0 0 12px rgba(0,212,255,0.12); color:#00d4ff; font-size:17px; }
+.jd-word { font-family:var(--orbitron); font-size:14px; font-weight:900; letter-spacing:3px; color:#eaf7ff; text-shadow:0 0 16px rgba(0,212,255,0.5); }
+.jd-sub { font-family:var(--mono); font-size:8px; letter-spacing:2px; color:rgba(0,212,255,0.6); margin-top:2px; }
+.jd-status { font-family:var(--mono); font-size:9px; letter-spacing:2px; color:#00d4ff; padding:4px 10px; border:1px solid rgba(0,212,255,0.4); border-radius:20px; background:rgba(0,212,255,0.08); animation:jd-pulse 2.4s ease-in-out infinite; }
+@keyframes jd-pulse { 0%,100% { box-shadow:0 0 6px rgba(0,212,255,0.2); } 50% { box-shadow:0 0 18px rgba(0,212,255,0.5); } }
+
+.jd-clockrow { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+.jd-clock { font-family:var(--orbitron); font-size:30px; font-weight:900; letter-spacing:2px; color:#ffffff; text-shadow:0 0 24px rgba(0,212,255,0.55); }
+.jd-date { font-family:var(--mono); font-size:10px; color:rgba(0,212,255,0.7); text-align:right; letter-spacing:1px; }
+
+.jd-section-label { display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:9px; letter-spacing:2px; color:#00d4ff; margin-top:4px; }
+.jd-section-label i { font-size:10px; }
+.jd-section-label::after { content:""; flex:1; height:1px; background:linear-gradient(90deg, rgba(0,212,255,0.4), transparent); }
+
+.jd-ops { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+.jd-op { position:relative; background:linear-gradient(160deg, rgba(0,212,255,0.06), rgba(0,40,80,0.12)); border:1px solid rgba(0,212,255,0.22); border-radius:10px; padding:10px 8px; overflow:hidden; }
+.jd-op::before { content:""; position:absolute; left:0; top:0; bottom:0; width:2px; background:linear-gradient(180deg, #00d4ff, transparent); opacity:0.7; }
+.jd-op .jo-val { font-family:var(--orbitron); font-size:19px; font-weight:900; color:#eaf7ff; text-shadow:0 0 12px rgba(0,212,255,0.35); }
+.jd-op .jo-lbl { font-family:var(--mono); font-size:7.5px; letter-spacing:1px; color:rgba(0,212,255,0.65); text-transform:uppercase; margin-top:3px; }
+.jd-op .jo-sub { font-size:8px; color:rgba(0,212,255,0.4); margin-top:2px; }
+
+.jd-sys { display:flex; flex-direction:column; gap:8px; }
+.jd-bar { display:grid; grid-template-columns:34px 1fr 46px; align-items:center; gap:10px; font-family:var(--mono); font-size:9px; color:#b8e6ff; }
+.jd-bar span { letter-spacing:1px; }
+.jd-track { height:7px; border-radius:4px; background:rgba(0,212,255,0.08); border:1px solid rgba(0,212,255,0.15); overflow:hidden; }
+.jd-fill { height:100%; width:0%; background:linear-gradient(90deg, #0077b6, #00d4ff); box-shadow:0 0 10px rgba(0,212,255,0.6); border-radius:4px; transition:width 0.6s cubic-bezier(0.16,1,0.3,1); }
+.jd-bar b { font-family:var(--orbitron); font-size:10px; color:#eaf7ff; text-align:right; }
+
+.jd-cmds { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; }
+.jd-cmd { display:flex; align-items:center; gap:9px; background:rgba(0,212,255,0.05); border:1px solid rgba(0,212,255,0.22); border-radius:10px; padding:10px 12px; cursor:pointer; transition:all 0.2s ease; color:#d9f4ff; font-family:var(--mono); font-size:10px; letter-spacing:0.5px; text-align:left; }
+.jd-cmd i { font-size:13px; color:#00d4ff; text-shadow:0 0 10px rgba(0,212,255,0.5); }
+.jd-cmd:hover { background:rgba(0,212,255,0.14); border-color:#00d4ff; box-shadow:0 0 16px rgba(0,212,255,0.25); transform:translateY(-1px); color:#ffffff; }
+.jd-cmd.speak { border-color:rgba(0,212,255,0.5); background:rgba(0,212,255,0.12); }
+
+.jd-memory { display:flex; flex-direction:column; gap:6px; }
+.jd-mem { display:flex; gap:9px; align-items:flex-start; padding:8px 10px; background:rgba(0,212,255,0.04); border:1px solid rgba(0,212,255,0.14); border-radius:8px; }
+.jd-mem i { font-size:10px; color:#00d4ff; margin-top:2px; flex-shrink:0; }
+.jd-mem span { font-family:var(--mono); font-size:9px; color:rgba(0,212,255,0.75); line-height:1.5; word-break:break-word; }
+.jd-empty { font-family:var(--mono); font-size:9px; color:rgba(0,212,255,0.4); text-align:center; padding:14px 0; }
+.jd-empty i { margin-right:6px; }
+
+body.mode-jarvis .sys-monitor { display:none; }
+body.mode-jarvis .holo-orb-stage,
+body.mode-jarvis .holo-projection,
+body.mode-jarvis .holo-status,
+body.mode-jarvis .holo-label,
+body.mode-jarvis .speech-waves,
+body.mode-jarvis .timer-pill { display:none; }
+body.mode-jarvis .orb-section { flex:0 0 auto; padding:0; overflow:hidden; }
+body.mode-jarvis .holo-dock { margin-top:0; border-top:1px solid rgba(0,212,255,0.15); }
 
 /* SYSTEM MONITOR */
 .sys-monitor { flex:0 0 auto; padding:18px 24px; display:flex; flex-direction:column; gap:16px; border-bottom:1px solid rgba(229,193,88,0.15); overflow-y:auto; min-height:0; }
@@ -635,7 +674,6 @@ body.light-mode .welcome-footer-hint i { color: rgba(8,145,178,0.5); }
   .holo-panel { width:100%; max-width:none; height:35vh; min-width:0; border-right:none; border-bottom:1px solid rgba(255,255,255,0.06); }
   .chat-panel { height:65vh; }
   .sys-monitor { display:none; }
-  .jarvis-deck { display:none; }
   .orb-section { min-height:0; }
   .holo-orb-stage { min-height:80px; }
   #orb-canvas { width:160px; height:160px; }

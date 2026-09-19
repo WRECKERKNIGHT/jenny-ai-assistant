@@ -696,6 +696,11 @@ function setOrbState(state) {
   const statusEl = document.getElementById('holo-status');
   const labelEl = document.getElementById('holo-label');
   const clickZone = document.getElementById('orb-click');
+  const jdStatus = document.getElementById('jd-status');
+  if (jdStatus) {
+    const map = { idle: 'ONLINE', listening: 'LISTENING', thinking: 'PROCESSING', speaking: 'SPEAKING' };
+    jdStatus.textContent = map[state] || 'ONLINE';
+  }
   if (statusEl) { statusEl.textContent = state.toUpperCase(); statusEl.className = 'holo-status' + (state === 'listening' ? ' listening' : state === 'speaking' ? ' speaking' : ''); }
   if (labelEl) { const labels = { idle: 'Tap the orb or type a command', listening: 'Listening...', thinking: 'Processing...', speaking: 'Speaking...' }; labelEl.textContent = labels[state] || ''; }
   if (clickZone) {
@@ -3317,65 +3322,130 @@ function applyMode(mode) {
   renderModeWelcome(mode);
   toggleAgencyPanel(mode === 'jarvis');
   loadVoiceBadge();
-  if (mode === 'jarvis') loadJarvisDeck();
+  if (mode === 'jarvis') initJarvisDashboard();
 }
 
 // ================================================
-// JARVIS COMMAND DECK — academic/business briefing
+// JARVIS EXECUTIVE COMMAND CENTER — dedicated
+// Jarvis-only dashboard. Distinct from FRIDAY.
 // ================================================
-async function loadJarvisDeck() {
-  const deck = document.getElementById('jarvis-deck');
-  if (!deck) return;
-  const briefEl = document.getElementById('jdeck-brief');
-  const statsEl = document.getElementById('jdeck-stats');
-  const memEl = document.getElementById('jdeck-memory');
+let jdClockTimer = null;
+let jdTelemetryTimer = null;
+
+const JD_DIRECTIVES = [
+  { cmd: "agency briefing", icon: "fa-clipboard-list", label: "Morning Brief" },
+  { cmd: "agency new mission", icon: "fa-crosshairs", label: "Launch Mission" },
+  { cmd: "agency outreach", icon: "fa-envelope-open-text", label: "Review Outreach" },
+  { cmd: "open notes", icon: "fa-note-sticky", label: "Notebook" },
+  { cmd: "open vault", icon: "fa-database", label: "Memory Vault" },
+  { cmd: "what can you do", icon: "fa-terminal", label: "All Capabilities" },
+];
+
+function initJarvisDashboard() {
+  const dash = document.getElementById('jarvis-dashboard');
+  if (!dash) return;
+
+  if (jdClockTimer) clearInterval(jdClockTimer);
+  const clockEl = document.getElementById('jd-clock');
+  const dateEl = document.getElementById('jd-date');
+  const tickClock = () => {
+    const n = new Date();
+    if (clockEl) clockEl.textContent = n.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    if (dateEl) dateEl.textContent = n.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  };
+  tickClock();
+  jdClockTimer = setInterval(tickClock, 1000);
+
+  // Directives grid (always available; useful, not decorative).
+  const cmdsEl = document.getElementById('jd-cmds');
+  if (cmdsEl) {
+    cmdsEl.innerHTML = [...JD_DIRECTIVES,
+      { cmd: "", icon: "fa-microphone", label: "Speak", cls: "speak" }
+    ].map(d => `<button class="jd-cmd ${d.cls || ''}" data-jd="${d.cmd}"><i class="fa-solid ${d.icon}"></i><span>${d.label}</span></button>`).join('');
+    cmdsEl.querySelectorAll('.jd-cmd').forEach(btn => {
+      btn.onclick = () => {
+        const cmd = btn.dataset.jd;
+        if (cmd) { if (typeof sendMessage === 'function') sendMessage(cmd); }
+        else { if (window.isListening) stopListening(); else startListening(); }
+      };
+    });
+  }
+
+  loadJarvisAgency();
+  loadJarvisMemory();
+  refreshJarvisTelemetry();
+  if (jdTelemetryTimer) clearInterval(jdTelemetryTimer);
+  jdTelemetryTimer = setInterval(refreshJarvisTelemetry, 4000);
+}
+
+async function loadJarvisAgency() {
+  const opsEl = document.getElementById('jd-ops');
+  if (!opsEl) return;
   try {
     const res = await fetch('/api/briefing', { cache: 'no-store' });
     const d = await res.json();
     const b = d.briefing || {};
-    if (briefEl) {
-      briefEl.innerHTML = `${d.briefing.agency && d.briefing.agency.online && d.briefing.agency.online !== false ? '<i class="fa-solid fa-circle-notch fa-spin" style="font-size:8px;margin-right:4px;"></i>' : ''}<b>${b.greeting || 'Good day, Sir.'}</b> ${b.date || ''} — <span id="jdeck-clock">${b.time || '--'}</span>`;
-      setInterval(() => {
-        const c = document.getElementById('jdeck-clock');
-        if (c) c.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      }, 1000);
-    }
-    if (statsEl && b.agency && b.agency.online) {
-      statsEl.innerHTML = [
-        { v: b.agency.agents_online, l: 'Agents Online' },
-        { v: b.agency.leads_today, l: 'Leads Today' },
-        { v: b.agency.missions_running, l: 'Missions' },
-        { v: b.agency.sent_outreach, l: 'Outreach Sent' },
-        { v: b.agency.meetings || 0, l: 'Meetings' },
-        { v: b.agency.pending_approval, l: 'Pending' }
-      ].map(s => `<div class="jdeck-stat"><span class="js-val">${s.v ?? '--'}</span><span class="js-lbl">${s.l}</span></div>`).join('');
-    } else if (statsEl) {
-      statsEl.innerHTML = [
-        { v: `${b.system || '--'}`, l: 'System' },
-        { v: b.battery || '--', l: 'Battery' },
-        { v: b.vaultCount ?? 0, l: 'Memories' }
-      ].map(s => `<div class="jdeck-stat"><span class="js-val">${s.v}</span><span class="js-lbl">${s.l}</span></div>`).join('');
+    if (b.agency && b.agency.online) {
+      const rows = [
+        { v: b.agency.agents_online ?? '--', l: 'Agents Online', s: 'Live' },
+        { v: b.agency.agents_working ?? '--', l: 'Working', s: 'Now' },
+        { v: b.agency.leads_today ?? '--', l: 'Leads Today', s: 'Today' },
+        { v: b.agency.total_leads ?? '--', l: 'Total Leads', s: 'All time' },
+        { v: b.agency.missions_running ?? '--', l: 'Missions', s: 'Active' },
+        { v: b.agency.meetings ?? 0, l: 'Meetings', s: 'Booked' }
+      ];
+      opsEl.innerHTML = rows.map(r => `<div class="jd-op"><div class="jo-val">${r.v}</div><div class="jo-lbl">${r.l}</div><div class="jo-sub">${r.s}</div></div>`).join('');
+    } else {
+      const sys = b.system || '--';
+      opsEl.innerHTML = [
+        { v: b.vaultCount ?? 0, l: 'Memories', s: 'Vault' },
+        { v: b.battery || '--', l: 'Battery', s: 'Power' },
+        { v: sys, l: 'Load', s: 'CPU / RAM' }
+      ].map(r => `<div class="jd-op"><div class="jo-val">${r.v}</div><div class="jo-lbl">${r.l}</div><div class="jo-sub">${r.s}</div></div>`).join('');
     }
   } catch(e) {
-    if (briefEl) briefEl.textContent = 'Briefing unavailable.';
+    opsEl.innerHTML = '<div class="jd-empty"><i class="fa-solid fa-triangle-exclamation"></i>Briefing unavailable</div>';
   }
-  document.querySelectorAll('.jdeck-btn').forEach(btn => {
-    btn.onclick = () => { if (typeof sendMessage === 'function') sendMessage(btn.dataset.jcmd); };
-  });
+}
+
+async function refreshJarvisTelemetry() {
+  try {
+    const res = await fetch('/api/system-status', { cache: 'no-store' });
+    const d = await res.json();
+    const set = (id, pct, val) => {
+      const f = document.getElementById(id + '-fill');
+      const v = document.getElementById(id + '-val');
+      if (f) f.style.width = Math.min(100, Math.max(0, pct)) + '%';
+      if (v) v.textContent = val;
+    };
+    if (d.cpu) set('jd-cpu', d.cpu.usage, Math.round(d.cpu.usage) + '%');
+    if (d.ram) set('jd-ram', d.ram.usage, Math.round(d.ram.usage) + '%');
+    if (d.disk) set('jd-disk', d.disk.usage, Math.round(d.disk.usage) + '%');
+    if (d.net) {
+      const bytes = d.net.bytes || 0;
+      const mbs = (bytes / (1024 * 1024)).toFixed(2);
+      set('jd-net', Math.min(100, mbs * 8), mbs + ' MB/s');
+    }
+  } catch(e) {}
+}
+
+async function loadJarvisMemory() {
+  const memEl = document.getElementById('jd-memory');
+  if (!memEl) return;
   try {
     const r = await fetch('/api/vault', { cache: 'no-store' });
     const v = await r.json();
-    const entries = (v.data || []).slice(0, 3);
-    if (memEl) {
-      if (!entries.length) {
-        memEl.innerHTML = '<div class="jdeck-empty"><i class="fa-solid fa-database"></i> No memories yet — tell me &quot;remember ...&quot;</div>';
-      } else {
-        memEl.innerHTML = '<div class="jmem-head" style="font-size:8px;letter-spacing:1px;color:rgba(0,212,255,0.6);margin-bottom:4px;text-transform:uppercase;">RECENT MEMORY</div>' + entries.map(e =>
-          `<div class="jmem-row"><i class="fa-solid fa-file-lines"></i><span>${escHtml(e.text)}</span></div>`
-        ).join('');
-      }
+    const entries = (v.data || []).slice(0, 5);
+    if (!entries.length) {
+      memEl.innerHTML = '<div class="jd-empty"><i class="fa-solid fa-database"></i>No memories yet &mdash; say &quot;remember ...&quot;</div>';
+    } else {
+      memEl.innerHTML = entries.map(e =>
+        `<div class="jd-mem"><i class="fa-solid fa-circle-check"></i><span>${escHtml(e.text)}</span></div>`
+      ).join('');
     }
-  } catch(e) {}
+  } catch(e) {
+    memEl.innerHTML = '<div class="jd-empty"><i class="fa-solid fa-database"></i>Memory offline</div>';
+  }
 }
 function escHtml(s) {
   const d = document.createElement('div');

@@ -97,20 +97,39 @@
         <span class="mode-badge" id="mode-badge" title="AI API status">ONLINE</span>
       </div>
 
-      <div class="jarvis-deck jarvis-only" id="jarvis-deck">
-        <div class="jdeck-head">
-          <span class="jdeck-title"><i class="fa-solid fa-gauge-high"></i> COMMAND DECK</span>
-          <span class="jdeck-mode"><i class="fa-solid fa-building-shield"></i> AGENCY OS</span>
+      <div class="jarvis-only" id="jarvis-dashboard">
+        <div class="jd-top">
+          <div class="jd-identity">
+            <div class="jd-mark"><i class="fa-solid fa-robot"></i></div>
+            <div>
+              <div class="jd-word">J.A.R.V.I.S.</div>
+              <div class="jd-sub">EXECUTIVE COMMAND CENTER</div>
+            </div>
+          </div>
+          <div class="jd-status" id="jd-status">ONLINE</div>
         </div>
-        <div class="jdeck-brief" id="jdeck-brief">Loading briefing...</div>
-        <div class="jdeck-stats" id="jdeck-stats"></div>
-        <div class="jdeck-actions">
-          <button class="jdeck-btn" data-jcmd="agency briefing"><i class="fa-solid fa-clipboard-list"></i><span>Briefing</span></button>
-          <button class="jdeck-btn" data-jcmd="agency new mission"><i class="fa-solid fa-bullseye"></i><span>Mission</span></button>
-          <button class="jdeck-btn" data-jcmd="agency outreach"><i class="fa-solid fa-envelope-open-text"></i><span>Outreach</span></button>
-          <button class="jdeck-btn" data-jcmd="agenda"><i class="fa-solid fa-list-check"></i><span>Agenda</span></button>
+
+        <div class="jd-clockrow">
+          <div class="jd-clock" id="jd-clock">--:--:--</div>
+          <div class="jd-date" id="jd-date">-----</div>
         </div>
-        <div class="jdeck-memory" id="jdeck-memory"></div>
+
+        <div class="jd-section-label"><i class="fa-solid fa-building-shield"></i> AGENCY OPERATIONS</div>
+        <div class="jd-ops" id="jd-ops"></div>
+
+        <div class="jd-section-label"><i class="fa-solid fa-gauge-high"></i> LIVE SYSTEMS</div>
+        <div class="jd-sys">
+          <div class="jd-bar"><span>CPU</span><div class="jd-track"><div class="jd-fill" id="jd-cpu-fill"></div></div><b id="jd-cpu-val">--%</b></div>
+          <div class="jd-bar"><span>RAM</span><div class="jd-track"><div class="jd-fill" id="jd-ram-fill"></div></div><b id="jd-ram-val">--%</b></div>
+          <div class="jd-bar"><span>DISK</span><div class="jd-track"><div class="jd-fill" id="jd-disk-fill"></div></div><b id="jd-disk-val">--%</b></div>
+          <div class="jd-bar"><span>NET</span><div class="jd-track"><div class="jd-fill" id="jd-net-fill"></div></div><b id="jd-net-val">--</b></div>
+        </div>
+
+        <div class="jd-section-label"><i class="fa-solid fa-bolt"></i> DIRECTIVES</div>
+        <div class="jd-cmds" id="jd-cmds"></div>
+
+        <div class="jd-section-label"><i class="fa-solid fa-database"></i> MEMORY ARCHIVE</div>
+        <div class="jd-memory" id="jd-memory"></div>
       </div>
 
       <div class="sys-monitor" id="sys-monitor">
