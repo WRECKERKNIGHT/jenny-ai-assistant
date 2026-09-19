@@ -166,6 +166,15 @@ def _groq_key() -> str:
 
 def transcribe_groq(wav_bytes: bytes) -> str | None:
     """Transcribe WAV bytes with Groq Whisper (whisper-large-v3-turbo)."""
+    return transcribe_groq_file(wav_bytes, "audio.wav", "audio/wav")
+
+
+def transcribe_groq_file(data: bytes, filename: str, mime: str) -> str | None:
+    """Transcribe arbitrary audio bytes (wav/webm/ogg/mp3...) with Groq Whisper.
+
+    Used by the phone-call bridge, which uploads browser MediaRecorder output
+    (webm/opus) instead of PC-side WAV captures.
+    """
     key = _groq_key()
     if not key:
         return None
@@ -174,7 +183,7 @@ def transcribe_groq(wav_bytes: bytes) -> str | None:
         client = Groq(api_key=key)
         tr = client.audio.transcriptions.create(
             model="whisper-large-v3-turbo",
-            file=("mic.wav", wav_bytes, "audio/wav"),
+            file=(filename or "audio.webm", data, mime or "audio/webm"),
         )
         text = (getattr(tr, "text", "") or "").strip()
         return text or None

@@ -383,9 +383,21 @@
       <div class="phone-panel-content">
         <!-- QR CODE STAGE (Waiting/Unlinked State) -->
         <div class="phone-qr-stage" id="phone-qr-stage">
-          <div class="qr-container-box">
-            <img id="phone-qr-img" src="" alt="QR Code Link">
-            <div class="qr-scanner-overlay"></div>
+          <div class="qr-holo-wrap">
+            <div class="qr-corner qc-tl"></div>
+            <div class="qr-corner qc-tr"></div>
+            <div class="qr-corner qc-bl"></div>
+            <div class="qr-corner qc-br"></div>
+            <div class="qr-orbit-ring"></div>
+            <div class="qr-container-box">
+              <img id="phone-qr-img" src="" alt="QR Code Link">
+              <div class="qr-scanner-overlay"></div>
+            </div>
+            <div class="qr-scan-laser"></div>
+            <div class="qr-holo-chip"><i class="fa-solid fa-qrcode"></i> QUANTUM LINK</div>
+            <div class="qr-particle p1"></div>
+            <div class="qr-particle p2"></div>
+            <div class="qr-particle p3"></div>
           </div>
           <div class="phone-link-label">Scan to connect phone</div>
           
@@ -403,7 +415,7 @@
           </div>
           <div class="phone-status-pulse">
             <div class="pulse-ring"></div>
-            <span>WAITING FOR INCOMING LINK...</span>
+            <span id="phone-qr-status-txt">WAITING FOR INCOMING LINK...</span>
           </div>
         </div>
 
@@ -493,6 +505,22 @@
               <input type="range" min="0" max="100" value="70" class="ctrl-slider" oninput="setPhoneVolume(this.value)">
             </div>
           </div>
+
+          <!-- FUTURISTIC CALL WIDGET -->
+          <div class="call-widget hidden" id="call-widget">
+            <div class="call-widget-top">
+              <span class="call-widget-pulse"></span>
+              <span class="call-widget-label" id="call-widget-label">LIVE CALL WITH PHONE</span>
+              <span class="call-widget-timer" id="call-widget-timer">00:00</span>
+            </div>
+            <div class="call-widget-feed" id="call-widget-feed">
+              <div class="call-widget-line"><span class="cw-who">JENNY</span><span class="cw-txt">Neural link established.</span></div>
+            </div>
+          </div>
+
+          <button class="call-phone-btn" id="call-phone-btn" onclick="callPhone()" title="Ring the linked phone / start a voice call">
+            <i class="fa-solid fa-phone"></i> CALL PHONE
+          </button>
         </div>
       </div>
     </aside>

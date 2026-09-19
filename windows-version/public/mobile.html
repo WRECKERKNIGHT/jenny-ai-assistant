@@ -391,9 +391,182 @@
       margin-top: 6px;
     }
     .clip-get:active { background: var(--gold); color: #000; }
+
+    /* =============================================
+       FUTURISTIC JENNY CALL SCREEN (phone <-> PC)
+       ============================================= */
+    .call-overlay {
+      position: fixed; inset: 0; z-index: 10000;
+      background: radial-gradient(circle at 50% 35%, rgba(0,212,230,0.12), transparent 60%),
+                  radial-gradient(circle at 50% 85%, rgba(229,193,88,0.08), transparent 55%),
+                  #000;
+      display: flex; flex-direction: column; align-items: center;
+      padding: env(safe-area-inset-top, 16px) 18px env(safe-area-inset-bottom, 18px);
+      transition: opacity 0.4s ease, transform 0.4s ease;
+      overflow: hidden;
+    }
+    .call-overlay.hidden { opacity: 0; transform: scale(1.06); pointer-events: none; }
+
+    .call-ring-rays {
+      position: absolute; top: 18%; left: 50%; width: 220px; height: 220px;
+      transform: translateX(-50%); border-radius: 50%; pointer-events: none;
+      background: conic-gradient(from 0deg, rgba(0,212,230,0.35), rgba(229,193,88,0.25), rgba(0,212,230,0.35));
+      -webkit-mask: radial-gradient(circle, transparent 60%, black 61%, black 100%);
+      mask: radial-gradient(circle, transparent 60%, black 61%, black 100%);
+      animation: ray-spin 4s linear infinite;
+    }
+    @keyframes ray-spin { to { transform: translateX(-50%) rotate(360deg); } }
+
+    .call-big-avatar {
+      width: 130px; height: 130px; border-radius: 50%;
+      position: relative; margin-top: 16px;
+      display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(circle, rgba(0,212,230,0.25), rgba(0,0,0,0.85) 75%);
+      border: 2px solid rgba(0,212,230,0.6);
+      box-shadow: 0 0 50px rgba(0,212,230,0.35), inset 0 0 40px rgba(0,212,230,0.15);
+    }
+    .call-big-avatar::before, .call-big-avatar::after {
+      content: ''; position: absolute; inset: -8px; border-radius: 50%;
+      border: 1px solid rgba(0,212,230,0.25);
+      animation: call-pulse 2.2s ease-out infinite;
+    }
+    .call-big-avatar::after { animation-delay: 1.1s; }
+    @keyframes call-pulse {
+      0% { transform: scale(1); opacity: 0.9; }
+      100% { transform: scale(1.45); opacity: 0; }
+    }
+    .call-big-avatar img { width: 70%; height: 70%; border-radius: 50%; object-fit: cover; filter: drop-shadow(0 0 12px rgba(0,212,230,0.5)); }
+
+    .call-caption { font-size: 16px; font-weight: 800; letter-spacing: 3px; color: #fff; margin-top: 18px; }
+    .call-sub { font-size: 10px; color: var(--silver); letter-spacing: 2px; margin-top: 4px; }
+    .call-timer { font-family: var(--mono); font-size: 12px; color: var(--gold); margin-top: 6px; letter-spacing: 2px; }
+
+    .call-transcript {
+      flex: 1; width: 100%; margin: 18px 0 12px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 8px; padding: 6px 2px;
+    }
+    .call-bubble {
+      max-width: 82%; padding: 10px 14px; border-radius: 16px;
+      font-size: 13px; line-height: 1.45; word-break: break-word;
+    }
+    .call-bubble.you { align-self: flex-end; background: rgba(0,212,230,0.15); border: 1px solid rgba(0,212,230,0.3); color: #eafcff; border-bottom-right-radius: 4px; }
+    .call-bubble.jenny { align-self: flex-start; background: rgba(255,255,255,0.06); border: 1px solid rgba(229,193,88,0.3); color: var(--txt2); border-bottom-left-radius: 4px; }
+    .call-bubble .cb-who { font-size: 8px; letter-spacing: 1px; opacity: 0.6; margin-bottom: 3px; text-transform: uppercase; }
+    .call-bubble.jenny::after { content: ''; }
+
+    .call-wave { width: 100%; height: 46px; display: flex; align-items: center; justify-content: center; gap: 3px; margin-bottom: 6px; }
+    .call-wave span {
+      width: 3px; height: 12px; border-radius: 2px; background: rgba(0,212,230,0.5);
+      transition: height 0.08s ease;
+    }
+    .call-wave.speaking span { background: var(--gold); }
+    .call-wave.listening span { background: #00d4e6; }
+
+    .call-hold-btn {
+      width: 104px; height: 104px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,212,230,0.35), rgba(0,0,0,0.8) 70%);
+      border: 2px solid #00d4e6; color: #00d4e6; font-size: 34px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s ease; touch-action: none; user-select: none;
+      -webkit-user-select: none; box-shadow: 0 0 40px rgba(0,212,230,0.25);
+    }
+    .call-hold-btn.pressed { transform: scale(1.12); background: radial-gradient(circle, rgba(255,59,48,0.5), rgba(0,0,0,0.8) 70%); border-color: #ff3b30; color: #ff3b30; box-shadow: 0 0 60px rgba(255,59,48,0.6); }
+    .call-hold-hint { font-size: 9px; color: var(--silver); letter-spacing: 2px; margin-top: 8px; text-transform: uppercase; text-align: center; }
+
+    .call-end-row { margin-top: 14px; display: flex; gap: 20px; align-items: center; }
+    .call-end-btn {
+      width: 62px; height: 62px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,59,48,0.6), rgba(120,0,0,0.9));
+      border: 2px solid #ff3b30; color: #fff; font-size: 20px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .call-mini-btn {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.2);
+      color: var(--silver); font-size: 15px; display: flex; align-items: center; justify-content: center;
+    }
+    .call-connecting {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 18px; background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 5;
+      transition: opacity 0.4s ease;
+    }
+    .call-connecting.hidden { opacity: 0; pointer-events: none; }
+    .call-connecting .ring {
+      width: 90px; height: 90px; border-radius: 50%;
+      border: 3px solid rgba(0,212,230,0.2); border-top-color: #00d4e6;
+      animation: spin 1s linear infinite;
+    }
+    .call-connecting .txt { font-size: 11px; letter-spacing: 3px; color: var(--gold); }
+
+    .incoming-call {
+      position: fixed; inset: 0; z-index: 10001;
+      background: radial-gradient(circle at 50% 30%, rgba(229,193,88,0.2), transparent 60%), #000;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+      padding: 30px; text-align: center;
+      transition: opacity 0.4s ease, transform 0.4s ease;
+    }
+    .incoming-call.hidden { opacity: 0; transform: scale(1.08); pointer-events: none; }
+    .incoming-call .in-title { font-size: 14px; letter-spacing: 3px; color: var(--gold); font-weight: 800; }
+    .incoming-call .in-desc { font-size: 11px; color: var(--txt2); letter-spacing: 1px; }
+    .incoming-call .in-avatar {
+      width: 110px; height: 110px; border-radius: 50%;
+      border: 2px solid var(--gold); display: flex; align-items: center; justify-content: center;
+      font-size: 42px; color: var(--gold);
+      background: radial-gradient(circle, rgba(229,193,88,0.2), rgba(0,0,0,0.85));
+      animation: pulse-red 1.2s infinite;
+      box-shadow: 0 0 40px rgba(229,193,88,0.3);
+    }
+    .in-actions { display: flex; gap: 40px; margin-top: 10px; }
+    .in-btn { width: 70px; height: 70px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+    .in-btn.accept { background: radial-gradient(circle, rgba(52,199,89,0.7), rgba(0,80,0,0.9)); border: 2px solid #34c759; color: #fff; }
+    .in-btn.decline { background: radial-gradient(circle, rgba(255,59,48,0.7), rgba(120,0,0,0.9)); border: 2px solid #ff3b30; color: #fff; }
   </style>
 </head>
 <body>
+
+  <!-- FUTURISTIC CALL SCREEN (phone -> PC voice bridge) -->
+  <div class="call-overlay hidden" id="call-overlay">
+    <div class="call-ring-rays"></div>
+    <div class="call-big-avatar"><img src="/logo.png" alt="JENNY" id="call-avatar-img"></div>
+    <div class="call-caption">J.E.N.N.Y.</div>
+    <div class="call-sub" id="call-sub">SECURE NEURAL LINK ACTIVE</div>
+    <div class="call-timer" id="call-timer">00:00</div>
+
+    <div class="call-transcript" id="call-transcript"></div>
+
+    <div class="call-wave" id="call-wave" style="visibility:hidden;">
+      <span></span><span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span><span></span>
+    </div>
+
+    <div class="call-hold-btn" id="call-hold-btn"><i class="fa-solid fa-microphone"></i></div>
+    <div class="call-hold-hint" id="call-hold-hint">HOLD TO TALK TO JENNY</div>
+
+    <div class="call-end-row">
+      <button class="call-mini-btn" id="call-pcview" title="Peek at the PC screen"><i class="fa-solid fa-desktop"></i></button>
+      <button class="call-end-btn" id="call-end-btn" title="End call"><i class="fa-solid fa-phone-slash"></i></button>
+      <button class="call-mini-btn" id="call-keypad" title="Type instead"><i class="fa-solid fa-keyboard"></i></button>
+    </div>
+
+    <div class="call-connecting" id="call-connecting">
+      <div class="ring"></div>
+      <div class="txt" id="call-connecting-txt">ESTABLISHING NEURAL LINK</div>
+    </div>
+  </div>
+
+  <!-- INCOMING CALL FROM PC -->
+  <div class="incoming-call hidden" id="incoming-call">
+    <div class="in-title">INCOMING REMOTE CALL</div>
+    <div class="in-desc">JENNY on your PC is calling your device</div>
+    <div class="in-avatar"><i class="fa-solid fa-phone"></i></div>
+    <div class="in-actions">
+      <button class="in-btn decline" id="in-decline"><i class="fa-solid fa-phone-slash"></i></button>
+      <button class="in-btn accept" id="in-accept"><i class="fa-solid fa-phone"></i></button>
+    </div>
+  </div>
 
   <!-- PENDING AUTHORIZATION SCREEN -->
   <div class="auth-overlay" id="auth-pending-screen">
@@ -431,6 +604,9 @@
         <i class="fa-solid fa-microphone"></i>
       </div>
       <div class="orb-hint" id="orb-hint">TAP ORB FOR VOICE COMMAND</div>
+      <button id="start-call-btn" style="margin-top:10px;width:100%;background:radial-gradient(circle at 50% 50%, rgba(0,212,230,0.2), rgba(0,0,0,0.6));border:1px solid rgba(0,212,230,0.5);border-radius:14px;padding:12px;color:#00d4e6;font-family:var(--mono);font-size:12px;letter-spacing:2px;font-weight:700;">
+        <i class="fa-solid fa-phone-volume"></i> CALL J.E.N.N.Y.
+      </button>
     </div>
 
     <!-- TELEMETRY -->
@@ -700,7 +876,13 @@
 
     function executePhoneCommand(action, value) {
       appendLog('HOST_CMD', `Received remote action: ${action.toUpperCase()}`);
-      
+
+      if (action === 'call') {
+        incomingCall.classList.remove('hidden');
+        try { navigator.vibrate && navigator.vibrate([200, 150, 200]); } catch (e) {}
+        return;
+      }
+
       if (action === 'buzz') {
         try {
           const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1096,6 +1278,207 @@
         if (p === 'granted') showMobileToast('PC notifications will appear here.');
       });
     }
+
+    // ================================================
+    // JENNY CALL BRIDGE — hold-to-talk, phone -> PC voice
+    // ================================================
+    const callOverlay = document.getElementById('call-overlay');
+    const callTranscript = document.getElementById('call-transcript');
+    const callHoldBtn = document.getElementById('call-hold-btn');
+    const callHoldHint = document.getElementById('call-hold-hint');
+    const callTimerEl = document.getElementById('call-timer');
+    const callConnecting = document.getElementById('call-connecting');
+    const callConnectingTxt = document.getElementById('call-connecting-txt');
+    const callWave = document.getElementById('call-wave');
+    const callWaveBars = callWave.querySelectorAll('span');
+    const incomingCall = document.getElementById('incoming-call');
+
+    let callActive = false;
+    let callStartTs = 0;
+    let callRecorder = null;
+    let callChunks = [];
+    let callRecording = false;
+    let callTimerInt = null;
+    let callWaveInt = null;
+    let callAudio = null;
+
+    function fmtDur(sec) {
+      const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+      return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    }
+
+    function callAddBubble(who, text) {
+      const d = document.createElement('div');
+      d.className = 'call-bubble ' + (who === 'you' ? 'you' : 'jenny');
+      d.innerHTML = '<div class="cb-who">' + (who === 'you' ? 'You' : 'J.E.N.N.Y.') + '</div>' + String(text).replace(/[<>]/g, '').slice(0, 300);
+      callTranscript.appendChild(d);
+      callTranscript.scrollTop = callTranscript.scrollHeight;
+    }
+
+    function callWaveFX(mode) {
+      if (callWaveInt) { clearInterval(callWaveInt); callWaveInt = null; }
+      if (!mode) { callWave.style.visibility = 'hidden'; return; }
+      callWave.style.visibility = 'visible';
+      callWave.className = 'call-wave ' + mode;
+      callWaveInt = setInterval(function() {
+        for (let i = 0; i < callWaveBars.length; i++) {
+          callWaveBars[i].style.height = (mode === 'speaking' ? 6 + Math.random() * 30 : 8 + Math.random() * 22) + 'px';
+        }
+      }, 90);
+    }
+
+    async function openCall() {
+      callOverlay.classList.remove('hidden');
+      callConnecting.classList.remove('hidden');
+      try {
+        const r = await fetch(serverUrl + '/api/call/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId: getDeviceId(), callerLabel: getDeviceOS() + ' phone' })
+        });
+        const d = await r.json();
+        callConnecting.classList.add('hidden');
+        if (d.success && d.call) {
+          callActive = true;
+          callStartTs = Date.now();
+          var st = d.call.transcript || [];
+          callTranscript.innerHTML = '';
+          st.forEach(function(line) {
+            if (line.role === 'phone') callAddBubble('you', line.text);
+            else if (line.role === 'jenny') callAddBubble('jenny', line.text);
+          });
+          callTimerInt = setInterval(function() { callTimerEl.textContent = fmtDur((Date.now() - callStartTs) / 1000); }, 500);
+          callHoldHint.textContent = 'HOLD TO TALK TO JENNY';
+          pollCallStatus();
+        } else {
+          callConnectingTxt.innerHTML = d.error || 'CALL FAILED';
+          setTimeout(function() { callOverlay.classList.add('hidden'); }, 1500);
+        }
+      } catch (e) {
+        callConnectingTxt.innerHTML = 'NO NEURAL LINK';
+        setTimeout(function() { callOverlay.classList.add('hidden'); }, 1500);
+      }
+    }
+
+    async function hangupCall() {
+      callActive = false;
+      callRecording = false;
+      if (callTimerInt) clearInterval(callTimerInt);
+      callWaveFX(null);
+      if (callAudio) { try { callAudio.pause(); } catch (e) {} }
+      callTimerEl.textContent = '00:00';
+      callOverlay.classList.add('hidden');
+      incomingCall.classList.add('hidden');
+      try { await fetch(serverUrl + '/api/call/hangup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deviceId: getDeviceId() }) }); } catch (e) {}
+    }
+
+    async function startTalk() {
+      if (!callActive || callRecording) return;
+      callChunks = [];
+      var stream = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        var mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+        callRecorder = new MediaRecorder(stream, { mimeType: mime });
+        callRecorder.ondataavailable = function(e) { if (e.data && e.data.size) callChunks.push(e.data); };
+        callRecorder.onstop = function() {
+          sendTalkAudio();
+          try { stream.getTracks().forEach(function(t) { t.stop(); }); } catch (e) {}
+        };
+        callRecorder.start();
+        callRecording = true;
+        callHoldBtn.classList.add('pressed');
+        callHoldHint.textContent = 'LISTENING...';
+        callWaveFX('listening');
+      } catch (e) {
+        showMobileToast('Mic error');
+      }
+    }
+
+    function stopTalk() {
+      if (!callRecording) return;
+      callRecording = false;
+      callHoldBtn.classList.remove('pressed');
+      try { callRecorder.stop(); } catch (e) {}
+      callRecorder = null;
+    }
+
+    async function sendTalkAudio() {
+      var blob = new Blob(callChunks, { type: 'audio/webm' });
+      if (!blob.size) { callHoldHint.textContent = 'HOLD TO TALK TO JENNY'; callWaveFX(null); return; }
+      callHoldHint.textContent = 'JENNY IS THINKING...';
+      callWaveFX('speaking');
+      var fd = new FormData();
+      fd.append('audio', blob, 'call.webm');
+      fd.append('deviceId', getDeviceId());
+      try {
+        var r = await fetch(serverUrl + '/api/call/talk', { method: 'POST', body: fd });
+        var d = await r.json();
+        if (d.success && d.text) callAddBubble('you', d.text);
+        if (d.reply) {
+          var txt = d.reply.text || d.reply.speech || '';
+          if (txt) callAddBubble('jenny', txt);
+        }
+        if (d.speechAudio) {
+          callHoldHint.textContent = 'JENNY IS SPEAKING...';
+          callAudio = new Audio(d.speechAudio);
+          callAudio.onended = function() { callHoldHint.textContent = 'HOLD TO TALK TO JENNY'; callWaveFX(null); };
+          callAudio.onerror = function() { callHoldHint.textContent = 'HOLD TO TALK TO JENNY'; callWaveFX(null); };
+          callAudio.play().catch(function() { callHoldHint.textContent = 'HOLD TO TALK TO JENNY'; callWaveFX(null); });
+        } else {
+          callHoldHint.textContent = 'HOLD TO TALK TO JENNY';
+          callWaveFX(null);
+        }
+      } catch (e) {
+        callHoldHint.textContent = 'LINK ERROR - TRY AGAIN';
+        callWaveFX(null);
+      }
+    }
+
+    async function pollCallStatus() {
+      if (!callActive) return;
+      try {
+        var r = await fetch(serverUrl + '/api/call/status');
+        var d = await r.json();
+        if (d.call && !d.call.active) { hangupCall(); return; }
+        if (d.call && d.call.transcript) {
+          var last = d.call.transcript[d.call.transcript.length - 1];
+          if (last && last.role === 'system' && last.text.indexOf('Call ended') >= 0) hangupCall();
+        }
+      } catch (e) {}
+    }
+
+    callHoldBtn.addEventListener('touchstart', function(e) { e.preventDefault(); startTalk(); }, { passive: false });
+    callHoldBtn.addEventListener('touchend', function(e) { e.preventDefault(); stopTalk(); }, { passive: false });
+    callHoldBtn.addEventListener('mousedown', startTalk);
+    callHoldBtn.addEventListener('mouseup', stopTalk);
+    callHoldBtn.addEventListener('mouseleave', stopTalk);
+
+    document.getElementById('call-end-btn').addEventListener('click', hangupCall);
+    document.getElementById('call-pcview').addEventListener('click', async function() {
+      try {
+        var res = await fetch(serverUrl + '/api/screenshot-base64');
+        var d = await res.json();
+        if (d.success && d.image) {
+          var w = window.open('', '_blank');
+          if (w) w.document.write('<img style="width:100vw;background:#000" src="data:image/jpeg;base64,' + d.image + '">');
+        }
+      } catch (e) {}
+    });
+    document.getElementById('start-call-btn').addEventListener('click', openCall);
+
+    document.getElementById('in-accept').addEventListener('click', function() {
+      incomingCall.classList.add('hidden');
+      openCall();
+    });
+    document.getElementById('in-decline').addEventListener('click', function() {
+      incomingCall.classList.add('hidden');
+      try { fetch(serverUrl + '/api/call/hangup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deviceId: getDeviceId() }) }); } catch (e) {}
+    });
+
+    // Handle PC-issued "call" remote command is handled in executePhoneCommand above.
+
+    setInterval(pollCallStatus, 4000);
   </script>
 </body>
 </html>

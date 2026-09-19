@@ -2970,6 +2970,149 @@ function setPhoneVolume(val) {
 }
 
 // ================================================
+// PHONE CALL WIDGET (PC -> PHONE "dial" + live call status)
+// ================================================
+let callStartedAt = 0;
+let callWidgetTimerInt = null;
+
+async function callPhone() {
+  if (!currentLinkedDeviceId) {
+    toast('No phone currently linked, BOSS.', 'err');
+    return;
+  }
+  try {
+    const res = await fetch('/api/device/command/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: currentLinkedDeviceId, action: 'call', value: '' })
+    });
+    const d = await res.json();
+    if (d.success) {
+      toast('Ringing the linked phone...', 'ok');
+      showCallWidget('Ringing phone...', 'jenny', 'Incoming call request sent.');
+    } else {
+      toast('Failed to ring phone.', 'err');
+    }
+  } catch (err) {
+    toast('Failed to ring phone.', 'err');
+  }
+}
+
+async function hangUpPhone() {
+  try {
+    await fetch('/api/call/hangup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: currentLinkedDeviceId })
+    });
+  } catch (err) {}
+  hideCallWidget();
+  toast('Call terminated.', 'ok');
+}
+
+function showCallWidget(label, who, txt) {
+  const w = document.getElementById('call-widget');
+  if (!w) return;
+  w.classList.remove('hidden');
+  const lbl = document.getElementById('call-widget-label');
+  if (lbl) lbl.textContent = label.toUpperCase();
+  if (txt && who && document.getElementById('call-widget-feed')) {
+    feedCallWidget(who, txt);
+  }
+  const btn = document.getElementById('call-phone-btn');
+  if (btn) {
+    btn.innerHTML = '<i class="fa-solid fa-phone-slash"></i> HANG UP';
+    btn.onclick = hangUpPhone;
+  }
+}
+
+function hideCallWidget() {
+  const w = document.getElementById('call-widget');
+  if (!w) return;
+  w.classList.add('hidden');
+  const btn = document.getElementById('call-phone-btn');
+  if (btn) {
+    btn.innerHTML = '<i class="fa-solid fa-phone"></i> CALL PHONE';
+    btn.onclick = callPhone;
+  }
+}
+
+function feedCallWidget(who, txt) {
+  const feed = document.getElementById('call-widget-feed');
+  if (!feed) return;
+  const line = document.createElement('div');
+  line.className = 'call-widget-line';
+  const whoEl = document.createElement('span');
+  whoEl.className = 'cw-who';
+  whoEl.textContent = who;
+  const txtEl = document.createElement('span');
+  txtEl.className = 'cw-txt';
+  txtEl.textContent = String(txt).slice(0, 220);
+  line.appendChild(whoEl);
+  line.appendChild(txtEl);
+  feed.appendChild(line);
+  feed.scrollTop = feed.scrollHeight;
+  while (feed.children.length > 30) feed.removeChild(feed.firstChild);
+}
+
+function updateCallTimer() {
+  const el = document.getElementById('call-widget-timer');
+  if (!el) return;
+  if (!callStartedAt) { el.textContent = '00:00'; return; }
+  const sec = Math.floor((Date.now() - callStartedAt) / 1000);
+  const m = Math.floor(sec / 60), s = sec % 60;
+  el.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+
+async function pollCallWidget() {
+  const btn = document.getElementById('call-phone-btn');
+  if (!btn) return;
+  try {
+    const res = await fetch('/api/call/status');
+    const d = await res.json();
+    if (d.success && d.call && d.call.active) {
+      if (!callStartedAt) {
+        callStartedAt = Date.now();
+        const w = document.getElementById('call-widget');
+        if (w) w.classList.remove('hidden');
+      }
+      if (btn.innerHTML.indexOf('HANG UP') < 0) {
+        btn.innerHTML = '<i class="fa-solid fa-phone-slash"></i> HANG UP';
+        btn.onclick = hangUpPhone;
+      }
+      if (!callWidgetTimerInt) {
+        callWidgetTimerInt = setInterval(updateCallTimer, 1000);
+        updateCallTimer();
+      }
+      const transcript = d.call.transcript || [];
+      const last = transcript[transcript.length - 1];
+      if (last && last.role === 'jenny') {
+        // render last jenny line into feed only when it's new
+        const key = d.call.transcript.length + ':' + (last.text || '').slice(0, 40);
+        if (key !== window.__lastCallFeedKey) {
+          window.__lastCallFeedKey = key;
+          if (document.getElementById('call-widget').classList.contains('hidden')) {
+            showCallWidget('LIVE CALL', 'jenny', last.text);
+          } else {
+            feedCallWidget('jenny', last.text);
+          }
+        }
+      }
+    } else {
+      if (callStartedAt) {
+        callStartedAt = 0;
+        hideCallWidget();
+      }
+      if (callWidgetTimerInt) { clearInterval(callWidgetTimerInt); callWidgetTimerInt = null; }
+      if (document.getElementById('call-widget-timer')) document.getElementById('call-widget-timer').textContent = '00:00';
+    }
+  } catch (err) {}
+}
+
+// Call widget poller wired in phone-link loop below if available
+setInterval(pollCallWidget, 4000);
+
+// ================================================
 // OVERLAY MINI MODE
 // ================================================
 let overlayVisible = false;

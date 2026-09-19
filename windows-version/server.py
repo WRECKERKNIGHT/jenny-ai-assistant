@@ -6,6 +6,7 @@ from flask_cors import CORS
 import agency_client
 import tts_engine
 import proactive
+import speech_stt
 
 BASE_DIR = Path(__file__).parent
 PUBLIC_DIR = BASE_DIR / "public"
@@ -1215,8 +1216,62 @@ def local_command_router(msg):
     if res:
         return res
 
-    # SYSTEM ACTIONS that must never round-trip to the LLM
-    act = None
+    # APP INTEGRATIONS (Spotify / Telegram / WhatsApp / Discord / VS Code / Chrome deep)
+    # run BEFORE generic "open <app>" and master-volume handlers so integrations win.
+    if any(w in lo for w in ["ring my phone", "call my phone", "buzz my phone", "ring the phone", "call the phone"]):
+        return {"text": f"Ringing your phone, {boss}!", "speech": "Ringing your phone.", "command": {"action": "phone-ring", "value": ""}}
+    m = re.search(r"(?:play|put on)\s+(.+?)\s+(?:on|in)\s+spotify\b", lo)
+    if m:
+        q = m.group(1).strip()
+        return {"text": f"Playing **{q}** on Spotify, {boss}!", "speech": f"Playing {q} on Spotify.", "command": {"action": "spotify-search", "value": q}}
+    if ("what song" in lo or "what's playing" in lo or "now playing" in lo or "currently playing" in lo) and "spotify" in lo:
+        return {"text": f"Checking what's on Spotify, {boss}!", "speech": "Checking Spotify."}
+    if any(w in lo for w in ["spotify next", "next on spotify"]):
+        return {"text": f"Next on Spotify, {boss}!", "speech": "Next track on Spotify.", "command": {"action": "spotify-action", "value": "next"}}
+    if any(w in lo for w in ["spotify previous", "previous on spotify", "back on spotify"]):
+        return {"text": f"Going back, {boss}!", "speech": "Previous track.", "command": {"action": "spotify-action", "value": "previous"}}
+    m = re.search(r"(?:send|message|text)\s+(.+?)\s+to\s+(.+?)\s+(?:on|via)\s+(telegram|whatsapp|discord)\b(?:\s*[:,-]\s*(.*))?$", lo)
+    if not m:
+        m = re.search(r"(?:send|message|text)\s+(.+?)\s+(?:on|via)\s+(telegram|whatsapp|discord)\b\s*[:,-]\s*(.+)$", lo)
+    if m:
+        groups = m.groups()
+        if len(groups) == 4:
+            message, contact, platform_name, extra = groups
+            if not message or not message.strip():
+                message = extra or ""
+            elif not message.strip():
+                message = extra or ""
+            message = (message.strip(" :,-")) if message else ""
+        else:
+            contact, platform_name, message = groups
+            message = (message or "").strip()
+        if not message or not contact:
+            return {"text": f"What should I send {contact or 'them'} on {platform_name}?", "speech": "What should I send?"}
+        if platform_name == "telegram":
+            return {"text": f"Sending to **{contact.strip()}** on Telegram, {boss}!", "speech": f"Sending to {contact.strip()} on Telegram.", "command": {"action": "telegram-send", "value": f"{contact.strip()}|{message}"}}
+        if platform_name == "whatsapp":
+            return {"text": f"Opening WhatsApp for **{contact.strip()}**, {boss}!", "speech": "Opening WhatsApp Web.", "command": {"action": "whatsapp-open", "value": ""}}
+        return {"text": f"Opening Discord, {boss}!", "speech": "Opening Discord.", "command": {"action": "discord-open", "value": ""}}
+    if any(w in lo for w in ["open whatsapp", "launch whatsapp", "whatsapp web"]):
+        return {"text": f"Opening WhatsApp, {boss}!", "speech": "Opening WhatsApp.", "command": {"action": "whatsapp-open", "value": ""}}
+    if any(w in lo for w in ["open discord", "launch discord"]):
+        return {"text": f"Opening Discord, {boss}!", "speech": "Opening Discord.", "command": {"action": "discord-open", "value": ""}}
+    m = re.search(r"(?:open|crack open|start coding in)\s+(?:project|the project)\s*[ ]?([a-zA-Z0-9_\- ]+)", lo)
+    if m:
+        proj = m.group(1).strip()
+        return {"text": f"Opening project **{proj}**, {boss}!", "speech": f"Opening project {proj}.", "command": {"action": "open-project", "value": proj}}
+    m = re.search(r"(?:open|start)\s+(?:a\s+|the\s+)?terminal\s+(?:in|at)\s+([a-zA-Z0-9_\- ]+)", lo)
+    if m:
+        proj = m.group(1).strip()
+        return {"text": f"Terminal at **{proj}**, {boss}!", "speech": f"Opening terminal in {proj}.", "command": {"action": "terminal-project", "value": proj}}
+    m = re.search(r"(?:focus on|focus|bring up|switch to window|focus window)\s+(?:the\s+|window\s+)?([a-zA-Z0-9 _\-]{2,})$", lo)
+    if m and not any(w in lo for w in ["focus mode", "show me", "show the", "focus on the weather", "focus on the system", "focus on the music"]):
+        app = m.group(1).strip()
+        return {"text": f"Focusing **{app}**, {boss}!", "speech": f"Focusing {app}.", "command": {"action": "focus-window", "value": app}}
+    m = re.search(r"(?:set|change)\s+(.+?)\s*(?:app\x20volume|volume)\s+(?:to\s+|at\s+)?(\d+)", lo)
+    if m and "app volume" in lo:
+        appn = m.group(1).strip(); lev = m.group(2)
+        return {"text": f"Setting {appn} volume to {lev}%, {boss}!", "speech": f"{appn} volume to {lev} percent.", "command": {"action": "app-volume", "value": {"app": appn, "level": int(lev)}}}
     m = re.search(r"(?:open|launch|start|run)\s+(.+)", lo)
     if m:
         app_name = m.group(1).strip()
@@ -1281,6 +1336,28 @@ def local_command_router(msg):
     if m:
         pct = min(100, max(0, int(m.group(1))))
         return {"text": f"Brightness set to {pct}%, {boss}!", "speech": f"Brightness set to {pct} percent.", "command": {"action": "brightness", "value": str(pct)}}
+
+    # CHROME DEEP CONTROL (CDP bridge)
+    if any(w in lo for w in ["list tabs", "what tabs", "open tabs", "chrome tabs", "show tabs"]):
+        return {"text": f"Reading Chrome tabs, {boss}!", "speech": "Reading Chrome tabs.", "command": {"action": "chrome-list", "value": ""}}
+    if any(w in lo for w in ["close tab chrome", "close chrome tab", "close the chrome tab"]):
+        return {"text": f"Closing active tab, {boss}!", "speech": "Closing tab.", "command": {"action": "chrome-close", "value": "chrome"}}
+    m = re.search(r"(?:close|shut)\s+(?:the\s+)?tab\s+(?:for\s+|named\s+)?(.+)$", lo)
+    if m:
+        targ = m.group(1).strip()
+        return {"text": f"Closing tab {targ}, {boss}!", "speech": f"Closing tab {targ}.", "command": {"action": "chrome-close", "value": targ}}
+    m = re.search(r"(?:open in|open a chrome tab|new chrome tab|chrome tab|open tab)\s+(?:for\s+|to\s+)?(.+)$", lo)
+    if m:
+        targ = m.group(1).strip()
+        return {"text": f"Opening **{targ}** in Chrome, {boss}!", "speech": f"Opening {targ} in Chrome.", "command": {"action": "chrome-open", "value": targ}}
+    m = re.search(r"(?:switch to|activate|bring up)\s+(?:the\s+|tab\s+)?(?:chrome\s+)?tab\s+(.+)$", lo)
+    if m and "tab" in lo:
+        targ = m.group(1).strip()
+        return {"text": f"Switching to tab **{targ}**, {boss}!", "speech": f"Switching to tab {targ}.", "command": {"action": "chrome-activate", "value": targ}}
+    m = re.search(r"(?:play|search)\s+(.+?)\s+(?:on|in)\s+youtube\b", lo)
+    if m:
+        q = m.group(1).strip()
+        return {"text": f"Playing **{q}** on YouTube, {boss}!", "speech": f"Playing {q} on YouTube.", "command": {"action": "chrome-youtube", "value": q}}
 
     # BROWSER / SEARCH
     m = re.search(r"(?:play|search for|search|find)\s+(.+?)\s+(?:on|in)\s+youtube\b", lo)
@@ -2334,6 +2411,57 @@ def api_control():
             return jsonify({"success": True, "message": f"Media {value}."})
         except: return jsonify({"success": False})
 
+    # App integrations & Chrome deep control proxy into app_integrations / chrome_bridge
+    if lo in ("spotify-search", "spotify-action", "telegram-send", "whatsapp-open",
+              "discord-open", "open-project", "terminal-project", "focus-window",
+              "app-volume", "list-app-volumes", "foreground-window"):
+        try:
+            import app_integrations
+            ok, msg = app_integrations.run(lo, value)
+            return jsonify({"success": bool(ok), "message": msg})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)})
+    if lo in ("phone-ring", "phone-command"):
+        dids = [d for d, dev in activeDevices.items() if dev.get("status") == "approved"]
+        if not dids:
+            return jsonify({"success": False, "message": "No approved phone linked."})
+        did = dids[0]
+        if lo == "phone-ring":
+            pendingDeviceCommands.setdefault(did, []).append({"action": "call", "value": "", "timestamp": int(time.time() * 1000)})
+            return jsonify({"success": True, "message": "Ringing phone."})
+        pendingDeviceCommands.setdefault(did, []).append({"action": str(value.get("action", "toast")), "value": str(value.get("value", "")), "timestamp": int(time.time() * 1000)})
+        return jsonify({"success": True, "message": "Command sent to phone."})
+    if lo in ("chrome-open", "chrome-search", "chrome-youtube", "chrome-list",
+              "chrome-activate", "chrome-close"):
+        try:
+            import chrome_bridge
+            if lo == "chrome-open":
+                target = str(value)
+                if not target.startswith("http"):
+                    if not re.match(r"^[\w\-]+\.[\w\-]+", target):
+                        target = f"https://www.google.com/search?q={urllib.parse.quote(target)}"
+                    else:
+                        target = "https://" + target
+                r = chrome_bridge.open_url(target)
+                return jsonify({"success": r.get("success", False), "message": target})
+            if lo == "chrome-search":
+                url = chrome_bridge.search(str(value))
+                return jsonify({"success": bool(url), "message": url or "search failed"})
+            if lo == "chrome-youtube":
+                ok = chrome_bridge.youtube_play(str(value))
+                return jsonify({"success": ok, "message": str(value) if ok else "youtube failed"})
+            if lo == "chrome-list":
+                st = chrome_bridge.status()
+                return jsonify({"success": st.get("running", False), "tabs": st.get("tabs", []), "count": st.get("count", 0)})
+            if lo == "chrome-activate":
+                ok = chrome_bridge.activate(str(value))
+                return jsonify({"success": ok, "message": str(value) if ok else "tab not found"})
+            if lo == "chrome-close":
+                ok = chrome_bridge.close(str(value))
+                return jsonify({"success": ok, "message": str(value) if ok else "tab not found"})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)})
+
     # PC Automation actions that proxy into the shared pc_actions library so
     # the chat CI and ULTRON gestures execute identical code paths.
     _pc_map = {
@@ -2820,6 +2948,111 @@ def api_notifications_push():
 @app.route("/api/device/sms/send", methods=["POST"])
 def api_device_sms():
     return jsonify({"success": True, "message": "SMS feature coming soon"})
+
+# =====================================================================
+# PHONE->PC VOICE CALL BRIDGE ("dial JENNY", talk, she answers from the PC)
+# =====================================================================
+call_state = {
+    "active": False,
+    "device_id": "",
+    "caller_label": "",
+    "started_at": 0.0,
+    "last_activity": 0.0,
+    "transcript": [],   # [{role, text, ts}]
+}
+
+
+def _call_bump_activity():
+    call_state["last_activity"] = time.time()
+
+
+def _call_append(role: str, text: str):
+    call_state["transcript"].append({"role": role, "text": text, "ts": time.time()})
+    call_state["transcript"] = call_state["transcript"][-40:]
+    _call_bump_activity()
+
+
+@app.route("/api/call/start", methods=["POST"])
+def api_call_start():
+    """Start a call session from a linked phone. Rings the dashboard."""
+    d = request.get_json(force=True, silent=True) or {}
+    did = d.get("deviceId", "")
+    label = d.get("callerLabel", "Phone")
+    dev = activeDevices.get(did)
+    if dev and dev.get("status") == "approved":
+        call_state.update({
+            "active": True,
+            "device_id": did,
+            "caller_label": label,
+            "started_at": time.time(),
+            "last_activity": time.time(),
+            "transcript": [{"role": "system", "text": f"Incoming call from {label}", "ts": time.time()}],
+        })
+        _call_append("system", f"Call connected — {label} is on the line, Boss.")
+        tts_speak(f"Phone call connected. {label} is on the line, Boss.")
+        return jsonify({"success": True, "call": _call_status_payload()})
+    return jsonify({"success": False, "error": "Device not approved"})
+
+
+@app.route("/api/call/talk", methods=["POST"])
+def api_call_talk():
+    """Accept text or raw audio from the phone; transcribe -> brain -> reply.
+
+    Returns the same shape as /api/chat plus `speechAudio` (a URL the phone
+    plays back so JENNY's neural voice comes out of the phone speaker).
+    """
+    audio = request.files.get("audio") if request.files else None
+    text = ""
+    if audio is not None:
+        raw = audio.read()
+        filename = audio.filename or "call.webm"
+        if not raw:
+            return jsonify({"success": False, "error": "Empty audio"}), 400
+        mime = audio.mimetype or "audio/webm"
+        text = speech_stt.transcribe_groq_file(raw, filename, mime) or ""
+    else:
+        d = request.get_json(force=True, silent=True) or {}
+        text = d.get("text", "") or ""
+    if not text.strip():
+        return jsonify({"success": False, "error": "No speech recognized", "text": ""}), 200
+    _call_append("phone", text.strip())
+    reply = local_command_router(text.strip())
+    if not reply:
+        reply = grok_chat(text.strip(), chatHistory) or offline_reply(text.strip()) or {"text": "I'm offline, Boss.", "speech": "I'm offline, Boss."}
+    speech = reply.get("speech") or reply.get("text") or ""
+    _call_append("jenny", speech)
+    audio_url = f"/api/speak?text={urllib.parse.quote(speech[:6000])}" if speech else None
+    return jsonify({"success": True, "text": text.strip(), "reply": reply, "speechAudio": audio_url})
+
+
+@app.route("/api/call/hangup", methods=["POST"])
+def api_call_hangup():
+    """End the call (either side)."""
+    d = request.get_json(force=True, silent=True) or {}
+    did = d.get("deviceId", "")
+    if call_state["active"]:
+        _call_append("system", "Call ended.")
+        call_state.update({"active": False, "device_id": ""})
+    return jsonify({"success": True})
+
+
+@app.route("/api/call/status")
+def api_call_status():
+    return jsonify({"success": True, "call": _call_status_payload()})
+
+
+def _call_status_payload() -> dict:
+    dur = 0.0
+    if call_state["active"] and call_state["started_at"]:
+        dur = time.time() - call_state["started_at"]
+    return {
+        "active": call_state["active"],
+        "deviceId": call_state["device_id"],
+        "callerLabel": call_state["caller_label"],
+        "duration": dur,
+        "idle": (time.time() - call_state["last_activity"]) if call_state["last_activity"] else 0,
+        "transcript": call_state["transcript"],
+    }
 
 @app.route("/api/permissions-check")
 def api_permissions_check(): return jsonify({"success": True, "platform": sys.platform, "permissions": {"accessibility": {"status": "not_applicable"}, "automation": {"status": "not_applicable"}, "fullDiskAccess": {"status": "not_applicable"}}})
