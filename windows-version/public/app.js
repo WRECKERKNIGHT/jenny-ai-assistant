@@ -2368,7 +2368,7 @@ function initRecognition() {
   const r = new SR();
   r.continuous = true;
   r.interimResults = true;
-  r.lang = 'en-US';
+  r.lang = (document.getElementById('sp-lang-txt') || {}).textContent === 'HI' ? 'hi-IN' : 'en-US';
   r.maxAlternatives = 1;
 
   r.onresult = (e) => {
@@ -2463,6 +2463,7 @@ async function startListening() {
   dictationTranscript = '';
   if (orbClick) orbClick.classList.add('active');
   setOrbState('listening');
+  showSpeechPreview('listening');
   // Do NOT grab the browser mic before server capture - requesting
   // getUserMedia can lock the device so the PC's own STT engine cannot
   // capture (the "mic not working" bug). The server owns the mic.
@@ -2492,40 +2493,157 @@ async function startListening() {
       const d = await res.json();
       if (d && d.success && d.text) {
         heardText = d.text.trim();
-        toast('Heard: ' + heardText.slice(0, 60), 'ok');
         break;
       } else if (d && d.error) {
         // Quiet capture often means speak-start latency: retry once quickly.
         if (!retried && (String(d.error).toLowerCase().includes('no speech') || d.level === 'quiet')) {
           retried = true;
           toast('Listening again...', 'info');
+          showSpeechPreview('listening');
           continue;
         }
         toast('Mic: ' + d.error, 'err');
+        showSpeechPreview('error', String(d.error).slice(0, 80));
         break;
       } else {
         toast('No speech heard, Boss.', 'info');
+        showSpeechPreview('error', 'No speech heard. Please speak a little louder.');
         break;
       }
     } catch {
       // Server STT unavailable -> browser fallback.
       if (!recognition) recognition = initRecognition();
       if (!recognition) { stopListening(); toast('Speech recognition not supported', 'err'); return; }
+      showSpeechPreview('listening');
       try { recognition.start(); } catch {}
       break;
     }
   }
   stopListening();
-  if (heardText) sendMessage(heardText);
+  if (heardText) {
+    showSpeechPreview('confirm', heardText);
+    scheduleSpeechAutoSend(heardText);
+  }
 }
 
 function stopListening() {
   isListening = false;
-  orbClick.classList.remove('active');
+  if (orbClick) orbClick.classList.remove('active');
   if (orbState === 'listening') setOrbState('idle');
   stopSpeechWaves();
   if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
   try { recognition?.stop(); } catch {}
+}
+
+// ================================================
+// SPEECH RECOGNITION PREVIEW (live heard-text bar)
+// ================================================
+let spAutoTimer = null;
+let spPendingText = '';
+
+function showSpeechPreview(mode, text = '') {
+  const pv = document.getElementById('speech-preview');
+  if (!pv) return;
+  pv.classList.remove('hidden');
+  const stateEl = document.getElementById('sp-state');
+  const textEl = document.getElementById('sp-text');
+  const confirmEl = document.getElementById('sp-confirm');
+  const heardEl = document.getElementById('sp-heard');
+  const timerEl = document.getElementById('sp-timer');
+  if (!stateEl || !textEl || !confirmEl) return;
+  loadSttLangBadge();
+  if (mode === 'listening') {
+    if (confirmEl) confirmEl.classList.add('hidden');
+    stateEl.textContent = 'LISTENING...';
+    stateEl.className = 'sp-state listening';
+    if (textEl) textEl.textContent = 'Speak now';
+  } else if (mode === 'thinking') {
+    if (confirmEl) confirmEl.classList.add('hidden');
+    stateEl.textContent = 'PROCESSING...';
+    stateEl.className = 'sp-state';
+    if (textEl) textEl.textContent = 'Recognizing speech';
+  } else if (mode === 'confirm') {
+    if (confirmEl) confirmEl.classList.remove('hidden');
+    stateEl.textContent = 'RECOGNIZED';
+    stateEl.className = 'sp-state';
+    if (textEl) textEl.textContent = 'Ready to send';
+    if (heardEl) heardEl.textContent = '“' + text + '”';
+    spPendingText = text;
+  } else if (mode === 'error') {
+    if (confirmEl) confirmEl.classList.add('hidden');
+    stateEl.textContent = 'NOT HEARD';
+    stateEl.className = 'sp-state';
+    if (textEl) textEl.textContent = text || 'Could not recognize speech.';
+    setTimeout(() => { if (!isListening) hideSpeechPreview(); }, 1600);
+  }
+}
+
+function hideSpeechPreview() {
+  const pv = document.getElementById('speech-preview');
+  if (pv) pv.classList.add('hidden');
+  if (spAutoTimer) { clearInterval(spAutoTimer); spAutoTimer = null; }
+  spPendingText = '';
+}
+
+function scheduleSpeechAutoSend(text) {
+  if (spAutoTimer) clearInterval(spAutoTimer);
+  let left = 6;
+  const timerEl = document.getElementById('sp-timer');
+  if (timerEl) timerEl.textContent = left;
+  spAutoTimer = setInterval(() => {
+    left--;
+    if (timerEl) timerEl.textContent = left;
+    if (left <= 0) {
+      clearInterval(spAutoTimer);
+      spAutoTimer = null;
+      sendSpeechPreview();
+    }
+  }, 1000);
+}
+
+function sendSpeechPreview() {
+  const t = (spPendingText || '').trim();
+  hideSpeechPreview();
+  if (t) sendMessage(t);
+}
+
+function cancelSpeechPreview() {
+  hideSpeechPreview();
+  toast('Command cancelled.', 'info');
+}
+
+function restartSpeechPreview() {
+  hideSpeechPreview();
+  startListening();
+}
+
+async function toggleSttLang() {
+  const current = (document.getElementById('sp-lang-txt') || {}).textContent === 'HI' ? 'hi' : 'en';
+  const next = current === 'en' ? 'hi' : 'en';
+  try {
+    await fetch('/api/stt/language', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language: next }),
+    });
+    loadSttLangBadge(next);
+    toast(`Speech language: ${next === 'hi' ? 'हिन्दी (Hindi)' : 'English'}`, 'ok');
+  } catch (e) {
+    toast('Language switch failed.', 'err');
+  }
+}
+
+async function loadSttLangBadge(force) {
+  const el = document.getElementById('sp-lang-txt');
+  if (!el) return;
+  if (force) { el.textContent = force.toUpperCase(); return; }
+  try {
+    const res = await fetch('/api/stt/language');
+    const d = await res.json();
+    if (d.success) el.textContent = (d.language === 'hi' ? 'HI' : 'EN');
+  } catch (e) {
+    el.textContent = 'EN';
+  }
 }
 
 orbClick.addEventListener('click', () => { isListening ? stopListening() : startListening(); });
@@ -2806,29 +2924,51 @@ async function initPhoneLinkManager() {
   const urlPub = document.getElementById('phone-url-pub');
   const urlLoc = document.getElementById('phone-url-loc');
 
+  let locUrl = '';
+  try {
+    const rIp = await fetch('/api/local-ip');
+    const dIp = await rIp.json();
+    locUrl = (dIp.mobileUrl && !String(dIp.mobileUrl).includes('127.0.0.1') && !String(dIp.mobileUrl).includes('localhost'))
+      ? dIp.mobileUrl
+      : `${window.location.protocol}//${window.location.hostname}:${window.location.port || 3005}/mobile.html`;
+    if (urlLoc) urlLoc.textContent = locUrl;
+  } catch (e) {
+    locUrl = `${window.location.protocol}//${window.location.hostname}:${window.location.port || 3005}/mobile.html`;
+    if (urlLoc) urlLoc.textContent = locUrl;
+  }
+
   try {
     const rStatus = await fetch('/api/remote-status');
     const dStatus = await rStatus.json();
-    const pubUrl = dStatus.tunnelUrl ? `${dStatus.tunnelUrl}/mobile` : 'Retrieving...';
-    urlPub.textContent = pubUrl;
-    
-    const rIp = await fetch('/api/local-ip');
-    const dIp = await rIp.json();
-    const locUrl = dIp.mobileUrl || 'Retrieving...';
-    urlLoc.textContent = locUrl;
+    if (dStatus.remoteMode && dStatus.tunnelUrl) {
+      const pubUrl = `${dStatus.tunnelUrl}/mobile`;
+      if (urlPub) urlPub.textContent = pubUrl;
+    } else {
+      // No tunnel: Local Wi-Fi IS the way to connect.
+      if (urlPub) urlPub.textContent = 'LAN only — use Local URL';
+      const pubRow = document.getElementById('phone-url-pub-row');
+      if (pubRow) pubRow.style.opacity = '0.5';
+    }
 
-    const targetUrl = dStatus.tunnelUrl ? pubUrl : locUrl;
-    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=d08400&bgcolor=ffffff&data=${encodeURIComponent(targetUrl)}`;
-    qrImg.onerror = () => {
-      qrImg.style.display = 'none';
-      qrImg.parentElement.innerHTML = '<div style="color:rgba(255,215,0,0.4);font-family:var(--mono);font-size:11px;padding:40px;text-align:center;">QR Code unavailable offline.<br>Open <strong style="color:rgba(255,215,0,0.7)">' + locUrl + '</strong> on your phone.</div>';
-    };
+    const targetUrl = locUrl;
+    if (qrImg) {
+      qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=d08400&bgcolor=ffffff&data=${encodeURIComponent(targetUrl)}`;
+      qrImg.onerror = () => {
+        qrImg.style.display = 'none';
+        const wrap = qrImg.closest('.qr-container-box') || qrImg.parentElement;
+        wrap.innerHTML = '<div class="qr-offline-fallback"><i class="fa-solid fa-mobile-screen-button"></i><div class="qr-offline-title">OPEN ON YOUR PHONE</div><div class="qr-offline-url">' + locUrl + '</div></div>';
+      };
+    }
   } catch (e) {
     console.error('[PhoneLink] Failed to load remote URLs', e);
-    urlPub.textContent = 'Offline — use local URL';
-    urlLoc.textContent = 'http://localhost:3005/mobile.html';
-    qrImg.style.display = 'none';
-    qrImg.parentElement.innerHTML = '<div style="color:rgba(255,215,0,0.4);font-family:var(--mono);font-size:11px;padding:40px;text-align:center;">QR Code requires internet.<br>Open <strong style="color:rgba(255,215,0,0.7)">http://localhost:3005/mobile.html</strong> on your phone.</div>';
+    if (urlPub) urlPub.textContent = 'LAN only — use Local URL';
+    if (urlLoc) urlLoc.textContent = locUrl;
+    if (qrImg) {
+      qrImg.style.display = 'none';
+      const wrap = qrImg.closest('.qr-container-box') || qrImg.parentElement;
+      wrap.innerHTML = '<div class="qr-offline-fallback"><i class="fa-solid fa-mobile-screen-button"></i><div class="qr-offline-title">OPEN ON YOUR PHONE</div><div class="qr-offline-url">' + locUrl + '</div></div>';
+    }
+    toast('Local URL ready — open it on your phone.', 'info');
   }
 
   phoneLinkPollInterval = setInterval(pollDevices, 1500);
@@ -2846,6 +2986,15 @@ async function initPhoneLinkManager() {
     const linkedId = document.getElementById('linked-revoke-btn').dataset.deviceId;
     if (linkedId) respondToDevice(linkedId, 'revoked');
   });
+}
+
+function openMobileSite() {
+  const urlLoc = document.getElementById('phone-url-loc');
+  const url = urlLoc && urlLoc.textContent && String(urlLoc.textContent).startsWith('http')
+    ? urlLoc.textContent
+    : `${window.location.protocol}//${window.location.hostname}:${window.location.port || 3005}/mobile.html`;
+  window.open(url, '_blank');
+  toast('Opening mobile site...', 'info');
 }
 
 async function pollDevices() {
@@ -3273,11 +3422,18 @@ function renderModeWelcome(mode) {
   const ws = document.getElementById('welcome-screen');
   if (!ws || !cfg) return;
   const title = ws.querySelector('.welcome-title');
-  const sub = ws.querySelector('.welcome-sub');
+  const greet = ws.querySelector('.welcome-greet');
   if (title) title.textContent = cfg.name;
-  if (sub) sub.textContent = mode === 'jarvis'
-    ? "Agency OS is online. What shall we do today, boss?"
+  if (greet) greet.textContent = mode === 'jarvis'
+    ? "Agency OS online — systems nominal, boss. At your command."
+    : mode === 'ultron'
+    ? "Defense systems active. State your directive."
     : "What can I help you with, BOSS?";
+
+  // Live clock row (boot back when hidden / refreshed).
+  const clockrow = ws.querySelector('.welcome-clockrow');
+  if (clockrow) clockrow.classList.add('ready');
+  startWelcomeClock();
 
   const container = ws.querySelector('.welcome-actions');
   if (!container) return;
@@ -3291,6 +3447,21 @@ function renderModeWelcome(mode) {
     btn.addEventListener('click', () => sendMessage(s.cmd));
     container.appendChild(btn);
   });
+}
+
+let _wcClockTimer = null;
+function startWelcomeClock() {
+  if (_wcClockTimer) clearInterval(_wcClockTimer);
+  const timeEl = document.getElementById('wc-time');
+  const dateEl = document.getElementById('wc-date');
+  if (!timeEl) return;
+  const tick = () => {
+    const n = new Date();
+    timeEl.textContent = n.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    if (dateEl) dateEl.textContent = n.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+  tick();
+  _wcClockTimer = setInterval(tick, 1000);
 }
 
 function applyMode(mode) {
@@ -3761,7 +3932,7 @@ function initWakeWord() {
   wakeRecognition = new SR();
   wakeRecognition.continuous = true;
   wakeRecognition.interimResults = true;
-  wakeRecognition.lang = 'en-US';
+  wakeRecognition.lang = (document.getElementById('sp-lang-txt') || {}).textContent === 'HI' ? 'hi-IN' : 'en-US';
   wakeRecognition.maxAlternatives = 3;
 
   wakeRecognition.onresult = function(event) {
@@ -3875,7 +4046,7 @@ function onWakeWordDetected(transcript, wakeWord) {
     const cmdRecognition = new SR();
     cmdRecognition.continuous = false;
     cmdRecognition.interimResults = true;
-    cmdRecognition.lang = 'en-US';
+    cmdRecognition.lang = (document.getElementById('sp-lang-txt') || {}).textContent === 'HI' ? 'hi-IN' : 'en-US';
     cmdRecognition.maxAlternatives = 1;
 
     let finalTranscript = '';

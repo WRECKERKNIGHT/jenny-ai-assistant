@@ -293,6 +293,30 @@
 
       <div class="chat-area" id="chat-area">
         <div class="particle-bg" id="particle-bg"></div>
+
+        <div class="speech-preview hidden" id="speech-preview">
+          <div class="sp-head">
+            <span class="sp-title"><i class="fa-solid fa-microphone-lines"></i> LIVE SPEECH <span class="sp-dot" id="sp-dot"></span></span>
+            <div class="sp-actions">
+              <button class="sp-lang" id="sp-lang" onclick="toggleSttLang()" title="Toggle speech language (English / Hindi)"><i class="fa-solid fa-language"></i><span id="sp-lang-txt">EN</span></button>
+              <button class="sp-cancel" onclick="cancelSpeechPreview()" title="Cancel"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+          </div>
+          <div class="sp-body">
+            <div class="sp-state" id="sp-state">LISTENING...</div>
+            <div class="sp-text" id="sp-text"></div>
+          </div>
+          <div class="sp-confirm hidden" id="sp-confirm">
+            <div class="sp-heard" id="sp-heard"></div>
+            <div class="sp-btn-row">
+              <button class="sp-btn sp-btn-send" onclick="sendSpeechPreview()"><i class="fa-solid fa-paper-plane"></i> SEND</button>
+              <button class="sp-btn sp-btn-again" onclick="restartSpeechPreview()"><i class="fa-solid fa-rotate-right"></i> RETRY</button>
+              <button class="sp-btn sp-btn-cxl" onclick="cancelSpeechPreview()"><i class="fa-solid fa-ban"></i> CANCEL</button>
+            </div>
+            <div class="sp-tip">Auto-sending in <b id="sp-timer">6</b>s</div>
+          </div>
+        </div>
+
         <div class="chat-scroll" id="chat-scroll">
           <div class="msgs" id="msgs"></div>
         </div>
@@ -309,8 +333,13 @@
               <div class="planet planet-3"></div>
             </div>
           </div>
-          <div class="welcome-title">J.E.N.N.Y.</div>
-          <div class="welcome-sub">What can I help you with, BOSS?</div>
+          <div class="welcome-title" id="welcome-title">J.E.N.N.Y.</div>
+          <div class="welcome-greet" id="welcome-greet">What can I help you with, BOSS?</div>
+
+          <div class="welcome-clockrow">
+            <span class="wc-time" id="wc-time">--:--:--</span>
+            <span class="wc-date" id="wc-date">---</span>
+          </div>
 
           <div class="welcome-vitals">
             <div class="wv-item">
@@ -432,19 +461,23 @@
             <div class="qr-particle p3"></div>
           </div>
           <div class="phone-link-label">Scan to connect phone</div>
-          
+
           <div class="phone-urls-box">
-            <div class="url-copy-row">
-              <span class="url-label">Public URL:</span>
-              <span class="url-text" id="phone-url-pub">Retrieving...</span>
-              <button class="copy-url-btn" onclick="copyTextFromElement('phone-url-pub')"><i class="fa-regular fa-copy"></i></button>
-            </div>
             <div class="url-copy-row">
               <span class="url-label">Local Wi-Fi:</span>
               <span class="url-text" id="phone-url-loc">Retrieving...</span>
               <button class="copy-url-btn" onclick="copyTextFromElement('phone-url-loc')"><i class="fa-regular fa-copy"></i></button>
             </div>
+            <div class="url-copy-row" id="phone-url-pub-row">
+              <span class="url-label">Public URL:</span>
+              <span class="url-text" id="phone-url-pub">LAN only</span>
+              <button class="copy-url-btn" onclick="copyTextFromElement('phone-url-pub')"><i class="fa-regular fa-copy"></i></button>
+            </div>
           </div>
+          <button class="phone-open-site-btn" onclick="openMobileSite()" title="Open the mobile site on this PC to test it">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i> OPEN MOBILE SITE
+          </button>
+          <div class="phone-hint">Connect to the <b>same Wi-Fi</b> as this PC, open the local URL above on your phone, then approve this device on the next screen.</div>
           <div class="phone-status-pulse">
             <div class="pulse-ring"></div>
             <span id="phone-qr-status-txt">WAITING FOR INCOMING LINK...</span>
