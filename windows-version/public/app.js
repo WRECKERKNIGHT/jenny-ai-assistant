@@ -409,7 +409,9 @@ async function greetAfterBoot() {
   // Single-voice rule: if the server's proactive thread already spoke the
   // boot greeting, the UI only shows the text - never speaks over it.
   if (serverSpoke) return;
-  setTimeout(() => { if (typeof speak === 'function') speak(speech); }, 500);
+  // Soft sci-fi jingle first, then the spoken greeting after the music tails off.
+  setTimeout(() => { try { sfx.startupMusic(); } catch(e) {} }, 120);
+  setTimeout(() => { if (typeof speak === 'function') speak(speech); }, 1800);
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -875,10 +877,10 @@ async function fetchQuota() {
       if (dot) dot.style.background = 'rgba(52,211,153,0.7)';
       if (stext) stext.textContent = (health && health.degraded) ? 'degraded' : 'online';
     } else if (d.key_set || (health && health.key_set)) {
+      badge.textContent = 'ONLINE';
+      badge.classList.add('active');
       // Key exists: the server is up and speaking/chat still work. A slow Groq
       // probe must NEVER read as OFFLINE - only as "degraded" or "connecting".
-      badge.textContent = (d.model || 'groq').toUpperCase();
-      badge.classList.add('active');
       if (rpmEl) rpmEl.textContent = d.rpm.current;
       if (rpmMaxEl) rpmMaxEl.textContent = d.rpm.max;
       if (fill) fill.style.width = Math.round((d.bar || 0) * 100) + '%';
@@ -958,9 +960,14 @@ function dismissPermissions() {
 // ================================================
 function toast(msg, type = 'ok') {
   const c = document.getElementById('toasts');
+  if (!c) return;
+  // Dedupe: identical toasts collapse into the newest one instead of stacking.
+  const existing = Array.from(c.children).find(el => el.dataset.msg === msg);
+  if (existing) existing.remove();
   const icons = { ok: 'fa-circle-check', err: 'fa-circle-xmark', info: 'fa-circle-info' };
   const t = document.createElement('div');
   t.className = `toast t-${type}`;
+  t.dataset.msg = msg;
   t.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i><span>${msg}</span>`;
   c.appendChild(t);
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 300); }, 3000);
@@ -2097,7 +2104,7 @@ async function sendMessage(text) {
       removeTyping();
       if (data.success && data.reply) {
       addAIMessage(data.reply.text);
-      if (data.reply.command?.action === 'vault-save') { await fetch('/api/vault', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: data.reply.command.value?.text || '' }) }); toast('Saved to vault, BOSS.', 'ok'); }
+      if (data.reply.command?.action === 'vault-save') { toast('Saved to vault, BOSS.', 'ok'); }
       else if (data.reply.command?.action === 'open-chrome-bookmarks') {
         try {
           const bmr = await fetch('/api/chrome-bookmarks');
@@ -2275,7 +2282,7 @@ function speakWeb(text) {
 async function loadVoiceBadge() {
   const badge = document.getElementById('voice-badge');
   const nameEl = document.getElementById('voice-badge-name');
-  if (!nameEl) return;
+  if (!badge && !nameEl) return;
   if (badge) badge.classList.add('loading');
   try {
     const r = await fetch('/api/voice-info', { cache: 'no-store' });
@@ -2845,11 +2852,11 @@ async function pollDevices() {
     const devices = data.devices;
     
     const pending = devices.find(d => d.status === 'pending');
-    const approved = devices.find(d => d.status === 'approved');
+    const approved = devices.find(d => d.status === 'approved' && d.connected);
 
     const activeCount = document.getElementById('phone-active-count');
     if (activeCount) {
-      const approvedCount = devices.filter(d => d.status === 'approved').length;
+      const approvedCount = devices.filter(d => d.status === 'approved' && d.connected).length;
       activeCount.textContent = `${approvedCount} linked`;
     }
 
@@ -3303,9 +3310,6 @@ function applyMode(mode) {
     btn.classList.toggle('active', btn.dataset.mode === mode);
   });
   
-  const badge = document.getElementById('mode-badge');
-  if (badge) badge.textContent = mode.toUpperCase();
-  
   sfx.confirm();
   toast(`Switched to ${cfg.name} mode`, 'ok');
   
@@ -3313,6 +3317,70 @@ function applyMode(mode) {
   renderModeWelcome(mode);
   toggleAgencyPanel(mode === 'jarvis');
   loadVoiceBadge();
+  if (mode === 'jarvis') loadJarvisDeck();
+}
+
+// ================================================
+// JARVIS COMMAND DECK — academic/business briefing
+// ================================================
+async function loadJarvisDeck() {
+  const deck = document.getElementById('jarvis-deck');
+  if (!deck) return;
+  const briefEl = document.getElementById('jdeck-brief');
+  const statsEl = document.getElementById('jdeck-stats');
+  const memEl = document.getElementById('jdeck-memory');
+  try {
+    const res = await fetch('/api/briefing', { cache: 'no-store' });
+    const d = await res.json();
+    const b = d.briefing || {};
+    if (briefEl) {
+      briefEl.innerHTML = `${d.briefing.agency && d.briefing.agency.online && d.briefing.agency.online !== false ? '<i class="fa-solid fa-circle-notch fa-spin" style="font-size:8px;margin-right:4px;"></i>' : ''}<b>${b.greeting || 'Good day, Sir.'}</b> ${b.date || ''} — <span id="jdeck-clock">${b.time || '--'}</span>`;
+      setInterval(() => {
+        const c = document.getElementById('jdeck-clock');
+        if (c) c.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }, 1000);
+    }
+    if (statsEl && b.agency && b.agency.online) {
+      statsEl.innerHTML = [
+        { v: b.agency.agents_online, l: 'Agents Online' },
+        { v: b.agency.leads_today, l: 'Leads Today' },
+        { v: b.agency.missions_running, l: 'Missions' },
+        { v: b.agency.sent_outreach, l: 'Outreach Sent' },
+        { v: b.agency.meetings || 0, l: 'Meetings' },
+        { v: b.agency.pending_approval, l: 'Pending' }
+      ].map(s => `<div class="jdeck-stat"><span class="js-val">${s.v ?? '--'}</span><span class="js-lbl">${s.l}</span></div>`).join('');
+    } else if (statsEl) {
+      statsEl.innerHTML = [
+        { v: `${b.system || '--'}`, l: 'System' },
+        { v: b.battery || '--', l: 'Battery' },
+        { v: b.vaultCount ?? 0, l: 'Memories' }
+      ].map(s => `<div class="jdeck-stat"><span class="js-val">${s.v}</span><span class="js-lbl">${s.l}</span></div>`).join('');
+    }
+  } catch(e) {
+    if (briefEl) briefEl.textContent = 'Briefing unavailable.';
+  }
+  document.querySelectorAll('.jdeck-btn').forEach(btn => {
+    btn.onclick = () => { if (typeof sendMessage === 'function') sendMessage(btn.dataset.jcmd); };
+  });
+  try {
+    const r = await fetch('/api/vault', { cache: 'no-store' });
+    const v = await r.json();
+    const entries = (v.data || []).slice(0, 3);
+    if (memEl) {
+      if (!entries.length) {
+        memEl.innerHTML = '<div class="jdeck-empty"><i class="fa-solid fa-database"></i> No memories yet — tell me &quot;remember ...&quot;</div>';
+      } else {
+        memEl.innerHTML = '<div class="jmem-head" style="font-size:8px;letter-spacing:1px;color:rgba(0,212,255,0.6);margin-bottom:4px;text-transform:uppercase;">RECENT MEMORY</div>' + entries.map(e =>
+          `<div class="jmem-row"><i class="fa-solid fa-file-lines"></i><span>${escHtml(e.text)}</span></div>`
+        ).join('');
+      }
+    }
+  } catch(e) {}
+}
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : String(s);
+  return d.innerHTML;
 }
 
 async function switchMode(mode) {

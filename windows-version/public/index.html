@@ -89,19 +89,28 @@
       </div>
 
       <div class="holo-header">
-        <span class="mode-badge" id="mode-badge">OFFLINE</span>
-        <span class="voice-badge" id="voice-badge" title="Active TTS voice"><i class="fa-solid fa-microphone-lines"></i> <span id="voice-badge-name">--</span></span>
         <div class="mode-switcher">
-          <button class="mode-opt" data-mode="friday" onclick="switchMode('friday')" title="FRIDAY — Casual, witty assistant. System control, emails, timers, jokes, weather, browser. Voice: Female (Jenny/Aria).">F.R.I.D.A.Y</button>
-          <button class="mode-opt" data-mode="jarvis" onclick="switchMode('jarvis')" title="JARVIS — Formal, British AI. System control, briefings, diagnostics, process management. Voice: British Male (Ryan).">J.A.R.V.I.S</button>
-          <button class="mode-opt" data-mode="ultron" onclick="switchMode('ultron')" title="ULTRON — Gesture-controlled combat mode. Hand tracking via webcam, 3D orb, voice commands. Replaces dashboard with full-screen HUD.">U.L.T.R.O.N</button>
+          <button class="mode-opt" data-mode="friday" onclick="switchMode('friday')">F.R.I.D.A.Y</button>
+          <button class="mode-opt" data-mode="jarvis" onclick="switchMode('jarvis')">J.A.R.V.I.S</button>
+          <button class="mode-opt" data-mode="ultron" onclick="switchMode('ultron')">U.L.T.R.O.N</button>
         </div>
-        <span class="quota-pill" id="quota-pill" title="AI API usage / limit (Groq)">
-          <i class="fa-solid fa-bolt"></i>
-          <span id="quota-provider">GROQ</span>
-          <span class="quota-bar"><span class="quota-fill" id="quota-fill"></span></span>
-          <span id="quota-rpm">--</span>/<span id="quota-rpm-max">--</span>
-        </span>
+        <span class="mode-badge" id="mode-badge" title="AI API status">ONLINE</span>
+      </div>
+
+      <div class="jarvis-deck jarvis-only" id="jarvis-deck">
+        <div class="jdeck-head">
+          <span class="jdeck-title"><i class="fa-solid fa-gauge-high"></i> COMMAND DECK</span>
+          <span class="jdeck-mode"><i class="fa-solid fa-building-shield"></i> AGENCY OS</span>
+        </div>
+        <div class="jdeck-brief" id="jdeck-brief">Loading briefing...</div>
+        <div class="jdeck-stats" id="jdeck-stats"></div>
+        <div class="jdeck-actions">
+          <button class="jdeck-btn" data-jcmd="agency briefing"><i class="fa-solid fa-clipboard-list"></i><span>Briefing</span></button>
+          <button class="jdeck-btn" data-jcmd="agency new mission"><i class="fa-solid fa-bullseye"></i><span>Mission</span></button>
+          <button class="jdeck-btn" data-jcmd="agency outreach"><i class="fa-solid fa-envelope-open-text"></i><span>Outreach</span></button>
+          <button class="jdeck-btn" data-jcmd="agenda"><i class="fa-solid fa-list-check"></i><span>Agenda</span></button>
+        </div>
+        <div class="jdeck-memory" id="jdeck-memory"></div>
       </div>
 
       <div class="sys-monitor" id="sys-monitor">
@@ -256,6 +265,10 @@
         <div class="ambient-chip hidden" id="ambient-remote">
           <i class="fa-solid fa-tower-broadcast"></i>
           <span id="ambient-remote-text">Remote</span>
+        </div>
+        <div class="ambient-chip" style="cursor:pointer" onclick="toggleOverlay()" title="Open mini connector overlay — CPU / RAM / quick actions">
+          <i class="fa-solid fa-window-restore"></i>
+          <span>Connector</span>
         </div>
       </div>
 
