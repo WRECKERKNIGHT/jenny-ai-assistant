@@ -53,6 +53,10 @@ system_cache = {"cpu": 0, "ram": 0, "battery": 100, "charging": False, "disk": 0
 
 # Groq API usage/limit tracking (shared by the usage bars in every mode).
 GROQ_LIMITS = {"rpm_max": 30, "tpm_max": 6000}
+# Ordered candidate models: the first that the account can actually use wins.
+# Accounts often lose access to older model ids (e.g. llama-3.3-70b-versatile
+# returns 404), so we walk the list and cache the first working one.
+GROQ_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]
 GROQ_USAGE = {
     "requests": 0,
     "prompt_tokens": 0,
@@ -60,8 +64,31 @@ GROQ_USAGE = {
     "total_tokens": 0,
     "session_started": None,
     "minute": {"ts": None, "requests": 0, "tokens": 0},
-    "model": "llama-3.3-70b-versatile",
+    "model": GROQ_MODELS[0],
 }
+_GROQ_MODEL_CACHE = {"id": None, "ts": 0}
+_GROQ_MODEL_TTL = 60
+
+def _groq_working_model():
+    """Return a verified working Groq chat model, probing candidates if needed."""
+    now = time.time()
+    if _GROQ_MODEL_CACHE["id"] and (now - _GROQ_MODEL_CACHE["ts"]) < _GROQ_MODEL_TTL:
+        return _GROQ_MODEL_CACHE["id"]
+    key = get_grok_key()
+    if not key:
+        return GROQ_MODELS[0]
+    for model in GROQ_MODELS:
+        try:
+            payload = json.dumps({"model": model, "messages": [{"role": "user", "content": "OK"}], "max_tokens": 2}).encode("utf-8")
+            req = urllib.request.Request("https://api.groq.com/openai/v1/chat/completions", data=payload, headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}", "User-Agent": "Mozilla/5.0"}, method="POST")
+            urllib.request.urlopen(req, timeout=8)
+            _GROQ_MODEL_CACHE.update({"id": model, "ts": now})
+            return model
+        except Exception:
+            continue
+    _GROQ_MODEL_CACHE.update({"id": GROQ_MODELS[0], "ts": now})
+    return GROQ_MODELS[0]
+
 _usage_lock = threading.Lock()
 
 def track_grok_usage(usage):
@@ -92,7 +119,7 @@ def groq_usage_snapshot():
             "success": True,
             "provider": "groq",
             "key_set": bool(get_grok_key()),
-            "model": GROQ_USAGE["model"],
+            "model": _groq_working_model(),
             "rpm": {"current": rpm, "max": GROQ_LIMITS["rpm_max"]},
             "tpm": {"current": tpm, "max": GROQ_LIMITS["tpm_max"]},
             "session": {
@@ -474,8 +501,9 @@ def grok_chat(message, history=None):
                 role = "user" if h.get("role") == "user" else "assistant"
                 messages.append({"role": role, "content": h.get("content", "")})
         messages.append({"role": "user", "content": message})
+        model = _groq_working_model()
         payload = json.dumps({
-            "model": "llama-3.3-70b-versatile",
+            "model": model,
             "messages": messages,
             "temperature": 0.7,
             "max_tokens": 400,
@@ -1347,6 +1375,34 @@ def local_command_router(msg):
     m = re.search(r"(?:set|turn|adjust)\s*.*?volume\s+(?:to|at)?\s*(\d+)", lo)
     if m:
         return {"text": f"Volume set to {m.group(1)}%, {boss}!", "speech": f"Volume set to {m.group(1)} percent.", "command": {"action": "volume", "value": m.group(1)}}
+    m = re.search(r"(?:^|\s)volume\s+(?:to|at)?\s*(\d+)", lo)
+    if m:
+        return {"text": f"Volume set to {m.group(1)}%, {boss}!", "speech": f"Volume set to {m.group(1)} percent.", "command": {"action": "volume", "value": m.group(1)}}
+    if any(w in lo for w in ["purge ram", "clean ram", "free up ram", "clear ram", "clear memory"]):
+        return {"text": f"Cleaning up memory, {boss}!", "speech": "Cleaning up memory.", "command": {"action": "purge-ram", "value": ""}}
+    if any(w in lo for w in ["read my emails", "read emails", "check emails", "check my email", "read email inbox"]):
+        return {"text": "Opening your email inbox, Boss!", "speech": "Opening your email inbox.", "command": {"action": "open-chrome", "value": "https://mail.google.com"}}
+    if any(w in lo for w in ["wake mac display", "wake display", "wake the display", "wake screen", "turn on display"]):
+        return {"text": "Waking the display, Boss!", "speech": "Waking the display.", "command": {"action": "wake-display", "value": ""}}
+    m = re.search(r"(?:take|make|add|save|write)\s+a?\s*(?:note|notepad)(?:\s*(?:that|saying|for|:|-)\s*(.+))?(?:\s*(?:in|to|into)\s+(?:my\s+|the\s+)?(?:memory|vault|notes|brain))?$", lo)
+    if m:
+        note = (m.group(1) or "").strip()
+        note = re.sub(r"\s+(?:in|to|into)\s+(?:my\s+)?(?:memory|vault|notes|brain)\s*$", "", note).strip()
+        if note:
+            return {"text": f"Saved to the memory vault: **{note}**, {boss}.", "speech": f"Saved to memory: {note}.", "command": {"action": "vault-save", "value": {"text": note}}}
+        else:
+            return {"text": "Ready for your note, Boss. Tell me what to write after 'note'.", "speech": "I'm ready for your note.", "command": {"action": "note-prompt", "value": ""}}
+    if any(w in lo for w in ["tell me a joke", "tell me a funny joke", "crack a joke", "give me a joke"]):
+        _jokes = [
+            ("Why don't scientists trust atoms? Because they make up everything!", "Why don't scientists trust atoms? Because they make up everything!"),
+            ("Why did the scarecrow win an award? Because he was outstanding in his field!", "Why did the scarecrow win an award? Because he was outstanding in his field!"),
+            ("I told my computer I needed a break, and now it won't stop sending me KitKat ads.", "I told my computer I needed a break, and now it won't stop sending me KitKat ads."),
+            ("Why do programmers prefer dark mode? Because light attracts bugs!", "Why do programmers prefer dark mode? Because light attracts bugs!"),
+            ("I would tell you a UDP joke, but you might not get it.", "I would tell you a UDP joke, but you might not get it."),
+        ]
+        import random as _rnd
+        _j = _rnd.choice(_jokes)
+        return {"text": _j[0], "speech": _j[1]}
     if any(w in lo for w in ["mute", "volume mute"]):
         return {"text": f"Muted, {boss}.", "speech": "Muted.", "command": {"action": "volume", "value": "mute"}}
     if any(w in lo for w in ["unmute", "unmuted"]):
@@ -2002,7 +2058,7 @@ def api_health():
         "key_set": key_set,
         "api_reachable": bool(api_ok),
         "api_latency_ms": api_latency,
-        "model": GROQ_USAGE["model"] if chat == "groq" else "gemini-2.0-flash" if chat == "gemini" else None,
+        "model": _groq_working_model() if chat == "groq" else "gemini-2.0-flash" if chat == "gemini" else None,
         "tts": {"engine": "edge-tts" if tts_engine.edge_tts_available() else "SAPI-fallback", "speaking": bool(tts_engine.status().get("speaking"))},
         "mic": {"count": len(mics), "devices": mics[:4]},
         "uptime_seconds": int(time.time() - SERVER_START),
@@ -2364,6 +2420,16 @@ def api_control():
             if value == "unmute": vol.SetMute(0, None); return jsonify({"success": True, "message": "Unmuted."})
             vol.SetMasterVolumeLevelScalar(int(value)/100.0, None); return jsonify({"success": True, "message": f"Volume set to {value}%."})
         except: return jsonify({"success": False, "error": "Volume control failed"})
+    if lo == "wake-display":
+        try:
+            subprocess.Popen(["powershell", "-command", "(New-Object -ComObject WScript.Shell).SendKeys('{SCROLLLOCK}')"], creationflags=subprocess.CREATE_NO_WINDOW)
+            return jsonify({"success": True, "message": "Display woken."})
+        except: return jsonify({"success": False})
+    if lo == "purge-ram":
+        try:
+            subprocess.Popen(["powershell", "-command", "$M='GetProcessMemoryInfo';Add-Type -Namespace Win32 -Name P -MemberDefinition '[DllImport(\"psapi.dll\")] public static extern bool EmptyWorkingSet(IntPtr hProcess);';Get-Process|ForEach-Object{$P::EmptyWorkingSet($_.Handle)};'Memory flushed.'|Write-Output"], creationflags=subprocess.CREATE_NO_WINDOW)
+            return jsonify({"success": True, "message": "Memory flush started."})
+        except: return jsonify({"success": False})
     if lo == "lock":
         try: ctypes.windll.user32.LockWorkStation(); return jsonify({"success": True, "message": "Locked."})
         except: return jsonify({"success": False})
@@ -2404,9 +2470,15 @@ def api_control():
             return jsonify({"success": True, "ssid": ssid, "signal": sig})
         except: return jsonify({"success": False})
     if lo == "open-app":
-        apps = {"notepad": "notepad.exe", "calculator": "calc.exe", "paint": "mspaint.exe", "chrome": "chrome", "edge": "msedge", "vscode": "code", "spotify": "spotify", "discord": "discord"}
+        apps = {"notepad": "notepad.exe", "calculator": "calc.exe", "paint": "mspaint.exe", "chrome": "chrome", "edge": "msedge", "vscode": "code", "spotify": "spotify", "discord": "discord",
+                "task manager": "taskmgr.exe", "taskmanager": "taskmgr.exe", "terminal": "wt.exe", "cmd": "cmd.exe", "youtube": "https://www.youtube.com", "files": "explorer.exe", "explorer": "explorer.exe",
+                "control panel": "control.exe", "settings": "ms-settings:", "mail": "outlook.exe", "whatsapp": "whatsapp.exe", "telegram": "telegram.exe", "browser": "chrome", "firefox": "firefox"}
         name = str(value).lower(); target = apps.get(name, value)
-        try: subprocess.Popen(target, shell=True); return jsonify({"success": True, "message": f"Opened {value}."})
+        try:
+            if target.startswith("http://") or target.startswith("https://") or target.startswith("ms-settings:"):
+                webbrowser.open(target)
+                return jsonify({"success": True, "message": f"Opened {value}."})
+            subprocess.Popen(target, shell=True); return jsonify({"success": True, "message": f"Opened {value}."})
         except: return jsonify({"success": False})
     if lo == "close-app":
         try: subprocess.run(["taskkill", "/f", "/im", f"{value}.exe"], capture_output=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW); return jsonify({"success": True})

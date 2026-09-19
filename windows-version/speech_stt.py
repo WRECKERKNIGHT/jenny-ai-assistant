@@ -110,26 +110,64 @@ def peak_level(data, samplerate: int = DEFAULT_SAMPLE_RATE) -> float:
 
 def record_seconds(seconds: int = 5, samplerate: int = DEFAULT_SAMPLE_RATE,
                    device: int | None = None) -> bytes | None:
-    """Record `seconds` of audio from the microphone and return WAV bytes."""
+    """Record `seconds` of audio from the microphone and return WAV bytes.
+
+    Uses voice-activity detection: capture stops early (~0.7s of trailing
+    silence) once the user stops speaking, so replies feel instant instead of
+    always waiting out the full window."""
     if sd is None or np is None:
         return None
     seconds = max(1, min(int(seconds), 12))
     dev = pick_device(device)
     if dev is None:
         raise RuntimeError("no_mic")
+    samplerate = int(samplerate)
+    CHUNK = int(0.1 * samplerate)          # 100ms analysis blocks
+    silence_tail = int(0.7 * samplerate)   # stop ~0.7s after speech ends
+    frames = []
+    last_voice_at = 0
+    started = False
+    waited_silence = 0
     try:
-        data = sd.rec(int(seconds * samplerate), samplerate=samplerate,
-                      channels=DEFAULT_CHANNELS, dtype="int16", device=dev)
-        sd.wait()
-        level = peak_level(data, samplerate)
-        if level < 0.0005:
-            # Essentially silence - likely the wrong device or mic muted.
-            return None
-        return _to_wav(data, samplerate)
+        with sd.InputStream(samplerate=samplerate, channels=DEFAULT_CHANNELS,
+                            dtype="int16", device=dev) as stream:
+            first = True
+            for _ in range(int(seconds * samplerate) // CHUNK + 4):
+                # warm-up: consume ~0.25s so any start-click settles
+                if first:
+                    for _ in range(2):
+                        stream.read(CHUNK)
+                    first = False
+                in_data, _ = stream.read(CHUNK)
+                frames.append(in_data)
+                lvl = peak_level(in_data, samplerate)
+                if lvl > 0.003:
+                    started = True
+                    waited_silence = 0
+                    last_voice_at = len(frames)
+                else:
+                    waited_silence += CHUNK
+                # Early stop once we heard speech then a quiet tail.
+                if started and waited_silence >= silence_tail:
+                    break
+            # If nothing but silence the whole window, bail.
+            if not started:
+                return None
+            # Keep only the audio up to the last voiced block (+tail).
+            keep = last_voice_at + int(silence_tail / CHUNK)
+            frames = frames[:keep]
     except Exception as e:
         if _is_device_unavailable(e):
             raise RuntimeError("device_busy") from e
         return None
+
+    if not frames:
+        return None
+    data = np.concatenate([np.asarray(f, dtype=np.int16) for f in frames])
+    level = peak_level(data, samplerate)
+    if level < 0.0005:
+        return None
+    return _to_wav(data, samplerate)
 
 
 def _is_device_unavailable(e: Exception) -> bool:
