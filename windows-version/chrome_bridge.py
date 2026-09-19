@@ -141,8 +141,74 @@ def search(query: str, engine: str = "google") -> str:
     return url if r.get("success") else ""
 
 
-def youtube(search_query: str) -> str:
-    return search(search_query, engine="youtube")
+def _key_combo(*vk_codes: int):
+    """Send a chord of virtual key codes (Ctrl then keys) to the foreground window."""
+    import ctypes
+    keys = list(vk_codes)
+    for vk in keys:
+        ctypes.windll.user32.keybd_event(vk, 0, 0, 0)
+    for vk in reversed(keys):
+        ctypes.windll.user32.keybd_event(vk, 0, 2, 0)
+
+
+_CTRL = 0x11
+_VK_T = 0x54
+_VK_W = 0x57
+_VK_R = 0x52
+_VK_LEFT = 0x25
+_VK_RIGHT = 0x27
+_VK_F5 = 0x74
+
+
+def _focus_chrome_window() -> bool:
+    """No-op kept for clarity: CDP /json/activate already raises tabs."""
+    return _port_open()
+
+
+def navigate_back() -> bool:
+    if not _port_open():
+        return False
+    _key_combo(0x12, _VK_LEFT)   # Alt + Left
+    return True
+
+
+def navigate_forward() -> bool:
+    if not _port_open():
+        return False
+    _key_combo(0x12, _VK_RIGHT)  # Alt + Right
+    return True
+
+
+def reload() -> bool:
+    if not _port_open():
+        return False
+    _key_combo(_CTRL, _VK_R)     # Ctrl + R
+    return True
+
+
+def new_tab() -> bool:
+    if not _port_open():
+        return False
+    _key_combo(_CTRL, _VK_T)     # Ctrl + T
+    return True
+
+
+def close_current_tab() -> bool:
+    if not _port_open():
+        return False
+    _key_combo(_CTRL, _VK_W)     # Ctrl + W
+    return True
+
+
+def fullscreen() -> bool:
+    if not _port_open():
+        return False
+    _key_combo(0x7A)             # F11 = 0x7A
+    return True
+
+
+def youtube(query: str) -> str:
+    return search(query, engine="youtube")
 
 
 def status() -> dict:

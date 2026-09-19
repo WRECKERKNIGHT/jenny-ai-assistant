@@ -1358,6 +1358,14 @@ def local_command_router(msg):
     if m:
         q = m.group(1).strip()
         return {"text": f"Playing **{q}** on YouTube, {boss}!", "speech": f"Playing {q} on YouTube.", "command": {"action": "chrome-youtube", "value": q}}
+    if any(w in lo for w in ["chrome back", "go back in chrome", "back in chrome"]):
+        return {"text": f"Going back, {boss}!", "speech": "Going back in Chrome.", "command": {"action": "chrome-back", "value": ""}}
+    if any(w in lo for w in ["chrome forward", "go forward in chrome", "forward in chrome"]):
+        return {"text": f"Going forward, {boss}!", "speech": "Going forward in Chrome.", "command": {"action": "chrome-forward", "value": ""}}
+    if any(w in lo for w in ["refresh chrome", "reload chrome", "refresh the chrome tab"]):
+        return {"text": f"Refreshing Chrome, {boss}!", "speech": "Refreshing Chrome.", "command": {"action": "chrome-reload", "value": ""}}
+    if any(w in lo for w in ["chrome fullscreen", "fullscreen chrome", "full screen chrome"]):
+        return {"text": f"Fullscreen Chrome, {boss}!", "speech": "Fullscreen Chrome.", "command": {"action": "chrome-fullscreen", "value": ""}}
 
     # BROWSER / SEARCH
     m = re.search(r"(?:play|search for|search|find)\s+(.+?)\s+(?:on|in)\s+youtube\b", lo)
@@ -2432,7 +2440,8 @@ def api_control():
         pendingDeviceCommands.setdefault(did, []).append({"action": str(value.get("action", "toast")), "value": str(value.get("value", "")), "timestamp": int(time.time() * 1000)})
         return jsonify({"success": True, "message": "Command sent to phone."})
     if lo in ("chrome-open", "chrome-search", "chrome-youtube", "chrome-list",
-              "chrome-activate", "chrome-close"):
+              "chrome-activate", "chrome-close", "chrome-back", "chrome-forward",
+              "chrome-reload", "chrome-new-tab", "chrome-close-tab", "chrome-fullscreen"):
         try:
             import chrome_bridge
             if lo == "chrome-open":
@@ -2459,6 +2468,16 @@ def api_control():
             if lo == "chrome-close":
                 ok = chrome_bridge.close(str(value))
                 return jsonify({"success": ok, "message": str(value) if ok else "tab not found"})
+            _nav = {
+                "chrome-back": chrome_bridge.navigate_back,
+                "chrome-forward": chrome_bridge.navigate_forward,
+                "chrome-reload": chrome_bridge.reload,
+                "chrome-new-tab": chrome_bridge.new_tab,
+                "chrome-close-tab": chrome_bridge.close_current_tab,
+                "chrome-fullscreen": chrome_bridge.fullscreen,
+            }
+            ok = _nav[lo]()
+            return jsonify({"success": ok, "message": f"Chrome {lo.split('-')[-1]}" if ok else "chrome nav failed"})
         except Exception as e:
             return jsonify({"success": False, "error": str(e)})
 
