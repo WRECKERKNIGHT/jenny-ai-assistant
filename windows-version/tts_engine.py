@@ -317,27 +317,28 @@ def _sapi_speak(text: str, mode: str | None) -> None:
         natural_kws, legacy_kws, rate = SAPI_PROFILES.get(mode, SAPI_PROFILES["friday"])
         try:
             descs = [(v, v.GetDescription().lower()) for v in voice.GetVoices()]
-            picked = None
-            for kw in natural_kws:
-                for v, d in descs:
-                    if kw in d and ("natural" in d or "online" in d):
-                        picked = v
-                        break
-                if picked:
-                    break
-            if picked is None:
-                for v, d in descs:
+            if not descs:
+                raise RuntimeError("no sapi voices")
+            en = [t for t in descs if "en" in t[1]]
+
+            def pick_weighted():
+                # Heuristic: natural/online voices sound best — rank them first,
+                # then persona keywords, and fall back to any English voice.
+                best, best_score = None, -1
+                for v, d in en or descs:
+                    score = 0
                     if "natural" in d or "online" in d:
-                        picked = v
-                        break
-            if picked is None:
-                for kw in legacy_kws:
-                    for v, d in descs:
+                        score += 4
+                    wanted = natural_kws if ("natural" in d or "online" in d) else legacy_kws
+                    for i, kw in enumerate(wanted):
                         if kw in d:
-                            picked = v
+                            score += (len(wanted) - i)
                             break
-                    if picked:
-                        break
+                    if score > best_score:
+                        best_score, best = score, v
+                return best if best_score > -1 else None
+
+            picked = pick_weighted()
             if picked is not None:
                 voice.Voice = picked
             voice.Rate = rate
