@@ -741,6 +741,82 @@ body.light-mode .phone-link-panel {
   50% { clip-path: inset(95% 0% 0% 0%); opacity: 0.8; }
 }
 
+/* Futuristic holographic QR stage */
+.qr-holo-wrap {
+  position: relative;
+  width: 220px; height: 220px;
+  display: flex; justify-content: center; align-items: center;
+}
+.qr-holo-wrap .qr-container-box {
+  width: 172px; height: 172px;
+  background: rgba(10, 16, 28, 0.85);
+  box-shadow: 0 0 40px rgba(0, 212, 230, 0.18), inset 0 0 20px rgba(0, 212, 230, 0.06);
+  border: 1px solid rgba(0, 212, 230, 0.25);
+  z-index: 2;
+}
+.qr-holo-wrap .qr-container-box img { filter: drop-shadow(0 0 8px rgba(0, 212, 230, 0.35)); }
+.qr-orbit-ring {
+  position: absolute; inset: 6px; border-radius: 24px;
+  border: 1px dashed rgba(0, 212, 230, 0.18);
+  animation: qr-orbit-spin 16s linear infinite;
+  pointer-events: none;
+}
+@keyframes qr-orbit-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.qr-corner {
+  position: absolute; width: 26px; height: 26px; z-index: 3;
+  pointer-events: none;
+}
+.qc-tl { top: 0; left: 0; border-top: 3px solid var(--gold); border-left: 3px solid var(--gold); border-top-left-radius: 10px; }
+.qc-tr { top: 0; right: 0; border-top: 3px solid var(--gold); border-right: 3px solid var(--gold); border-top-right-radius: 10px; }
+.qc-bl { bottom: 0; left: 0; border-bottom: 3px solid var(--gold); border-left: 3px solid var(--gold); border-bottom-left-radius: 10px; }
+.qc-br { bottom: 0; right: 0; border-bottom: 3px solid var(--gold); border-right: 3px solid var(--gold); border-bottom-right-radius: 10px; }
+.qr-scan-laser {
+  position: absolute; left: 14px; right: 14px; height: 2px; z-index: 4;
+  background: linear-gradient(90deg, transparent, #00d4e6, transparent);
+  filter: drop-shadow(0 0 6px #00d4e6);
+  border-radius: 2px;
+  animation: qr-laser-sweep 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes qr-laser-sweep {
+  0%, 100% { top: 26px; opacity: 0.25; }
+  50% { top: 188px; opacity: 1; }
+}
+.qr-holo-chip {
+  position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+  font-family: var(--mono); font-size: 8px; font-weight: 700;
+  letter-spacing: 2.5px; color: var(--gold);
+  background: rgba(10, 22, 38, 0.96);
+  border: 1px solid rgba(229, 193, 88, 0.4);
+  border-radius: 20px; padding: 3px 10px; white-space: nowrap;
+  box-shadow: 0 0 14px rgba(229, 193, 88, 0.25);
+  z-index: 5;
+}
+.qr-holo-chip i { margin-right: 5px; }
+.qr-particle {
+  position: absolute; width: 5px; height: 5px; border-radius: 50%;
+  background: #00d4e6; opacity: 0.55;
+  filter: drop-shadow(0 0 4px #00d4e6);
+  animation: qr-particle-float 4.5s ease-in-out infinite;
+  pointer-events: none;
+}
+.qr-particle.p1 { top: 16px; left: 30px; }
+.qr-particle.p2 { bottom: 20px; right: 26px; animation-delay: 1.6s; }
+.qr-particle.p3 { top: 52px; right: 12px; animation-delay: 3s; background: var(--gold); filter: drop-shadow(0 0 4px var(--gold)); }
+@keyframes qr-particle-float {
+  0%, 100% { transform: translate(0, 0); opacity: 0.25; }
+  50% { transform: translate(8px, -14px); opacity: 0.9; }
+}
+body.mode-ultron .qr-holo-wrap .qr-container-box { box-shadow: 0 0 40px rgba(255,62,62,0.15), inset 0 0 20px rgba(255,62,62,0.05); border-color: rgba(255,62,62,0.25); }
+body.mode-ultron .qr-holo-wrap .qr-container-box img { filter: drop-shadow(0 0 8px rgba(255,62,62,0.35)); }
+body.mode-ultron .qr-orbit-ring { border-color: rgba(255,62,62,0.18); }
+body.mode-ultron .qr-scan-laser { background: linear-gradient(90deg, transparent, #ff3e3e, transparent); filter: drop-shadow(0 0 6px #ff3e3e); }
+body.mode-ultron .qr-particle { background: #ff3e3e; filter: drop-shadow(0 0 4px #ff3e3e); }
+body.mode-ultron .qr-particle.p3 { background: var(--gold); filter: drop-shadow(0 0 4px var(--gold)); }
+
 .phone-link-label {
   font-family: var(--mono); font-size: 11px;
   letter-spacing: 2px; color: var(--gold); font-weight: 700;
@@ -1343,3 +1419,116 @@ body.mode-ultron .orb-click-zone { box-shadow: 0 0 40px rgba(255,62,62,0.3), ins
 body.mode-ultron .orb-click-zone:hover { box-shadow: 0 0 60px rgba(255,62,62,0.5), inset 0 0 40px rgba(255,62,62,0.15); }
 body.mode-ultron .holo-projection .proj-line { background: linear-gradient(to bottom, transparent, rgba(255,62,62,0.2), transparent); }
 body.mode-ultron .wave-bar { background: rgba(255,62,62,0.4); }
+
+/* ==========================================
+   FUTURISTIC CALL WIDGET + CALL PHONE BUTTON
+   ========================================== */
+.call-phone-btn {
+  margin-top: 14px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(229, 193, 88, 0.35);
+  background: linear-gradient(135deg, rgba(229, 193, 88, 0.12), rgba(229, 193, 88, 0.03));
+  color: var(--gold);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 16px rgba(229, 193, 88, 0.08);
+}
+.call-phone-btn:hover {
+  background: linear-gradient(135deg, rgba(229, 193, 88, 0.22), rgba(229, 193, 88, 0.1));
+  border-color: var(--gold);
+  box-shadow: 0 0 24px rgba(229, 193, 88, 0.25);
+  transform: translateY(-1px);
+}
+.call-phone-btn i { font-size: 14px; }
+
+.call-widget {
+  margin-top: 16px;
+  border: 1px solid rgba(0, 212, 230, 0.3);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(0, 212, 230, 0.08), rgba(0, 0, 0, 0.25));
+  padding: 10px;
+  animation: call-widget-glow 2.2s ease-in-out infinite;
+}
+@keyframes call-widget-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(0, 212, 230, 0.1); }
+  50% { box-shadow: 0 0 20px rgba(0, 212, 230, 0.3); }
+}
+.call-widget.hidden { display: none; }
+.call-widget-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.call-widget-pulse {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #00d4e6;
+  box-shadow: 0 0 10px rgba(0, 212, 230, 0.8);
+  animation: call-pulse-dot 1.1s ease-in-out infinite;
+}
+@keyframes call-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.7); }
+}
+.call-widget-label {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  color: #00d4e6;
+  font-weight: 700;
+}
+.call-widget-timer {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--gold);
+  letter-spacing: 1px;
+}
+.call-widget-feed {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 110px;
+  overflow-y: auto;
+}
+.call-widget-line {
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.call-widget-line .cw-who {
+  font-family: var(--mono);
+  font-size: 7px;
+  font-weight: 700;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  flex-shrink: 0;
+}
+.call-widget-line .cw-txt { color: var(--txt2); word-break: break-word; }
+
+body.mode-ultron .call-phone-btn { border-color: rgba(255,62,62,0.35); color: #ff3e3e; background: linear-gradient(135deg, rgba(255,62,62,0.12), rgba(255,62,62,0.03)); box-shadow: 0 0 16px rgba(255,62,62,0.08); }
+body.mode-ultron .call-phone-btn:hover { border-color: #ff3e3e; background: linear-gradient(135deg, rgba(255,62,62,0.22), rgba(255,62,62,0.1)); box-shadow: 0 0 24px rgba(255,62,62,0.25); }
+body.mode-ultron .call-widget { border-color: rgba(255,62,62,0.3); background: linear-gradient(180deg, rgba(255,62,62,0.08), rgba(0,0,0,0.25)); }
+body.mode-ultron .call-widget-label { color: #ff6b35; }
+body.mode-ultron .call-widget-pulse { background: #ff3e3e; box-shadow: 0 0 10px rgba(255,62,62,0.8); }
+body.mode-ultron .call-widget { animation-name: call-widget-glow-red; }
+@keyframes call-widget-glow-red {
+  0%, 100% { box-shadow: 0 0 8px rgba(255,62,62,0.1); }
+  50% { box-shadow: 0 0 20px rgba(255,62,62,0.3); }
+}
