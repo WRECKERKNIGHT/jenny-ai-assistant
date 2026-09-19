@@ -138,6 +138,33 @@
       text-transform: uppercase;
       font-weight: 600;
     }
+    .mic-lang-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 2px;
+    }
+    .mic-lang-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--gold-dim);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 6px 12px;
+      color: var(--gold);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      cursor: pointer;
+    }
+    .mic-lang-chip:active { opacity: 0.7; }
+    .mic-lang-note {
+      font-size: 9px;
+      color: var(--silver);
+      opacity: 0.7;
+    }
 
     /* TELEMETRY METERS */
     .telemetry-row {
@@ -628,6 +655,10 @@
         <i class="fa-solid fa-microphone"></i>
       </div>
       <div class="orb-hint" id="orb-hint">TAP ORB FOR VOICE COMMAND</div>
+      <div class="mic-lang-row">
+        <button id="mic-lang-btn" class="mic-lang-chip" onclick="toggleMicLang()"><i class="fa-solid fa-language"></i> <span id="mic-lang-txt">EN</span></button>
+        <span class="mic-lang-note">Hi/EN toggle for PC-mic voice</span>
+      </div>
       <button id="start-call-btn" style="margin-top:10px;width:100%;background:radial-gradient(circle at 50% 50%, rgba(0,212,230,0.2), rgba(0,0,0,0.6));border:1px solid rgba(0,212,230,0.5);border-radius:14px;padding:12px;color:#00d4e6;font-family:var(--mono);font-size:12px;letter-spacing:2px;font-weight:700;">
         <i class="fa-solid fa-phone-volume"></i> CALL J.E.N.N.Y.
       </button>
@@ -656,7 +687,7 @@
         <i class="fa-solid fa-car"></i> On Way Home
       </div>
       <div class="ctrl-card" data-cmd="wake mac display">
-        <i class="fa-solid fa-sun"></i> Wake Mac
+        <i class="fa-solid fa-sun"></i> Wake Display
       </div>
       <div class="ctrl-card" data-cmd="lock screen">
         <i class="fa-solid fa-lock"></i> Lock Screen
@@ -678,6 +709,36 @@
       </div>
       <div class="ctrl-card" data-cmd="take screenshot">
         <i class="fa-solid fa-camera"></i> Screenshot
+      </div>
+      <div class="ctrl-card" data-cmd="empty trash">
+        <i class="fa-solid fa-trash-can"></i> Empty Recycle Bin
+      </div>
+      <div class="ctrl-card" data-cmd="open terminal">
+        <i class="fa-solid fa-terminal"></i> Open Terminal
+      </div>
+      <div class="ctrl-card" data-cmd="open task manager">
+        <i class="fa-solid fa-list"></i> Task Manager
+      </div>
+      <div class="ctrl-card" data-cmd="mute">
+        <i class="fa-solid fa-volume-xmark"></i> Mute PC
+      </div>
+      <div class="ctrl-card" data-cmd="what's the weather">
+        <i class="fa-solid fa-cloud-sun"></i> Weather
+      </div>
+      <div class="ctrl-card" data-cmd="what's today's news">
+        <i class="fa-solid fa-newspaper"></i> News
+      </div>
+      <div class="ctrl-card" data-cmd="open chrome">
+        <i class="fa-solid fa-globe"></i> Chrome
+      </div>
+      <div class="ctrl-card" data-cmd="open spotify">
+        <i class="fa-solid fa-music"></i> Spotify
+      </div>
+      <div class="ctrl-card" data-cmd="take a note">
+        <i class="fa-solid fa-note-sticky"></i> Quick Note
+      </div>
+      <div class="ctrl-card" data-cmd="tell me a joke">
+        <i class="fa-solid fa-face-laugh"></i> Joke
       </div>
     </div>
 
@@ -825,6 +886,45 @@
       if (/safari/i.test(ua) && !/chrome/i.test(ua)) return 'Safari';
       if (/firefox/i.test(ua)) return 'Firefox';
       return 'Web Browser';
+    }
+
+    // ---------- STT language (EN / HI) toggle for PC-mic voice ----------
+    window.__sttLang = 'en';
+    async function syncMicLang() {
+      try {
+        const r = await fetch(serverUrl + '/api/stt/language');
+        const d = await r.json();
+        const cur = (d && (d.language || d.current || '')) || '';
+        window.__sttLang = (String(cur)).toLowerCase().startsWith('hi') ? 'hi' : 'en';
+      } catch (e) {}
+      const txtEl = document.getElementById('mic-lang-txt');
+      if (txtEl) txtEl.textContent = window.__sttLang === 'hi' ? 'HI' : 'EN';
+      let micLangBtn = document.getElementById('mic-lang-btn');
+      if (micLangBtn) {
+        micLangBtn.style.color = window.__sttLang === 'hi' ? '#ff6b6b' : '#ffd700';
+        micLangBtn.style.borderColor = window.__sttLang === 'hi' ? 'rgba(255,107,107,0.5)' : 'rgba(255,215,0,0.5)';
+      }
+    }
+    async function setMicLang(lang) {
+      window.__sttLang = lang === 'hi' ? 'hi' : 'en';
+      try {
+        await fetch(serverUrl + '/api/stt/language', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ language: window.__sttLang })
+        });
+      } catch (e) {}
+      const txtEl = document.getElementById('mic-lang-txt');
+      if (txtEl) txtEl.textContent = window.__sttLang === 'hi' ? 'HI' : 'EN';
+      let micLangBtn = document.getElementById('mic-lang-btn');
+      if (micLangBtn) {
+        micLangBtn.style.color = window.__sttLang === 'hi' ? '#ff6b6b' : '#ffd700';
+        micLangBtn.style.borderColor = window.__sttLang === 'hi' ? 'rgba(255,107,107,0.5)' : 'rgba(255,215,0,0.5)';
+      }
+      showMobileToast(window.__sttLang === 'hi' ? 'Voice language: Hindi' : 'Voice language: English');
+    }
+    function toggleMicLang() {
+      setMicLang(window.__sttLang === 'hi' ? 'en' : 'hi');
     }
 
     async function checkDeviceAuth() {
@@ -1007,6 +1107,7 @@
 
     checkDeviceAuth();
     setInterval(pollAuthStatus, 1500);
+    syncMicLang();
 
     async function executeRemote(cmd) {
       if (!cmd.trim()) return;
@@ -1076,12 +1177,18 @@
     });
 
     // REAL-TIME DICTATION & VOICE MIC CONTROL
+    // NOTE: mobile browsers block the *phone* mic on plain http:// LAN (insecure
+    // context). We auto-detect and fall back to the PC's microphone via the
+    // server (/api/stt/record) so voice commands still work over LAN.
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const isSecureCtx = window.isSecureContext === true || location.protocol === 'https:';
+    const PC_MIC_FALLBACK = !(isSecureCtx && SR && navigator.mediaDevices);
     let recognition = null;
     let listening = false;
     let dictationTimer = null;
+    let pcMicListening = false;
 
-    if (SR) {
+    if (isSecureCtx && SR) {
       recognition = new SR();
       recognition.continuous = true;
       recognition.interimResults = true;
@@ -1124,21 +1231,58 @@
         micOrb.classList.remove('listening');
         orbHint.textContent = 'TAP ORB FOR VOICE COMMAND';
       };
+    }
 
-      micOrb.addEventListener('click', async () => {
-        if (listening) {
-          recognition.stop();
+    async function orbListenPcMic() {
+      if (pcMicListening) return;
+      pcMicListening = true;
+      micOrb.classList.add('listening');
+      orbHint.textContent = 'PC MIC LISTENING... SPEAK NEAR LAPTOP';
+      appendLog('GENIE', 'Using PC microphone... speak near the laptop.');
+      try {
+        const res = await fetch(serverUrl + '/api/stt/record', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ seconds: 8, language: window.__sttLang || (navigator.language && navigator.language.toLowerCase().indexOf('hi') >= 0 ? 'hi' : 'en') })
+        });
+        const d = await res.json();
+        if (d.success && d.text && d.text.trim()) {
+          appendLog('YOU', d.text.trim());
+          executeRemote(d.text.trim());
+        } else if (d.error) {
+          appendLog('JENNY', 'Mic: ' + d.error);
+          orbHint.textContent = 'MIC ERROR - RETRY';
+          setTimeout(() => { orbHint.textContent = 'TAP ORB FOR VOICE (PC MIC)'; }, 1600);
         } else {
-          try {
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-              await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
-            }
-            recognition.start();
-          } catch (e) {
-            orbHint.textContent = 'MIC ACCESS DENIED';
-          }
+          orbHint.textContent = 'NO SPEECH - RETRY';
+          setTimeout(() => { orbHint.textContent = 'TAP ORB FOR VOICE (PC MIC)'; }, 1600);
         }
-      });
+      } catch (e) {
+        appendLog('JENNY', 'PC mic unavailable.');
+      }
+      pcMicListening = false;
+      micOrb.classList.remove('listening');
+    }
+
+    micOrb.addEventListener('click', async () => {
+      if (listening && recognition) { recognition.stop(); return; }
+      if (pcMicListening) return;
+      if (recognition) {
+        try {
+          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
+          }
+          recognition.start();
+        } catch (e) {
+          orbHint.textContent = 'MIC ACCESS DENIED';
+        }
+      } else {
+        orbListenPcMic();
+      }
+    });
+
+    if (PC_MIC_FALLBACK && orbHint) {
+      orbHint.textContent = 'TAP ORB FOR VOICE (PC MIC)';
     }
 
     // TELEMETRY REFRESH (real-time via SSE, polling fallback)
@@ -1409,6 +1553,8 @@
     async function hangupCall() {
       callActive = false;
       callRecording = false;
+      pcMicHoldActive = false;
+      window.__pcMicRelease = null;
       if (callTimerInt) clearInterval(callTimerInt);
       callWaveFX(null);
       if (callAudio) { try { callAudio.pause(); } catch (e) {} }
@@ -1425,6 +1571,12 @@
     async function startTalk() {
       if (!callActive || callRecording) return;
       callChunks = [];
+      // On insecure http:// LAN mobile browsers block getUserMedia entirely —
+      // fall back to the PC's own mic on the server so hold-to-talk still works.
+      if (!window.isSecureContext) {
+        startPcMicHold();
+        return;
+      }
       var stream = null;
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1438,19 +1590,76 @@
         callRecorder.start();
         callRecording = true;
         callHoldBtn.classList.add('pressed');
-        callHoldHint.textContent = 'LISTENING...';
+        callHoldHint.textContent = 'LISTENING... (PHONE MIC)';
         callWaveFX('listening');
       } catch (e) {
-        showMobileToast('Mic error');
+        showMobileToast('Phone mic blocked — using PC mic mode.');
+        startPcMicHold();
       }
     }
 
     function stopTalk() {
+      if (pcMicHoldActive) { stopPcMicHold(); return; }
       if (!callRecording) return;
       callRecording = false;
       callHoldBtn.classList.remove('pressed');
       try { callRecorder.stop(); } catch (e) {}
       callRecorder = null;
+    }
+
+    // ------- PC-MIC hold-to-talk (insecure context fallback) -------
+    let pcMicHoldActive = false;
+    let pcMicHoldResolve = null;
+
+    function startPcMicHold() {
+      if (pcMicHoldActive) return;
+      pcMicHoldActive = true;
+      callHoldBtn.classList.add('pressed');
+      callHoldHint.textContent = 'LISTENING... SPEAK NEAR LAPTOP';
+      callWaveFX('listening');
+      showMobileToast('Using PC microphone (phone mic blocked on http).');
+      pcMicHoldResolve = new Promise(function(resolve) {
+        // user releases button -> resolve; also enforce a max of 12s.
+        window.__pcMicRelease = resolve;
+      });
+      setTimeout(function() { if (pcMicHoldActive) stopPcMicHold(); }, 12000);
+    }
+
+    function stopPcMicHold() {
+      if (!pcMicHoldActive) return;
+      pcMicHoldActive = false;
+      callHoldBtn.classList.remove('pressed');
+      callHoldHint.textContent = 'JENNY IS THINKING...';
+      callWaveFX('thinking');
+      var resolve = window.__pcMicRelease;
+      if (resolve) { try { resolve(); } catch (e) {} window.__pcMicRelease = null; }
+      sendPcMicRecording();
+    }
+
+    async function sendPcMicRecording() {
+      try {
+        var r = await fetch(serverUrl + '/api/stt/record', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ seconds: 10, language: window.__sttLang || (navigator.language && navigator.language.toLowerCase().indexOf('hi') >= 0 ? 'hi' : 'en') })
+        });
+        var d = await r.json();
+        if (d.success && d.text && d.text.trim()) {
+          callAddBubble('you', d.text.trim());
+          sendCallTextPayload(d.text.trim());
+        } else if (d.error) {
+          callAddBubble('jenny', 'PC mic: ' + d.error);
+          callHoldHint.textContent = 'HOLD TO TALK TO JENNY (PC MIC)';
+          callWaveFX(null);
+        } else {
+          callAddBubble('jenny', 'No speech heard from PC mic.');
+          callHoldHint.textContent = 'HOLD TO TALK TO JENNY (PC MIC)';
+          callWaveFX(null);
+        }
+      } catch (e) {
+        callHoldHint.textContent = 'LINK ERROR - TRY AGAIN';
+        callWaveFX(null);
+      }
     }
 
     async function sendTalkAudio() {
@@ -1485,13 +1694,8 @@
       }
     }
 
-    async function sendCallText() {
-      const inp = document.getElementById('call-type-input');
-      const raw = (inp.value || '').trim();
-      if (!callActive) { inp.value = ''; return; }
-      if (!raw) return;
-      inp.value = '';
-      callAddBubble('you', raw);
+    async function sendCallTextPayload(raw) {
+      if (!raw.trim()) return;
       callHoldHint.textContent = 'JENNY IS THINKING...';
       callWaveFX('speaking');
       try {
@@ -1520,6 +1724,16 @@
         callHoldHint.textContent = 'LINK ERROR - TRY AGAIN';
         callWaveFX(null);
       }
+    }
+
+    async function sendCallText() {
+      const inp = document.getElementById('call-type-input');
+      const raw = (inp.value || '').trim();
+      if (!callActive) { inp.value = ''; return; }
+      if (!raw) return;
+      inp.value = '';
+      callAddBubble('you', raw);
+      sendCallTextPayload(raw);
     }
 
     async function pollCallStatus() {
