@@ -303,17 +303,8 @@
             </div>
           </div>
           <div class="sp-body">
-            <div class="sp-state" id="sp-state">LISTENING...</div>
+            <div class="sp-state" id="sp-state">LISTENING... SPEAK NOW</div>
             <div class="sp-text" id="sp-text"></div>
-          </div>
-          <div class="sp-confirm hidden" id="sp-confirm">
-            <div class="sp-heard" id="sp-heard"></div>
-            <div class="sp-btn-row">
-              <button class="sp-btn sp-btn-send" onclick="sendSpeechPreview()"><i class="fa-solid fa-paper-plane"></i> SEND</button>
-              <button class="sp-btn sp-btn-again" onclick="restartSpeechPreview()"><i class="fa-solid fa-rotate-right"></i> RETRY</button>
-              <button class="sp-btn sp-btn-cxl" onclick="cancelSpeechPreview()"><i class="fa-solid fa-ban"></i> CANCEL</button>
-            </div>
-            <div class="sp-tip">Auto-sending in <b id="sp-timer">6</b>s</div>
           </div>
         </div>
 
@@ -542,15 +533,19 @@
               <div class="stat-lbl">Role</div>
               <div class="stat-val" id="phone-stat-role">Controller</div>
             </div>
+            <div class="stat-box">
+              <div class="stat-lbl">Battery</div>
+              <div class="stat-val" id="phone-stat-battery">--</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-lbl">Network</div>
+              <div class="stat-val" id="phone-stat-network">--</div>
+            </div>
           </div>
 
           <div class="linked-ctrl-section">
             <div class="ctrl-title">REMOTE COMMANDS</div>
             <div class="ctrl-grid">
-              <button class="ctrl-btn" onclick="triggerPhoneAction('buzz')" title="Play alert sound on phone">
-                <i class="fa-solid fa-volume-high"></i>
-                <span>Buzz Phone</span>
-              </button>
               <button class="ctrl-btn" onclick="triggerPhoneAction('toast')" title="Send banner toast message to phone">
                 <i class="fa-solid fa-message"></i>
                 <span>Send Toast</span>
@@ -559,9 +554,13 @@
                 <i class="fa-solid fa-mobile-retro"></i>
                 <span>Vibrate</span>
               </button>
-              <button class="ctrl-btn" onclick="triggerPhoneAction('toggle-flash')" title="Toggle screen flash strobe light">
-                <i class="fa-solid fa-lightbulb"></i>
-                <span>Flashlight</span>
+              <button class="ctrl-btn" onclick="triggerPhoneAction('speak')" title="Announce text aloud on the phone speaker">
+                <i class="fa-solid fa-volume-high"></i>
+                <span>Speak</span>
+              </button>
+              <button class="ctrl-btn" onclick="triggerPhoneAction('open-url')" title="Open a URL in the phone browser">
+                <i class="fa-solid fa-globe"></i>
+                <span>Open Link</span>
               </button>
             </div>
             
@@ -570,22 +569,6 @@
               <input type="range" min="0" max="100" value="70" class="ctrl-slider" oninput="setPhoneVolume(this.value)">
             </div>
           </div>
-
-          <!-- FUTURISTIC CALL WIDGET -->
-          <div class="call-widget hidden" id="call-widget">
-            <div class="call-widget-top">
-              <span class="call-widget-pulse"></span>
-              <span class="call-widget-label" id="call-widget-label">LIVE CALL WITH PHONE</span>
-              <span class="call-widget-timer" id="call-widget-timer">00:00</span>
-            </div>
-            <div class="call-widget-feed" id="call-widget-feed">
-              <div class="call-widget-line"><span class="cw-who">JENNY</span><span class="cw-txt">Neural link established.</span></div>
-            </div>
-          </div>
-
-          <button class="call-phone-btn" id="call-phone-btn" onclick="callPhone()" title="Ring the linked phone / start a voice call">
-            <i class="fa-solid fa-phone"></i> CALL PHONE
-          </button>
         </div>
       </div>
     </aside>

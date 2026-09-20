@@ -297,7 +297,7 @@ async function runBoot() {
     startSysMonitor(); startAmbientBar(); startParticles(); startPingMonitor();
     startInputStats(); fetchQuota(); setInterval(fetchQuota, 60000);
     setInterval(updateTimerDisplay, 1000); checkPermissions();
-    startConnectionMonitor(); initPhoneLinkManager();
+    startConnectionMonitor(); initPhoneLinkManager(); initWakeWord();
     app.style.display = 'flex';
     try { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch(e) {}
     restoreChatHistory();
@@ -377,6 +377,7 @@ async function runBoot() {
   checkPermissions();
   startConnectionMonitor();
   initPhoneLinkManager();
+  initWakeWord();
   app.style.display = 'flex';
   try { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch(e) {}
   restoreChatHistory();
@@ -2131,6 +2132,10 @@ async function sendMessage(text) {
         const url = data.reply.command.value;
         await fetch(`/api/open-chrome?url=${encodeURIComponent(url)}`);
       }
+      else if (data.reply.command?.action === 'email-read') {
+        openPanel('emails');
+        loadEmailPanel();
+      }
       else if (data.reply.command) { await fetch('/api/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data.reply.command) }); }
       speak(data.reply.speech || data.reply.text);
     } else { addAIMessage('Something went wrong, BOSS. Please try again.'); setOrbState('idle'); }
@@ -2464,9 +2469,10 @@ async function startListening() {
   if (orbClick) orbClick.classList.add('active');
   setOrbState('listening');
   showSpeechPreview('listening');
-  // Do NOT grab the browser mic before server capture - requesting
-  // getUserMedia can lock the device so the PC's own STT engine cannot
-  // capture (the "mic not working" bug). The server owns the mic.
+  // The server owns the microphone (never request getUserMedia here - it can
+  // lock the device so the PC's own STT engine can't capture). We open a LIVE
+  // streaming session instead of record-then-confirm: the preview shows the
+  // transcript WHILE the user is still speaking.
   let micDeviceIndex = null;
   try {
     const mi = await fetch('/api/stt/mics', { cache: 'no-store' });
@@ -2479,51 +2485,57 @@ async function startListening() {
     }
   } catch {}
 
-  // PRIORITY: the PC's own STT engine (Groq Whisper + Google fallback) works in
-  // pywebview/Chromium reliably. Browser Web Speech is only used as a fallback.
-  let heardText = null;
-  let retried = false;
-  while (true) {
+  let sid = null;
+  try {
+    const res = await fetch('/api/stt/live/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({seconds: 12, device: micDeviceIndex}),
+    });
+    const d = await res.json();
+    if (d && d.success && d.sessionId) { sid = d.sessionId; _liveSid = sid; _liveHandled = false; }
+    else { toast('Mic: ' + (d.error || 'could not start'), 'err'); stopListening(); return; }
+  } catch {
+    // Server STT unavailable -> browser Web Speech fallback.
+    if (!recognition) recognition = initRecognition();
+    if (!recognition) { stopListening(); toast('Speech recognition not supported', 'err'); return; }
+    showSpeechPreview('listening');
+    try { recognition.start(); } catch {}
+    return;
+  }
+
+  // Poll the live session: interim text updates the preview in real time,
+  // and when it finalizes we auto-send — no confirmation screen at all.
+  let finalText = '';
+  let errored = false;
+  const deadline = Date.now() + 15000;
+  while (isListening && Date.now() < deadline) {
     try {
-      const res = await fetch('/api/stt/record', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({seconds: 5, device: micDeviceIndex}),
-      });
-      const d = await res.json();
-      if (d && d.success && d.text) {
-        heardText = d.text.trim();
-        break;
-      } else if (d && d.error) {
-        // Quiet capture often means speak-start latency: retry once quickly.
-        if (!retried && (String(d.error).toLowerCase().includes('no speech') || d.level === 'quiet')) {
-          retried = true;
-          toast('Listening again...', 'info');
-          showSpeechPreview('listening');
-          continue;
+      const r2 = await fetch('/api/stt/live/status/' + sid, { cache: 'no-store' });
+      const s = await r2.json();
+      if (s && s.success) {
+        if (s.interim && s.interim !== finalText) {
+          finalText = s.interim;
+          updateSpeechPreviewLive(finalText + ' …');
         }
-        toast('Mic: ' + d.error, 'err');
-        showSpeechPreview('error', String(d.error).slice(0, 80));
-        break;
-      } else {
-        toast('No speech heard, Boss.', 'info');
-        showSpeechPreview('error', 'No speech heard. Please speak a little louder.');
-        break;
+        if (s.error) { errored = true; showSpeechPreview('error', String(s.error).slice(0, 80)); break; }
+        if (s.done && s.final) {
+          finalText = s.final.trim();
+          break;
+        }
+        if (s.done) { if (!finalText) showSpeechPreview('error', 'No speech heard. Please speak a little louder.'); break; }
       }
-    } catch {
-      // Server STT unavailable -> browser fallback.
-      if (!recognition) recognition = initRecognition();
-      if (!recognition) { stopListening(); toast('Speech recognition not supported', 'err'); return; }
-      showSpeechPreview('listening');
-      try { recognition.start(); } catch {}
-      break;
-    }
+    } catch {}
+    // small delay keeps the preview snappy without hammering the server
+    await new Promise(r => setTimeout(r, 900));
   }
   stopListening();
-  if (heardText) {
-    showSpeechPreview('confirm', heardText);
-    scheduleSpeechAutoSend(heardText);
+  if ((sid && !errored) && !_liveHandled && finalText) {
+    hideSpeechPreview();
+    sendMessage(finalText);
   }
+  _liveSid = null;
+  _liveHandled = false;
 }
 
 function stopListening() {
@@ -2540,6 +2552,8 @@ function stopListening() {
 // ================================================
 let spAutoTimer = null;
 let spPendingText = '';
+let _liveSid = null;
+let _liveHandled = false;
 
 function showSpeechPreview(mode, text = '') {
   const pv = document.getElementById('speech-preview');
@@ -2547,35 +2561,34 @@ function showSpeechPreview(mode, text = '') {
   pv.classList.remove('hidden');
   const stateEl = document.getElementById('sp-state');
   const textEl = document.getElementById('sp-text');
-  const confirmEl = document.getElementById('sp-confirm');
-  const heardEl = document.getElementById('sp-heard');
-  const timerEl = document.getElementById('sp-timer');
-  if (!stateEl || !textEl || !confirmEl) return;
+  if (!stateEl || !textEl) return;
   loadSttLangBadge();
   if (mode === 'listening') {
-    if (confirmEl) confirmEl.classList.add('hidden');
-    stateEl.textContent = 'LISTENING...';
+    stateEl.textContent = 'LISTENING... SPEAK NOW';
     stateEl.className = 'sp-state listening';
-    if (textEl) textEl.textContent = 'Speak now';
+    textEl.textContent = 'Speak now';
   } else if (mode === 'thinking') {
-    if (confirmEl) confirmEl.classList.add('hidden');
     stateEl.textContent = 'PROCESSING...';
     stateEl.className = 'sp-state';
-    if (textEl) textEl.textContent = 'Recognizing speech';
-  } else if (mode === 'confirm') {
-    if (confirmEl) confirmEl.classList.remove('hidden');
-    stateEl.textContent = 'RECOGNIZED';
-    stateEl.className = 'sp-state';
-    if (textEl) textEl.textContent = 'Ready to send';
-    if (heardEl) heardEl.textContent = '“' + text + '”';
-    spPendingText = text;
+    textEl.textContent = 'Recognizing speech';
   } else if (mode === 'error') {
-    if (confirmEl) confirmEl.classList.add('hidden');
     stateEl.textContent = 'NOT HEARD';
     stateEl.className = 'sp-state';
-    if (textEl) textEl.textContent = text || 'Could not recognize speech.';
+    textEl.textContent = text || 'Could not recognize speech.';
     setTimeout(() => { if (!isListening) hideSpeechPreview(); }, 1600);
   }
+}
+
+function updateSpeechPreviewLive(text) {
+  const pv = document.getElementById('speech-preview');
+  if (!pv) return;
+  pv.classList.remove('hidden');
+  const stateEl = document.getElementById('sp-state');
+  const textEl = document.getElementById('sp-text');
+  if (!stateEl || !textEl) return;
+  stateEl.textContent = 'LIVE — SPEAKING';
+  stateEl.className = 'sp-state listening';
+  textEl.textContent = text || '…';
 }
 
 function hideSpeechPreview() {
@@ -2585,36 +2598,35 @@ function hideSpeechPreview() {
   spPendingText = '';
 }
 
-function scheduleSpeechAutoSend(text) {
-  if (spAutoTimer) clearInterval(spAutoTimer);
-  let left = 6;
-  const timerEl = document.getElementById('sp-timer');
-  if (timerEl) timerEl.textContent = left;
-  spAutoTimer = setInterval(() => {
-    left--;
-    if (timerEl) timerEl.textContent = left;
-    if (left <= 0) {
-      clearInterval(spAutoTimer);
-      spAutoTimer = null;
-      sendSpeechPreview();
-    }
-  }, 1000);
-}
-
-function sendSpeechPreview() {
-  const t = (spPendingText || '').trim();
-  hideSpeechPreview();
-  if (t) sendMessage(t);
+async function stopListeningAndSend() {
+  // Tap the orb again while listening: finalize whatever was heard and send it
+  // right away (no confirmation). No-op when not listening.
+  if (!isListening) return;
+  const sid = _liveSid;
+  _liveHandled = true;
+  stopListening();
+  if (sid) {
+    try { await fetch('/api/stt/live/stop/' + sid, { method: 'POST' }).catch(() => {}); } catch {}
+    try {
+      const st = await fetch('/api/stt/live/status/' + sid, { cache: 'no-store' });
+      const sd = await st.json();
+      const t = (sd && sd.final || '').trim();
+      if (t) { hideSpeechPreview(); sendMessage(t); }
+      else hideSpeechPreview();
+    } catch { hideSpeechPreview(); }
+  }
+  _liveSid = null;
+  _liveHandled = false;
 }
 
 function cancelSpeechPreview() {
+  if (isListening) {
+    // Cancel without sending while a live session is active; the poll loop in
+    // startListening() notices isListening flipped and exits without sending.
+    stopListening();
+  }
   hideSpeechPreview();
   toast('Command cancelled.', 'info');
-}
-
-function restartSpeechPreview() {
-  hideSpeechPreview();
-  startListening();
 }
 
 async function toggleSttLang() {
@@ -2646,7 +2658,7 @@ async function loadSttLangBadge(force) {
   }
 }
 
-orbClick.addEventListener('click', () => { isListening ? stopListening() : startListening(); });
+orbClick.addEventListener('click', () => { isListening ? stopListeningAndSend() : startListening(); });
 
 // Bind Media HUD Buttons
 document.getElementById('media-btn-prev')?.addEventListener('click', () => {
@@ -3040,6 +3052,11 @@ async function pollDevices() {
       document.getElementById('linked-device-meta').textContent = `${approved.browser} · ${approved.ip}${batTxt}${sigTxt}`;
       document.getElementById('linked-revoke-btn').dataset.deviceId = approved.deviceId;
 
+      const batEl = document.getElementById('phone-stat-battery');
+      if (batEl) batEl.textContent = approved.battery != null ? approved.battery + '%' : '--';
+      const netEl = document.getElementById('phone-stat-network');
+      if (netEl) netEl.textContent = approved.network || approved.signal || '--';
+
       const systemPing = document.getElementById('ambient-ping-text')?.textContent || '12ms';
       document.getElementById('phone-stat-ping').textContent = systemPing;
     } else {
@@ -3105,11 +3122,18 @@ async function triggerPhoneAction(action, value = '') {
     return;
   }
   
-  // For toast, ask user for custom input message
+  // Ask for user input for actions that need a payload
   let finalVal = value;
   if (action === 'toast' && !value) {
     finalVal = prompt('Enter toast message for phone:', 'Hello from desktop, BOSS!');
     if (finalVal === null) return; // user cancelled
+  } else if (action === 'speak' && !value) {
+    finalVal = prompt('What should the phone say aloud?', 'Hello from your desktop, Boss!');
+    if (finalVal === null) return;
+  } else if (action === 'open-url' && !value) {
+    finalVal = prompt('Enter URL to open on the phone:', 'https://www.google.com');
+    if (finalVal === null) return;
+    if (!/^https?:\/\//i.test(finalVal)) finalVal = 'https://' + finalVal;
   }
 
   try {
@@ -3537,7 +3561,7 @@ function initJarvisDashboard() {
       btn.onclick = () => {
         const cmd = btn.dataset.jd;
         if (cmd) { if (typeof sendMessage === 'function') sendMessage(cmd); }
-        else { if (window.isListening) stopListening(); else startListening(); }
+        else { if (window.isListening) stopListeningAndSend(); else startListening(); }
       };
     });
   }
@@ -3913,114 +3937,15 @@ function loadNewsPanel(el) {
 }
 
 // ================================================
-// WAKE WORD DETECTION — Browser SpeechRecognition
-// Listens continuously for "Hey Jenny" / "Hey Friday"
+// WAKE WORD — server-side, always-on
+// The listener runs inside the server (speech_stt) so "Hey Jenny" works even
+// when this tab isn't focused. The button toggles it via /api/wake/toggle and
+// the UI consumes /api/wake/events to render the server-driven conversation.
 // ================================================
 let wakeWordActive = false;
-let wakeRecognition = null;
-let wakeListening = false;
+let _wakeEventsTimer = null;
 
-const WAKE_WORDS = ['hey friday', 'hey jarvis', 'hey ultron'];
-
-function initWakeWord() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) {
-    console.warn('[WakeWord] SpeechRecognition not supported in this browser');
-    return false;
-  }
-
-  wakeRecognition = new SR();
-  wakeRecognition.continuous = true;
-  wakeRecognition.interimResults = true;
-  wakeRecognition.lang = (document.getElementById('sp-lang-txt') || {}).textContent === 'HI' ? 'hi-IN' : 'en-US';
-  wakeRecognition.maxAlternatives = 3;
-
-  wakeRecognition.onresult = function(event) {
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const transcript = event.results[i][0].transcript.toLowerCase().trim();
-      for (const ww of WAKE_WORDS) {
-        if (transcript.includes(ww)) {
-          console.log('[WakeWord] Detected:', ww);
-          onWakeWordDetected(transcript, ww);
-          return;
-        }
-      }
-    }
-  };
-
-  wakeRecognition.onerror = function(event) {
-    console.warn('[WakeWord] Error:', event.error);
-    if (event.error === 'no-speech') {
-      restartWakeListening();
-    } else if (event.error === 'not-allowed') {
-      toast('Microphone access denied. Enable it in browser settings.', 'err');
-      wakeWordActive = false;
-      updateWakeWordUI();
-    }
-  };
-
-  wakeRecognition.onend = function() {
-    wakeListening = false;
-    if (wakeWordActive) {
-      restartWakeListening();
-    }
-  };
-
-  return true;
-}
-
-function restartWakeListening() {
-  if (!wakeWordActive || !wakeRecognition) return;
-  setTimeout(() => {
-    if (wakeWordActive && !wakeListening) {
-      try {
-        wakeRecognition.start();
-        wakeListening = true;
-      } catch(e) {
-        console.warn('[WakeWord] Restart failed:', e);
-      }
-    }
-  }, 500);
-}
-
-function startWakeWord() {
-  if (!wakeRecognition && !initWakeWord()) {
-    toast('Wake word requires microphone access', 'err');
-    return;
-  }
-  wakeWordActive = true;
-  try {
-    wakeRecognition.start();
-    wakeListening = true;
-    toast('Wake word active — Say "Hey Friday", "Hey Jarvis" or "Hey Ultron"', 'ok');
-  } catch(e) {
-    if (e.message && e.message.includes('already started')) {
-      wakeListening = true;
-    } else {
-      console.error('[WakeWord] Start error:', e);
-      toast('Failed to start wake word: ' + e.message, 'err');
-    }
-  }
-  updateWakeWordUI();
-}
-
-function stopWakeWord() {
-  wakeWordActive = false;
-  if (wakeRecognition) {
-    try { wakeRecognition.stop(); } catch(e) {}
-  }
-  wakeListening = false;
-  toast('Wake word deactivated', 'info');
-  updateWakeWordUI();
-}
-
-function toggleWakeWord() {
-  if (wakeWordActive) {
-    stopWakeWord();
-  } else {
-    startWakeWord();
-  }
-}
+const WAKE_WORDS = ['hey jenny', 'hey friday', 'hey jarvis', 'hey ultron'];
 
 function updateWakeWordUI() {
   const btn = document.getElementById('wake-word-btn');
@@ -4030,64 +3955,94 @@ function updateWakeWordUI() {
   }
 }
 
-function onWakeWordDetected(transcript, wakeWord) {
-  sfx.confirm();
+async function syncWakeStatus() {
+  try {
+    const r = await fetch('/api/wake/status', { cache: 'no-store' });
+    const d = await r.json();
+    const phrases = (d && d.phrases) || WAKE_WORDS;
+    const on = !!(d && d.on);
+    if (on !== wakeWordActive) {
+      wakeWordActive = on;
+      updateWakeWordUI();
+      if (on) toast(`Wake word active — Say "${phrases[0]}" anytime`, 'ok');
+    }
+  } catch {}
+}
 
-  document.body.classList.add('orb-active');
-  const holoLabel = document.getElementById('holo-label');
-  if (holoLabel) holoLabel.textContent = 'WAKE WORD DETECTED — Listening...';
-  const holoStatus = document.getElementById('holo-status');
-  if (holoStatus) holoStatus.textContent = 'LISTENING';
+async function toggleWakeWord() {
+  try {
+    const r = await fetch('/api/wake/toggle', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({on: !wakeWordActive}),
+    });
+    const d = await r.json();
+    if (d && 'on' in d) { wakeWordActive = !!d.on; updateWakeWordUI(); }
+    toast(wakeWordActive ? 'Wake word ON — Say "Hey Jenny" anytime' : 'Wake word OFF', 'info');
+  } catch(e) { toast('Wake toggle failed: ' + e.message, 'err'); }
+}
 
-  speak('Yes Boss?', () => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return;
+function startWakeWord() { toggleWakeWord(); }
+function stopWakeWord() { toggleWakeWord(); }
+function onWakeWordDetected() {}
 
-    const cmdRecognition = new SR();
-    cmdRecognition.continuous = false;
-    cmdRecognition.interimResults = true;
-    cmdRecognition.lang = (document.getElementById('sp-lang-txt') || {}).textContent === 'HI' ? 'hi-IN' : 'en-US';
-    cmdRecognition.maxAlternatives = 1;
+async function executeCommandAction(cmd) {
+  if (!cmd || !cmd.action) return;
+  try {
+    if (cmd.action === 'email-read') { openPanel('emails'); loadEmailPanel(); }
+    else if (cmd.action === 'open-folder') {
+      if (cmd.value) window.open(`/api/open-folder?path=${encodeURIComponent(cmd.value)}`, '_blank');
+      await fetch('/api/control', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(cmd) });
+    }
+    else if (cmd.action === 'open-chrome') {
+      if (cmd.value) await fetch(`/api/open-chrome?url=${encodeURIComponent(cmd.value)}`);
+    }
+    else if (cmd.action === 'open-chrome-bookmarks') {
+      const bmr = await fetch('/api/chrome-bookmarks'); const bmd = await bmr.json();
+      if (bmd.success && bmd.bookmarks && bmd.bookmarks.length) {
+        let t = `**Your Chrome Bookmarks** (${bmd.total} total):\n\n`;
+        bmd.bookmarks.slice(0, 15).forEach((b, i) => { t += `${i+1}. **${b.name}** — ${b.url}\n`; });
+        if (bmd.total > 15) t += `\n_...and ${bmd.total - 15} more._`;
+        addAIMessage(t);
+      } else addAIMessage('No Chrome bookmarks found, Boss.');
+    }
+    else if (cmd.action !== 'vault-save') {
+      await fetch('/api/control', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(cmd) });
+    }
+  } catch(e) { console.warn('[WakeEvent] command execute failed:', e); }
+}
 
-    let finalTranscript = '';
-
-    cmdRecognition.onresult = function(event) {
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
+// Poll server-side wake events so a headless "Hey Jenny" conversation shows up
+// in this dashboard as normal chat bubbles (and executes command actions).
+async function pollWakeEvents() {
+  try {
+    const r = await fetch('/api/wake/events', { cache: 'no-store' });
+    const d = await r.json();
+    if (!d || !d.success || !Array.isArray(d.events) || !d.events.length) return;
+    for (const ev of d.events) {
+      if (!ev) continue;
+      if (ev.kind === 'wake') {
+        addUserMessage(ev.text + ' ');
+        setOrbState('listening');
+        setTimeout(() => setOrbState('idle'), 600);
+      } else if (ev.kind === 'user') {
+        addUserMessage(ev.text);
+      } else if (ev.kind === 'assistant') {
+        addAIMessage(ev.text || '');
+        if (ev.command && ev.command.action && ev.command.action !== 'vault-save') {
+          executeCommandAction(ev.command);
         }
       }
-      if (finalTranscript) {
-        if (holoLabel) holoLabel.textContent = finalTranscript;
-      }
-    };
+    }
+  } catch {}
+}
 
-    cmdRecognition.onend = function() {
-      document.body.classList.remove('orb-active');
-      if (holoLabel) holoLabel.textContent = 'Tap the orb or type a command';
-      if (holoStatus) holoStatus.textContent = 'STANDBY';
-
-      if (finalTranscript.trim()) {
-        const cmd = finalTranscript.trim().toLowerCase();
-        if (['goodbye', 'bye', 'sleep', 'stop listening', 'go back to sleep'].some(w => cmd.includes(w))) {
-          speak('Going back to sleep mode, Boss. Say Hey Jenny to wake me.');
-          stopWakeWord();
-          return;
-        }
-        sendMessage(finalTranscript.trim());
-      }
-    };
-
-    cmdRecognition.onerror = function() {
-      document.body.classList.remove('orb-active');
-      if (holoLabel) holoLabel.textContent = 'Tap the orb or type a command';
-      if (holoStatus) holoStatus.textContent = 'STANDBY';
-    };
-
-    try {
-      cmdRecognition.start();
-    } catch(e) {}
-  });
+function initWakeWord() {
+  syncWakeStatus();
+  if (!_wakeEventsTimer) {
+    _wakeEventsTimer = setInterval(pollWakeEvents, 2500);
+  }
+  return true;
 }
 
 // ================================================

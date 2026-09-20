@@ -1029,25 +1029,6 @@
         return;
       }
 
-      if (action === 'buzz') {
-        try {
-          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-          const oscillator = audioCtx.createOscillator();
-          const gainNode = audioCtx.createGain();
-          oscillator.type = 'sawtooth';
-          oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
-          oscillator.frequency.exponentialRampToValueAtTime(1760, audioCtx.currentTime + 0.4);
-          gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-          oscillator.connect(gainNode);
-          gainNode.connect(audioCtx.destination);
-          oscillator.start();
-          oscillator.stop(audioCtx.currentTime + 0.5);
-        } catch (err) {
-          console.error('Audio buzz failed', err);
-        }
-      }
-      
       if (action === 'vibrate') {
         if (navigator.vibrate) {
           navigator.vibrate([200, 100, 200, 100, 300]);
@@ -1055,25 +1036,30 @@
           showMobileToast('Vibration not supported on this browser.');
         }
       }
-      
-      if (action === 'toggle-flash') {
-        const strobe = document.createElement('div');
-        strobe.style.position = 'fixed';
-        strobe.style.inset = '0';
-        strobe.style.background = '#ffffff';
-        strobe.style.zIndex = '999998';
-        document.body.appendChild(strobe);
-        let flashes = 0;
-        const interval = setInterval(() => {
-          strobe.style.visibility = strobe.style.visibility === 'hidden' ? 'visible' : 'hidden';
-          flashes++;
-          if (flashes > 12) {
-            clearInterval(interval);
-            strobe.remove();
-          }
-        }, 80);
+
+      if (action === 'speak') {
+        try {
+          const tt = value || 'Hello, Boss';
+          speechSynthesis.cancel();
+          const u = new SpeechSynthesisUtterance(tt);
+          u.lang = 'en-US';
+          speechSynthesis.speak(u);
+          showMobileToast('Speaking: ' + tt.slice(0, 40) + (tt.length > 40 ? '…' : ''));
+        } catch (err) {
+          showMobileToast('Speech synthesis failed.');
+        }
       }
-      
+
+      if (action === 'open-url') {
+        try {
+          const u = value || 'https://www.google.com';
+          window.open(u, '_blank');
+          showMobileToast('Opening link...');
+        } catch (err) {
+          showMobileToast('Could not open link.');
+        }
+      }
+
       if (action === 'toast') {
         showMobileToast(value || 'System ping, BOSS!');
       }
