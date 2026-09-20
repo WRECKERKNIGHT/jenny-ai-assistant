@@ -15,9 +15,7 @@ Usage:  pythonw tray.py      (background, no console)
 
 from __future__ import annotations
 
-import io
 import os
-import subprocess
 import sys
 import threading
 import time
@@ -83,41 +81,39 @@ def ensure_server():
 
 
 # ---------------------------------------------------------------------------
-# Wake-word lifecycle (background subprocess)
+# Wake-word lifecycle
+#
+# The wake word now runs inside the server itself (always-on, works headless),
+# so the tray simply toggles it over HTTP instead of spawning the old
+# browser-dependent scripts/wakeword.py subprocess.
 # ---------------------------------------------------------------------------
 
-_wake_proc = None
 _wake_lock = threading.Lock()
 
 
 def wake_word_running():
-    global _wake_proc
-    with _wake_lock:
-        return _wake_proc is not None and _wake_proc.poll() is None
+    # The server-side listener is the single source of truth.
+    try:
+        import json as _json
+        import urllib.request as _ur
+        with _ur.urlopen(f"http://127.0.0.1:{PORT}/api/wake/status", timeout=2) as r:
+            return bool(_json.loads(r.read().decode()).get("on", False))
+    except Exception:
+        return False
 
 
 def set_wake_word(on):
-    global _wake_proc
     with _wake_lock:
-        if on and (_wake_proc is None or _wake_proc.poll() is not None):
-            flags = 0
-            try:
-                flags = subprocess.CREATE_NO_WINDOW
-            except AttributeError:
-                pass
-            _wake_proc = subprocess.Popen(
-                [sys.executable, str(BASE_DIR / "scripts" / "wakeword.py")],
-                cwd=str(BASE_DIR),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                creationflags=flags,
-            )
-        elif not on and _wake_proc is not None:
-            try:
-                _wake_proc.terminate()
-            except Exception:
-                pass
-            _wake_proc = None
+        try:
+            import json as _json
+            import urllib.request as _ur
+            req = _ur.Request(f"http://127.0.0.1:{PORT}/api/wake/toggle",
+                              data=_json.dumps({"on": bool(on)}).encode(),
+                              headers={"Content-Type": "application/json"})
+            with _ur.urlopen(req, timeout=3) as r:
+                r.read()
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------

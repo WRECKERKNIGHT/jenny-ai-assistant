@@ -1287,6 +1287,12 @@ def local_command_router(msg):
         return {"text": f"Next on Spotify, {boss}!", "speech": "Next track on Spotify.", "command": {"action": "spotify-action", "value": "next"}}
     if any(w in lo for w in ["spotify previous", "previous on spotify", "back on spotify"]):
         return {"text": f"Going back, {boss}!", "speech": "Previous track.", "command": {"action": "spotify-action", "value": "previous"}}
+    if any(w in lo for w in ["pause spotify", "pause the music", "pause music", "pause the song", "spotify pause", "stop spotify", "stop the music", "stop music", "stop the song"]):
+        return {"text": f"Pausing audio on Spotify, {boss}!", "speech": "Pausing Spotify.", "command": {"action": "spotify-action", "value": "pause"}}
+    if any(w in lo for w in ["resume spotify", "resume the music", "resume music", "resume the song", "continue spotify", "play the music", "unpause"]):
+        return {"text": f"Resuming playback, {boss}!", "speech": "Resuming Spotify.", "command": {"action": "spotify-action", "value": "play"}}
+    if any(w in lo for w in ["open spotify", "open spotify app", "launch spotify"]):
+        return {"text": f"Opening Spotify, {boss}!", "speech": "Opening Spotify.", "command": {"action": "open-app", "value": "spotify"}}
     m = re.search(r"(?:send|message|text)\s+(.+?)\s+to\s+(.+?)\s+(?:on|via)\s+(telegram|whatsapp|discord)\b(?:\s*[:,-]\s*(.*))?$", lo)
     if not m:
         m = re.search(r"(?:send|message|text)\s+(.+?)\s+(?:on|via)\s+(telegram|whatsapp|discord)\b\s*[:,-]\s*(.+)$", lo)
@@ -1380,8 +1386,8 @@ def local_command_router(msg):
         return {"text": f"Volume set to {m.group(1)}%, {boss}!", "speech": f"Volume set to {m.group(1)} percent.", "command": {"action": "volume", "value": m.group(1)}}
     if any(w in lo for w in ["purge ram", "clean ram", "free up ram", "clear ram", "clear memory"]):
         return {"text": f"Cleaning up memory, {boss}!", "speech": "Cleaning up memory.", "command": {"action": "purge-ram", "value": ""}}
-    if any(w in lo for w in ["read my emails", "read emails", "check emails", "check my email", "read email inbox"]):
-        return {"text": "Opening your email inbox, Boss!", "speech": "Opening your email inbox.", "command": {"action": "open-chrome", "value": "https://mail.google.com"}}
+    if any(w in lo for w in ["read my emails", "read emails", "check emails", "check my email", "read email inbox", "show my emails", "show emails"]):
+        return {"text": "Opening your emails, Boss!", "speech": "Opening your emails.", "command": {"action": "email-read", "value": ""}}
     if any(w in lo for w in ["wake mac display", "wake display", "wake the display", "wake screen", "turn on display"]):
         return {"text": "Waking the display, Boss!", "speech": "Waking the display.", "command": {"action": "wake-display", "value": ""}}
     m = re.search(r"(?:take|make|add|save|write)\s+a?\s*(?:note|notepad)(?:\s*(?:that|saying|for|:|-)\s*(.+))?(?:\s*(?:in|to|into)\s+(?:my\s+|the\s+)?(?:memory|vault|notes|brain))?$", lo)
@@ -2357,12 +2363,10 @@ def parse_agency_mission_intent(text):
         return {"city": city_match.group(1).strip().title(), "category": "School", "limit": limit}
     return {"city": "Patna", "category": "School", "limit": limit}
 
-@app.route("/api/chat", methods=["POST"])
-def api_chat():
-    d = request.get_json(force=True, silent=True) or {}
-    msg = d.get("message", "").strip()
-    if not msg:
-        return jsonify({"success": False, "error": "No message"}), 400
+def _assistant_reply(msg: str) -> dict:
+    """Shared chat pipeline used by both /api/chat and the server wake-word
+    flow. Returns the reply dict (local router or LLM chain), updates history,
+    memory vault and activity telemetry — identical behaviour from either path."""
     if get_mode() == "jarvis":
         intent = parse_agency_mission_intent(msg)
         if intent:
@@ -2380,7 +2384,7 @@ def api_chat():
         if len(chatHistory) > 20:
             chatHistory.pop(0); chatHistory.pop(0)
         proactive.mark_activity()
-        return jsonify({"success": True, "reply": local})
+        return local
     reply = grok_chat(msg, chatHistory)
     if not reply:
         reply = gemini_chat(msg, chatHistory)
@@ -2393,7 +2397,27 @@ def api_chat():
     if len(chatHistory) > 20:
         chatHistory.pop(0); chatHistory.pop(0)
     proactive.mark_activity()
-    return jsonify({"success": True, "reply": reply})
+    return reply
+
+
+def _execute_control_command(cmd: dict) -> None:
+    """Execute a command dict server-side (same handler /api/control uses)."""
+    if not cmd:
+        return
+    try:
+        with app.test_client() as c:
+            c.post("/api/control", json=cmd)
+    except Exception:
+        pass
+
+
+@app.route("/api/chat", methods=["POST"])
+def api_chat():
+    d = request.get_json(force=True, silent=True) or {}
+    msg = d.get("message", "").strip()
+    if not msg:
+        return jsonify({"success": False, "error": "No message"}), 400
+    return jsonify({"success": True, "reply": _assistant_reply(msg)})
 
 @app.route("/api/smart-suggestions")
 def api_smart_suggestions():
@@ -3369,7 +3393,14 @@ def api_open_chrome():
     return jsonify({"success": False, "error": "No URL"})
 
 @app.route("/api/emails")
-def api_emails(): return jsonify({"success": True, "emails": [], "message": "Email not available on Windows yet."})
+def api_emails():
+    """Fetch the latest emails via IMAP (or the Outlook app fallback)."""
+    try:
+        import email_integration
+        res = email_integration.fetch_emails(int(request.args.get("count", 8)))
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({"success": False, "emails": [], "message": f"Email module error: {e}"})
 
 @app.route("/api/timers")
 def api_timers(): return jsonify({"success": True, "timers": []})
@@ -3398,6 +3429,39 @@ def api_stt_record():
     language = str(d.get("language", "") or "").lower().strip()
     result = speech_stt.record_and_transcribe(seconds, device=device, language=language)
     return jsonify(result)
+
+@app.route("/api/stt/live/start", methods=["POST"])
+def api_stt_live_start():
+    """Open a streaming STT session. Returns {sessionId} — poll
+    /api/stt/live/status/<sid> for live interim + final text."""
+    import speech_stt
+    d = request.get_json(force=True, silent=True) or {}
+    seconds = max(3, min(int(d.get("seconds", 12)), 30))
+    device = d.get("device")
+    if device is not None:
+        try:
+            device = int(device)
+        except (TypeError, ValueError):
+            device = None
+    language = str(d.get("language", "") or "").lower().strip()
+    res = speech_stt.start_live_session(seconds, device=device, language=language)
+    return jsonify(res)
+
+@app.route("/api/stt/live/status/<sid>")
+def api_stt_live_status(sid):
+    import speech_stt
+    res = speech_stt.live_status(sid)
+    if isinstance(res, tuple):
+        return jsonify(res[0]), res[1]
+    return jsonify(res)
+
+@app.route("/api/stt/live/stop/<sid>", methods=["POST"])
+def api_stt_live_stop(sid):
+    import speech_stt
+    res = speech_stt.stop_live_session(sid)
+    if isinstance(res, tuple):
+        return jsonify(res[0]), res[1]
+    return jsonify(res)
 
 @app.route("/api/stt/language", methods=["GET", "POST"])
 def api_stt_language():
@@ -3456,6 +3520,95 @@ def api_remote_mode(): return jsonify({"success": True, "remoteMode": False})
 @app.route("/api/wake", methods=["POST"])
 def api_wake(): return jsonify({"success": True})
 
+@app.route("/api/wake/status")
+def api_wake_status():
+    import speech_stt
+    st = speech_stt.wake_status()
+    st["success"] = True
+    return jsonify(st)
+
+@app.route("/api/wake/toggle", methods=["POST"])
+def api_wake_toggle():
+    """Enable/disable the always-on server-side wake word listener and persist
+    the choice so boot restores it automatically."""
+    import speech_stt
+    d = request.get_json(force=True, silent=True) or {}
+    on = d.get("on")
+    if on is None:
+        on = not speech_stt.wake_listener_active()
+    settings = load_json(DATA_DIR / "settings.json", {})
+    settings["wake_word"] = bool(on)
+    save_json(DATA_DIR / "settings.json", settings)
+    if on:
+        started = speech_stt.start_wake_listener(_on_wake_detected)
+        return jsonify({"success": True, "on": started})
+    speech_stt.stop_wake_listener()
+    return jsonify({"success": True, "on": False})
+
+_WAKE_EVENTS = []
+_WAKE_EVENTS_LOCK = threading.Lock()
+
+@app.route("/api/wake/events")
+def api_wake_events():
+    """Pop all accumulated server-side wake conversation events (for the GUI
+    to render bubbles) without blocking the wake listener."""
+    with _WAKE_EVENTS_LOCK:
+        evts = _WAKE_EVENTS[:]
+        _WAKE_EVENTS.clear()
+    return jsonify({"success": True, "events": evts})
+
+def _on_wake_detected(text: str, phrase: str):
+    """Server-side wake-word handler: ack, capture the spoken command, route it
+    through the normal chat pipeline, speak the reply and surface events."""
+    try:
+        import speech_stt
+        mode = _wake_mode_for_phrase(phrase)
+        if mode:
+            set_mode(mode)
+        with _WAKE_EVENTS_LOCK:
+            _WAKE_EVENTS.append({"kind": "wake", "text": phrase})
+            _WAKE_EVENTS.append({"kind": "user", "text": phrase})
+        tts_engine.speak(f"Yes, {MODE_PROFILES.get(mode or 'friday', MODE_PROFILES['friday'])['boss']}?", mode or "friday", use_chime=True)
+        res = speech_stt.record_and_transcribe(8, language=speech_stt.get_stt_language())
+        if not res.get("success"):
+            err = res.get("error", "I'm here. Go ahead.")
+            speech_stt.wake_cooldown(3.0)
+            tts_engine.speak(f"My apologies, {MODE_PROFILES.get(mode or 'friday', MODE_PROFILES['friday'])['boss']}. {err}", mode or "friday")
+            with _WAKE_EVENTS_LOCK:
+                _WAKE_EVENTS.append({"kind": "assistant", "text": err})
+            return
+        command = res.get("text", "").strip()
+        if not command:
+            tts_engine.speak("I didn't catch that. Please say it again, Boss.", mode or "friday")
+            return
+        with _WAKE_EVENTS_LOCK:
+            _WAKE_EVENTS.append({"kind": "user", "text": command})
+        tts_engine.stop_speech()
+        reply = _assistant_reply(command)
+        cmd = (reply or {}).get("command", {})
+        # Execute control commands headlessly right here; a live GUI drains the
+        # same command through its own dispatch (dedup by event kind = 'cmd').
+        if cmd and not tts_engine.ui_client_active():
+            _execute_control_command(cmd)
+        with _WAKE_EVENTS_LOCK:
+            ev = {"kind": "assistant", "text": reply.get("text", "")}
+            if cmd:
+                ev["command"] = cmd
+            _WAKE_EVENTS.append(ev)
+        tts_engine.speak((reply or {}).get("speech") or (reply or {}).get("text", ""), mode or "friday")
+    except Exception:
+        import traceback
+        traceback.print_exc()
+
+
+def _wake_mode_for_phrase(phrase: str) -> str:
+    p = (phrase or "").lower()
+    if "ultron" in p:
+        return "ultron"
+    if "jarvis" in p:
+        return "jarvis"
+    return "friday"
+
 @app.route("/api/sleep", methods=["POST"])
 def api_sleep():
     try: os.system("rundll32.exe powrprof.dll,SetSuspendState 0,1,0"); return jsonify({"success": True})
@@ -3500,6 +3653,11 @@ if __name__ == "__main__":
     threading.Thread(target=tts_engine.prewarm, daemon=True).start()
     import proactive as _proactive
     _proactive.start()
+    # Always-on server-side wake word (restored from saved settings).
+    import speech_stt as _stt
+    if load_json(DATA_DIR / "settings.json", {}).get("wake_word", True):
+        if _stt.start_wake_listener(_on_wake_detected):
+            print(f"[JENNY] Wake word active: {', '.join(_stt.wake_phrases())} (say it anytime)")
     print(f"[JENNY] Server running on http://localhost:3005")
     print(f"[JENNY] Neural voice engine: {'edge-tts (online)' if tts_engine.edge_tts_available() else 'SAPI fallback'}")
     serve(app, host="0.0.0.0", port=3005, threads=8)
