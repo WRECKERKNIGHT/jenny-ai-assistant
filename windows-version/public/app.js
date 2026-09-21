@@ -766,7 +766,25 @@ function startClock() {
   setInterval(tick, 1000);
 }
 
-function startAmbientBar() { fetchAmbientData(); setInterval(fetchAmbientData, 8000); }
+function startAmbientBar() { fetchAmbientData(); fetchSpotifyStatus(); setInterval(fetchAmbientData, 8000); setInterval(fetchSpotifyStatus, 10000); }
+
+async function fetchSpotifyStatus() {
+  try {
+    const res = await fetch('/api/spotify/status', { cache: 'no-store' });
+    const d = await res.json();
+    if (!d) return;
+    const chip = document.getElementById('ambient-spotify');
+    const txt = document.getElementById('ambient-spotify-text');
+    if (!chip || !txt) return;
+    const running = !!(d.running || d.connected);
+    txt.textContent = running ? 'Spotify connected' : 'Spotify offline';
+    chip.style.borderColor = running ? 'rgba(29,185,84,0.45)' : 'rgba(255,255,255,0.08)';
+    chip.style.background = running ? 'rgba(29,185,84,0.08)' : '';
+    const icon = chip.querySelector('i');
+    if (icon) icon.style.color = running ? '#1db954' : '';
+    chip.title = d.message || '';
+  } catch {}
+}
 
 async function fetchAmbientData() {
   try {
@@ -2496,11 +2514,14 @@ async function startListening() {
     if (d && d.success && d.sessionId) { sid = d.sessionId; _liveSid = sid; _liveHandled = false; }
     else { toast('Mic: ' + (d.error || 'could not start'), 'err'); stopListening(); return; }
   } catch {
-    // Server STT unavailable -> browser Web Speech fallback.
-    if (!recognition) recognition = initRecognition();
+    // Server STT unavailable -> browser Web Speech fallback. NOTE: a
+    // SpeechRecognition instance can only be started once in Chromium; reuse
+    // silently does nothing, so we always build a brand-new instance here.
+    try { recognition?.abort(); } catch {}
+    recognition = initRecognition();
     if (!recognition) { stopListening(); toast('Speech recognition not supported', 'err'); return; }
     showSpeechPreview('listening');
-    try { recognition.start(); } catch {}
+    try { recognition.start(); } catch (err) { console.warn('[JENNY] WS start failed:', err); }
     return;
   }
 
@@ -2545,6 +2566,7 @@ function stopListening() {
   stopSpeechWaves();
   if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
   try { recognition?.stop(); } catch {}
+  recognition = null;
 }
 
 // ================================================
@@ -3018,11 +3040,11 @@ async function pollDevices() {
     const devices = data.devices;
     
     const pending = devices.find(d => d.status === 'pending');
-    const approved = devices.find(d => d.status === 'approved' && d.connected);
+    const approved = devices.find(d => d.linked);
 
     const activeCount = document.getElementById('phone-active-count');
     if (activeCount) {
-      const approvedCount = devices.filter(d => d.status === 'approved' && d.connected).length;
+      const approvedCount = devices.filter(d => d.status === 'approved').length;
       activeCount.textContent = `${approvedCount} linked`;
     }
 
@@ -3049,7 +3071,8 @@ async function pollDevices() {
       document.getElementById('linked-device-name').textContent = approved.os;
       const batTxt = approved.battery != null ? ` · 🔋 ${approved.battery}%` : '';
       const sigTxt = approved.signal ? ` · ${approved.signal}` : '';
-      document.getElementById('linked-device-meta').textContent = `${approved.browser} · ${approved.ip}${batTxt}${sigTxt}`;
+      const liveTxt = approved.connected ? '' : ` · offline`;
+      document.getElementById('linked-device-meta').textContent = `${approved.browser} · ${approved.ip}${batTxt}${sigTxt}${liveTxt}`;
       document.getElementById('linked-revoke-btn').dataset.deviceId = approved.deviceId;
 
       const batEl = document.getElementById('phone-stat-battery');
@@ -4026,10 +4049,15 @@ async function pollWakeEvents() {
         setOrbState('listening');
         setTimeout(() => setOrbState('idle'), 600);
       } else if (ev.kind === 'user') {
-        addUserMessage(ev.text);
+        addUserMessage(ev.source === 'phone' ? '[Phone] ' + ev.text : ev.text);
+      } else if (ev.kind === 'cmd') {
+        // A phone control action executed on the PC — show it as a compact note.
+        addAIMessage(ev.text || '');
       } else if (ev.kind === 'assistant') {
         addAIMessage(ev.text || '');
-        if (ev.command && ev.command.action && ev.command.action !== 'vault-save') {
+        // Phone-originated commands are already executed by the phone itself;
+        // only run the command here when it came from the local wake pipeline.
+        if (ev.command && ev.command.action && ev.command.action !== 'vault-save' && ev.source !== 'phone') {
           executeCommandAction(ev.command);
         }
       }
