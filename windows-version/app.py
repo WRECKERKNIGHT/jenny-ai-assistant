@@ -27,7 +27,7 @@ def start_server(port=PORT):
     sys.path.insert(0, str(BASE_DIR))
     import server
     threading.Thread(target=server.update_telemetry, daemon=True).start()
-    serve(server.app, host="0.0.0.0", port=port, threads=8)
+    serve(server.app, host="0.0.0.0", port=port, threads=16)
 
 
 def play_startup_sound():
