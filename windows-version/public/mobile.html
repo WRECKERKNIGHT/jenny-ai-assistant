@@ -1020,6 +1020,45 @@
       }
     }
 
+    // PC-side TTS streamed to the phone: an <audio> element works over plain
+    // http:// LAN (no secure-context requirement), unlike speechSynthesis.
+    function playServerTts(text) {
+      if (!text) return;
+      return new Promise((resolve) => {
+        try {
+          const url = serverUrl + '/api/speak?text=' + encodeURIComponent(String(text).slice(0, 6000)) + '&fmt=mp3&t=' + Date.now();
+          const au = new Audio(url);
+          au.onended = () => { au.remove(); resolve(true); };
+          au.onerror = () => { au.remove(); resolve(false); };
+          au.play().catch(() => resolve(false));
+        } catch (e) { resolve(false); }
+      });
+    }
+
+    // Tappable OPAQUE banner for remote links: a real user tap defeats the
+    // browser popup-blocker that otherwise swallows window.open() inside an
+    // async fetch callback.
+    let _openUrlBanner = null;
+    function promptOpenUrl(url) {
+      if (_openUrlBanner) _openUrlBanner.remove();
+      const b = document.createElement('div');
+      b.style.cssText = 'position:fixed;left:16px;right:16px;bottom:140px;z-index:999998;background:rgba(208,132,0,0.97);border:1px solid #ffd700;border-radius:16px;padding:14px 16px;box-shadow:0 0 30px rgba(208,132,0,0.5);font-family:monospace;color:#fff;';
+      const safe = String(url).slice(0, 90);
+      b.innerHTML = '<div style="font-size:10px;letter-spacing:2px;color:#ffe9b8;margin-bottom:6px;">REMOTE LINK</div>' +
+        '<div style="font-size:12px;word-break:break-all;margin-bottom:10px;">' + safe.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div>' +
+        '<div style="display:flex;gap:8px;">' +
+        '<button id="ob-open" style="flex:1;background:#fff;color:#8a5400;border:none;border-radius:10px;padding:10px;font-family:monospace;font-weight:bold;font-size:12px;">OPEN</button>' +
+        '<button id="ob-cancel" style="flex:1;background:rgba(255,255,255,0.12);color:#fff;border:1px solid rgba(255,255,255,0.35);border-radius:10px;padding:10px;font-family:monospace;font-size:12px;">DISMISS</button>' +
+        '</div>';
+      document.body.appendChild(b);
+      b.querySelector('#ob-open').addEventListener('click', () => {
+        try { window.open(String(url), '_blank'); showMobileToast('Opening link…'); } catch (e) { showMobileToast('Could not open link.'); }
+        b.remove(); _openUrlBanner = null;
+      });
+      b.querySelector('#ob-cancel').addEventListener('click', () => { b.remove(); _openUrlBanner = null; });
+      _openUrlBanner = b;
+    }
+
     function executePhoneCommand(action, value) {
       appendLog('HOST_CMD', `Received remote action: ${action.toUpperCase()}`);
 
@@ -1038,26 +1077,29 @@
       }
 
       if (action === 'speak') {
-        try {
-          const tt = value || 'Hello, Boss';
-          speechSynthesis.cancel();
-          const u = new SpeechSynthesisUtterance(tt);
-          u.lang = 'en-US';
-          speechSynthesis.speak(u);
-          showMobileToast('Speaking: ' + tt.slice(0, 40) + (tt.length > 40 ? '…' : ''));
-        } catch (err) {
-          showMobileToast('Speech synthesis failed.');
-        }
+        const tt = value || 'Hello, Boss';
+        playServerTts(tt).then((ok) => {
+          if (ok) showMobileToast('Speaking: ' + tt.slice(0, 40) + (tt.length > 40 ? '…' : ''));
+          else {
+            // Fall back to the local voice engine if the PC TTS isn't reachable.
+            try {
+              speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(tt);
+              u.lang = 'en-US';
+              speechSynthesis.speak(u);
+              showMobileToast('Speaking: ' + tt.slice(0, 40) + (tt.length > 40 ? '…' : ''));
+            } catch (err) {
+              showMobileToast('Speech unavailable on this phone.');
+            }
+          }
+        });
       }
 
       if (action === 'open-url') {
-        try {
-          const u = value || 'https://www.google.com';
-          window.open(u, '_blank');
-          showMobileToast('Opening link...');
-        } catch (err) {
-          showMobileToast('Could not open link.');
-        }
+        const u = value || 'https://www.google.com';
+        promptOpenUrl(u);
+        // Best-effort immediate open too (some browsers allow it).
+        try { window.open(u, '_blank'); } catch (e) {}
       }
 
       if (action === 'toast') {
@@ -1065,7 +1107,7 @@
       }
 
       if (action === 'volume') {
-        showMobileToast(`Volume updated remotely to ${value}%`);
+        showMobileToast('Remote volume: on iPhone/Android web pages can\u2019t change system volume — use the side buttons.');
       }
     }
 
@@ -1103,7 +1145,7 @@
       try {
         const res = await fetch(`${serverUrl}/api/chat`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Source': 'phone' },
           body: JSON.stringify({ message: cmd, deviceId: getDeviceId() })
         });
         const d = await res.json();
@@ -1113,7 +1155,7 @@
           if (d.reply.command && d.reply.command.action !== 'vault-save') {
             await fetch(`${serverUrl}/api/control`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', 'X-Source': 'phone' },
               body: JSON.stringify({ ...d.reply.command, deviceId: getDeviceId() })
             });
           }
@@ -1138,7 +1180,7 @@
       try {
         await fetch(`${serverUrl}/api/control`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Source': 'phone' },
           body: JSON.stringify({ action: 'media', value: 'previous', deviceId: getDeviceId() })
         });
       } catch (e) {}
@@ -1147,7 +1189,7 @@
       try {
         await fetch(`${serverUrl}/api/control`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Source': 'phone' },
           body: JSON.stringify({ action: 'media', value: 'playpause', deviceId: getDeviceId() })
         });
       } catch (e) {}
@@ -1156,7 +1198,7 @@
       try {
         await fetch(`${serverUrl}/api/control`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Source': 'phone' },
           body: JSON.stringify({ action: 'media', value: 'next', deviceId: getDeviceId() })
         });
       } catch (e) {}
