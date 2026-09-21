@@ -66,7 +66,7 @@ def start_server(port=PORT):
     import proactive as _proactive
     _proactive.start()
     from waitress import serve
-    serve(server.app, host="0.0.0.0", port=port, threads=8)
+    serve(server.app, host="0.0.0.0", port=port, threads=16)
 
 
 def ensure_server():

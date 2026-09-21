@@ -70,6 +70,79 @@ def _load_devices():
 
 _load_devices()
 
+AUTOSTART_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+AUTOSTART_NAME = "JENNY Assistant"
+
+def _autostart_command() -> str:
+    """Launch command registered at login: pythonw tray.py --auto."""
+    py = sys.executable or "python"
+    pyw = str(Path(py).with_name("pythonw.exe"))
+    runner = pyw if os.path.exists(pyw) else py
+    script = str(BASE_DIR / "tray.py")
+    flag = " --auto" if "--auto" not in script else ""
+    return f'"{runner}" "{script}"{flag}'
+
+def _autostart_enabled() -> bool:
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, AUTOSTART_RUN_KEY) as k:
+            winreg.QueryValueEx(k, AUTOSTART_NAME)
+            return True
+    except Exception:
+        return False
+
+def _autostart_set(on: bool) -> bool:
+    """Create/remove the HKCU Run entry so JENNY starts with Windows."""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, AUTOSTART_RUN_KEY, 0, winreg.KEY_SET_VALUE) as k:
+            if on:
+                winreg.SetValueEx(k, AUTOSTART_NAME, 0, winreg.REG_SZ, _autostart_command())
+            else:
+                try:
+                    winreg.DeleteValue(k, AUTOSTART_NAME)
+                except FileNotFoundError:
+                    pass
+        return True
+    except Exception:
+        return False
+
+def _services_status() -> dict:
+    """Connected-services status used by the dashboard panel and boot greeting."""
+    keys = load_json(DATA_DIR / "keys.json", {})
+    settings = load_json(DATA_DIR / "settings.json", {})
+    email_configured = bool(str(keys.get("email_user") or keys.get("email_address") or "").strip()
+                            and str(keys.get("email_pass") or keys.get("email_password") or "").strip())
+    discord_ok = False
+    discord_url = str(keys.get("discord_webhook_url") or "").strip()
+    if discord_url:
+        try:
+            req = urllib.request.Request(discord_url + "?wait=0", method="GET",
+                                         headers={"Accept": "application/json"})
+            with urllib.request.urlopen(req, timeout=4) as r:
+                discord_ok = r.status == 200 or True
+        except Exception:
+            discord_ok = False
+    wa = str(settings.get("whatsapp_number") or "").strip()
+    agency_url = (str(settings.get("agency_url") or os.environ.get("AGENCY_OS_URL", "") or "http://localhost:3200").strip().rstrip("/"))
+    agency = {"url": agency_url, "online": False, "error": ""}
+    try:
+        import agency_client as _ac
+        _ac.AGENCY_BASE = agency_url
+        agency["online"] = bool(_ac.agency_online())
+        if not agency["online"]:
+            agency["error"] = f"No server at {agency_url}. Start the Agency OS app, or set agency_url in Settings."
+    except Exception as e:
+        agency["error"] = str(e)[:120]
+    return {
+        "email": {"configured": email_configured, "note": "Configured for IMAP/Outlook reads" if email_configured else "Add email_user / email_pass (and email_imap_host) in Settings > Keys"},
+        "discord": {"configured": bool(discord_url), "online": discord_ok or None, "note": "Webhook configured — 'post to discord ...'" if discord_url else "Add a Discord webhook URL to post messages to a channel"},
+        "whatsapp": {"configured": bool(wa), "note": ("Sends via wa.me link to " + wa) if wa else "Add whatsapp_number to open chat + send drafts"},
+        "agency": agency,
+        "autostart": {"enabled": _autostart_enabled(), "note": "Runs JENNY at Windows login"},
+        "wake": {"enabled": bool(speech_stt.wake_listener_active())},
+    }
+
 # Groq API usage/limit tracking (shared by the usage bars in every mode).
 GROQ_LIMITS = {"rpm_max": 30, "tpm_max": 6000}
 # Ordered candidate models: the first that the account can actually use wins.
@@ -2699,6 +2772,35 @@ def api_control():
             return jsonify({"success": True, "message": "Ringing phone."})
         pendingDeviceCommands.setdefault(did, []).append({"action": str(value.get("action", "toast")), "value": str(value.get("value", "")), "timestamp": int(time.time() * 1000)})
         return jsonify({"success": True, "message": "Command sent to phone."})
+    if lo in ("discord-send", "whatsapp-send"):
+        if lo == "discord-send":
+            text = (value or "").replace("\n", " ")
+            webhook = str(load_json(DATA_DIR / "keys.json", {}).get("discord_webhook_url") or "").strip()
+            if not webhook:
+                return jsonify({"success": False, "error": "No Discord webhook configured (Settings > Services)."})
+            try:
+                payload = json.dumps({"content": str(text)[:1900]}).encode("utf-8")
+                req = urllib.request.Request(webhook, data=payload, method="POST",
+                                             headers={"Content-Type": "application/json", "User-Agent": "JENNY"})
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    ok = 200 <= int(r.status) < 300
+                return jsonify({"success": ok, "message": "Posted to Discord." if ok else "Discord rejected the message."})
+            except Exception as e:
+                return jsonify({"success": False, "error": f"Discord send failed: {str(e)[:120]}"})
+        # whatsapp-send: open a wa.me conversation with the draft pre-filled.
+        num = str(load_json(DATA_DIR / "settings.json", {}).get("whatsapp_number") or "").strip()
+        target = str(value.get("to") or num or "").strip() if isinstance(value, dict) else ""
+        text = (value.get("text") if isinstance(value, dict) else str(value or "")).strip()
+        if not target:
+            return jsonify({"success": False, "error": "No WhatsApp number set (Settings > Services)."})
+        target = re.sub(r"[^0-9]", "", target)
+        url = f"https://wa.me/{target}" + (("?text=" + urllib.parse.quote(text)) if text else "")
+        try:
+            webbrowser.open(url)
+            return jsonify({"success": True, "message": "Opened WhatsApp chat with draft ready."})
+        except Exception:
+            return jsonify({"success": False, "error": "Could not open WhatsApp."})
+
     if lo in ("chrome-open", "chrome-search", "chrome-youtube", "chrome-list",
               "chrome-activate", "chrome-close", "chrome-back", "chrome-forward",
               "chrome-reload", "chrome-new-tab", "chrome-close-tab", "chrome-fullscreen"):
@@ -2981,6 +3083,19 @@ def api_settings():
     d = request.get_json(force=True, silent=True) or {}; s = load_json(DATA_DIR / "settings.json", {"latitude": 26.8467, "longitude": 80.9462, "cityName": "Lucknow"})
     for k in ["latitude", "longitude", "cityName"]:
         if k in d: s[k] = d[k]
+    # Behaviour / permission preferences (permanent app defaults).
+    for k in ("auto_approve_phones", "proactive", "wake_word"):
+        if k in d: s[k] = bool(d[k])
+    for k in ("agency_url", "whatsapp_number"):
+        if k in d and isinstance(d[k], str): s[k] = d[k].strip()
+    # Secrets live in the git-ignored keys file.
+    if "discord_webhook_url" in d:
+        keys = load_json(DATA_DIR / "keys.json", {})
+        keys["discord_webhook_url"] = str(d["discord_webhook_url"]).strip()
+        save_json(DATA_DIR / "keys.json", keys)
+    if "autostart" in d:
+        _autostart_set(bool(d["autostart"]))
+        s["autostart"] = bool(d["autostart"])
     save_json(DATA_DIR / "settings.json", s); return jsonify({"success": True, "settings": s})
 
 @app.route("/api/settings/keys", methods=["POST"])
@@ -3003,6 +3118,16 @@ def api_get_settings_keys():
         else:
             masked[k] = "SET" if v else "NOT SET"
     return jsonify({"success": True, "keys": masked})
+
+
+@app.route("/api/services")
+def api_services():
+    """Connected-services dashboard: email / discord / whatsapp / agency /
+    autostart / wake — the 'permission health' view for the Permanent App."""
+    try:
+        return jsonify({"success": True, **{"services": _services_status()}})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 @app.route("/api/gemini-keys")
 def api_gemini_keys():
@@ -3156,13 +3281,16 @@ def api_mobile_stats():
 def api_device_register():
     d = request.get_json(force=True, silent=True) or {}; did = d.get("deviceId", "")
     if not did: return jsonify({"success": False, "message": "deviceId required"})
+    auto = load_json(DATA_DIR / "settings.json", {}).get("auto_approve_phones", True) is not False
     if did not in activeDevices:
-        activeDevices[did] = {"deviceId": did, "os": d.get("os", "Unknown"), "browser": d.get("browser", "Unknown"), "ip": request.remote_addr, "status": "pending", "lastActive": datetime.datetime.now().isoformat()}
+        activeDevices[did] = {"deviceId": did, "os": d.get("os", "Unknown"), "browser": d.get("browser", "Unknown"), "ip": request.remote_addr, "status": "approved" if auto else "pending", "lastActive": datetime.datetime.now().isoformat()}
     else:
         activeDevices[did]["ip"] = request.remote_addr
         activeDevices[did].setdefault("os", d.get("os", "Unknown"))
         activeDevices[did].setdefault("browser", d.get("browser", "Unknown"))
         activeDevices[did]["lastActive"] = datetime.datetime.now().isoformat()
+        if activeDevices[did].get("status") == "pending" and auto:
+            activeDevices[did]["status"] = "approved"
     _save_devices()
     return jsonify({"success": True, "device": activeDevices[did]})
 
@@ -3642,6 +3770,13 @@ def api_wake_toggle():
     speech_stt.stop_wake_listener()
     return jsonify({"success": True, "on": False})
 
+@app.route("/api/wake/restart", methods=["POST"])
+def api_wake_restart():
+    """Force the wake listener to re-open its microphone stream (self-heal)."""
+    import speech_stt as _stt
+    ok = _stt.wake_restart()
+    return jsonify({"success": True, "restarted": ok, **(_stt.wake_status())})
+
 _WAKE_EVENTS = []
 _WAKE_EVENTS_LOCK = threading.Lock()
 
@@ -3723,6 +3858,55 @@ def _wake_mode_for_phrase(phrase: str) -> str:
         return "jarvis"
     return "friday"
 
+_AGENCY_SNAPSHOT = {"replies": 0, "pending": 0, "interested": 0, "online": False}
+_AGENCY_WATCH_LOCK = threading.Lock()
+
+def _agency_alert_watcher() -> None:
+    """Poll Agency OS and speak + show a dashboard note when there is NEW work:
+    more replies, freshly interested leads, or new pending outreach. This gives
+    J.A.R.V.I.S a live agency voice so the business dashboard 'talks' too."""
+    while True:
+        time.sleep(120)
+        if not proactive.proactive_enabled():
+            continue
+        try:
+            url = (load_json(DATA_DIR / "settings.json", {}).get("agency_url") or "http://localhost:3200").strip().rstrip("/")
+            agency_client.AGENCY_BASE = url
+            st = agency_client.agency_state(cached=0)
+            s = agency_client.summarize_state(st) if st else None
+            online = s is not None
+            with _AGENCY_WATCH_LOCK:
+                prev = dict(_AGENCY_SNAPSHOT)
+                _AGENCY_SNAPSHOT.update({
+                    "replies": (s or {}).get("replies", 0),
+                    "pending": (s or {}).get("pending_approval", 0),
+                    "interested": (s or {}).get("interested", 0),
+                    "online": online,
+                })
+            if not online or not s:
+                if prev["online"] and not online:
+                    tts_engine.speak("Sir, Agency OS has gone offline.", "jarvis")
+                    _ui_feed("assistant", "[Agency] Went offline.", source="agency")
+                continue
+            mode = get_mode()
+            if mode != "jarvis" and not mode:
+                mode = "jarvis"
+            notes = []
+            if s["replies"] > prev["replies"]:
+                notes.append(f"{s['replies'] - prev['replies']} new replies from leads")
+            if s["pending_approval"] > prev["pending"]:
+                notes.append(f"{s['pending_approval'] - prev['pending']} new outreach items await approval")
+            if s["interested"] > prev["interested"]:
+                notes.append(f"{s['interested'] - prev['interested']} more interested institutions")
+            if not prev["online"] and online:
+                notes.append(f"Agency OS is back online with {s['leads_today']} leads today")
+            if notes:
+                line = "Sir, " + ", and ".join(notes) + "."
+                tts_engine.speak(line, "jarvis")
+                _ui_feed("assistant", "[Agency] " + line, source="agency")
+        except Exception:
+            continue
+
 @app.route("/api/sleep", methods=["POST"])
 def api_sleep():
     try: os.system("rundll32.exe powrprof.dll,SetSuspendState 0,1,0"); return jsonify({"success": True})
@@ -3767,11 +3951,14 @@ if __name__ == "__main__":
     threading.Thread(target=tts_engine.prewarm, daemon=True).start()
     import proactive as _proactive
     _proactive.start()
+    threading.Thread(target=_agency_alert_watcher, daemon=True).start()
     # Always-on server-side wake word (restored from saved settings).
     import speech_stt as _stt
     if load_json(DATA_DIR / "settings.json", {}).get("wake_word", True):
         if _stt.start_wake_listener(_on_wake_detected):
             print(f"[JENNY] Wake word active: {', '.join(_stt.wake_phrases())} (say it anytime)")
+        else:
+            print("[JENNY] Wake word FAILED to start — check sounddevice/mic. Toggle 'Wake Word' in Settings to retry.")
     print(f"[JENNY] Server running on http://localhost:3005")
     print(f"[JENNY] Neural voice engine: {'edge-tts (online)' if tts_engine.edge_tts_available() else 'SAPI fallback'}")
-    serve(app, host="0.0.0.0", port=3005, threads=8)
+    serve(app, host="0.0.0.0", port=3005, threads=16)
