@@ -276,7 +276,8 @@ body.mode-jarvis .holo-dock { margin-top:0; border-top:1px solid rgba(0,212,255,
 
 .speech-waves { position:relative; z-index:2; display:flex; gap:3px; align-items:flex-end; height:24px; margin-top:4px; opacity:0; transition:opacity 0.3s ease; }
 .speech-waves.active { opacity:1; }
-.speech-waves .wave-bar { width:2px; height:2px; background:rgba(255,255,255,0.5); border-radius:2px; transition:height 0.06s ease; }
+.speech-waves .wave-bar { width:2px; height:24px; background:rgba(255,255,255,0.5); border-radius:2px; transform-origin:bottom; transform:scaleY(0.08); transition:transform 0.06s cubic-bezier(0.16, 1, 0.3, 1); will-change:transform; }
+.speech-waves .wave-bar.active { transform:scaleY(1); }
 
 /* PRESS ANYWHERE TO START OVERLAY */
 .press-start-overlay { position:fixed; inset:0; z-index:99999; display:flex; align-items:center; justify-content:center; background:#000000; backdrop-filter:blur(30px); -webkit-backdrop-filter:blur(30px); cursor:pointer; overflow:hidden; transition:opacity 0.6s ease, visibility 0.6s ease; }
