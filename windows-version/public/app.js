@@ -1732,6 +1732,22 @@ function loadSettingsPanel(el) {
     </div>
   `;
   
+  // Connected services & permissions (permanent-app control center)
+  html += `
+    <div style="border-top:1px solid rgba(255,255,255,0.06); margin:8px 0; padding-top:8px;">
+      <div style="font-family:var(--mono); font-size:8px; color:var(--txt3); letter-spacing:1px; margin-bottom:8px;">CONNECTED SERVICES & PERMISSIONS</div>
+      <div id="services-status" style="font-family:var(--mono); font-size:9px; color:var(--txt2); margin-bottom:8px;">Loading...</div>
+      <div class="setting-row"><label></label><button id="services-refresh-btn" style="padding:4px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:var(--txt3);font-family:var(--mono);font-size:9px;cursor:pointer;">REFRESH STATUS</button></div>
+      <div class="setting-row"><label>DISCORD WEBHOOK URL</label><input type="text" id="discord-webhook-input" placeholder="https://discord.com/api/webhooks/..." style="flex:1;min-width:0;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:var(--txt);border-radius:6px;padding:3px 7px;font-family:var(--mono);font-size:9px;"></div>
+      <div class="setting-row"><label>WHATSAPP NUMBER</label><input type="text" id="whatsapp-input" placeholder="+91 xxxxxxxxxx" style="flex:1;min-width:0;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:var(--txt);border-radius:6px;padding:3px 7px;font-family:var(--mono);font-size:9px;"></div>
+      <div class="setting-row"><label>AGENCY OS URL</label><input type="text" id="agency-url-input" placeholder="http://localhost:3200" style="flex:1;min-width:0;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:var(--txt);border-radius:6px;padding:3px 7px;font-family:var(--mono);font-size:9px;"></div>
+      <div class="setting-row"><label>AUTO-APPROVE PHONES</label><input type="checkbox" id="auto-approve-toggle"></div>
+      <div class="setting-row"><label>START WITH WINDOWS</label><input type="checkbox" id="autostart-toggle"></div>
+      <div class="setting-row"><label>MIC AIM</label><button id="wake-restart-btn" style="padding:4px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:var(--txt3);font-family:var(--mono);font-size:9px;cursor:pointer;">Restart Wake Listener</button></div>
+      <div class="setting-row"><label></label><button id="save-services-btn" style="padding:5px 12px;background:rgba(229,193,88,0.1);border:1px solid rgba(229,193,88,0.35);border-radius:6px;color:var(--gold);font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;">SAVE SERVICES</button></div>
+    </div>
+  `;
+
   // Permissions section
   html += `
     <div style="border-top:1px solid rgba(255,255,255,0.06); margin:8px 0; padding-top:8px;">
@@ -1819,6 +1835,68 @@ function loadSettingsPanel(el) {
   // API keys details button
   document.getElementById('show-keys-btn').addEventListener('click', () => showKeyDetails());
   
+  // Connected services — status + controls
+  async function refreshServicesStatus() {
+    const el = document.getElementById('services-status');
+    if (!el) return;
+    el.innerHTML = 'Loading...';
+    try {
+      const res = await fetch('/api/services');
+      const d = await res.json();
+      if (!d.success) { el.innerHTML = `<span style="color:var(--pink)">${String(d.error||'services error').slice(0,160)}</span>`; return; }
+      const s = d.services || {};
+      const chip = (ok, label) => `<span style="display:inline-block;padding:2px 8px;border-radius:10px;margin:2px 4px 2px 0;border:1px solid ${ok ? 'rgba(74,222,128,0.4)' : 'rgba(255,159,28,0.4)'};color:${ok ? '#4ade80' : '#ff9f1c'};font-size:9px;letter-spacing:1px;"><i class="fa-solid fa-circle" style="font-size:5px;vertical-align:middle;"></i> ${label.toUpperCase()}</span>`;
+      const rows = [
+        ['Email', s.email ? (s.email.configured ? 'configured' : 'not configured') : '—'],
+        ['Discord', s.discord ? (s.discord.configured ? 'configured' : 'add webhook') : '—'],
+        ['WhatsApp', s.whatsapp ? (s.whatsapp.configured ? 'ready' : 'add number') : '—'],
+        ['Agency OS', s.agency ? (s.agency.online ? 'online' : 'offline') : '—'],
+        ['Start with Windows', s.autostart ? (s.autostart.enabled ? 'enabled' : 'off') : '—'],
+        ['Wake Word', s.wake ? (s.wake.enabled ? 'on' : 'off') : '—'],
+      ];
+      el.innerHTML = rows.map(([n, v]) => {
+        const ok = v === 'configured' || v === 'ready' || v === 'online' || v === 'enabled' || v === 'on';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px dashed rgba(255,255,255,0.04);"><span>${n}</span>${chip(ok, v)}</div>`;
+      }).join('');
+      const auto = document.getElementById('auto-approve-toggle');
+      if (auto) fetch('/api/settings').then(r=>r.json()).then(x => { if (x.success && x.settings) auto.checked = x.settings.auto_approve_phones !== false; }).catch(()=>{});
+      const as = document.getElementById('autostart-toggle');
+      if (as && s.autostart) as.checked = !!s.autostart.enabled;
+      const ws = document.getElementById('whatsapp-input');
+      if (ws) fetch('/api/settings').then(r=>r.json()).then(x => { if (x.success && x.settings) ws.value = x.settings.whatsapp_number || ''; }).catch(()=>{});
+      const au = document.getElementById('agency-url-input');
+      if (au) { au.value = (s.agency && s.agency.url) || 'http://localhost:3200'; if (!au.closest('.setting-row')) {} }
+      if (s.agency && !s.agency.online && s.agency.error && el) el.innerHTML += `<div style="margin-top:6px;color:var(--pink);font-size:9px;word-break:break-word;">${String(s.agency.error).slice(0,180)}</div>`;
+    } catch(e) { el.innerHTML = `<span style="color:var(--pink)">services unavailable</span>`; }
+  }
+  refreshServicesStatus();
+
+  document.getElementById('services-refresh-btn').addEventListener('click', refreshServicesStatus);
+  document.getElementById('wake-restart-btn').addEventListener('click', async () => {
+    try {
+      const r = await fetch('/api/wake/restart', { method: 'POST' });
+      const d = await r.json();
+      toast(d.restarted ? 'Wake listener restarted.' : 'Wake listener is off — enable it first.', d.restarted ? 'ok' : 'info');
+      syncWakeStatus();
+      refreshServicesStatus();
+    } catch { toast('Restart failed', 'err'); }
+  });
+  document.getElementById('save-services-btn').addEventListener('click', async () => {
+    const payload = {
+      auto_approve_phones: document.getElementById('auto-approve-toggle').checked,
+      autostart: document.getElementById('autostart-toggle').checked,
+      agency_url: (document.getElementById('agency-url-input').value || '').trim(),
+      whatsapp_number: (document.getElementById('whatsapp-input').value || '').trim(),
+    };
+    try {
+      await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const dw = (document.getElementById('discord-webhook-input').value || '').trim();
+      if (dw) await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ discord_webhook_url: dw }) });
+      toast('Services saved.', 'ok');
+      refreshServicesStatus();
+    } catch { toast('Save failed', 'err'); }
+  });
+
   // Permissions check button
   document.getElementById('check-perms-btn').addEventListener('click', async () => {
     try {
@@ -3974,9 +4052,23 @@ function updateWakeWordUI() {
   const btn = document.getElementById('wake-word-btn');
   if (btn) {
     btn.classList.toggle('active', wakeWordActive);
-    btn.title = wakeWordActive ? 'Wake word ON — Click to disable' : 'Wake word OFF — Click to enable';
+    const d = wakeDiagnostics || {};
+    const bits = [];
+    if (wakeWordActive) {
+      bits.push('Wake word ON — Say "Hey Jenny" anytime');
+      if (d.streamOpen) bits.push('MIC STREAM OPEN');
+      else bits.push('MIC STREAM CLOSED');
+      if (d.device) bits.push('device: ' + d.device);
+      if (d.lastError) bits.push('lastError: ' + d.lastError);
+    } else {
+      bits.push('Wake word OFF — Click to enable');
+      if (d.lastError) bits.push('lastError: ' + d.lastError);
+    }
+    btn.title = bits.join(' · ');
   }
 }
+
+let wakeDiagnostics = null;
 
 async function syncWakeStatus() {
   try {
@@ -3984,10 +4076,16 @@ async function syncWakeStatus() {
     const d = await r.json();
     const phrases = (d && d.phrases) || WAKE_WORDS;
     const on = !!(d && d.on);
+    if (d) wakeDiagnostics = { streamOpen: !!d.streamOpen, device: d.device || '', lastError: d.lastError || '' };
     if (on !== wakeWordActive) {
       wakeWordActive = on;
       updateWakeWordUI();
-      if (on) toast(`Wake word active — Say "${phrases[0]}" anytime`, 'ok');
+    } else {
+      updateWakeWordUI();
+    }
+    if (on && !window.__wakeNotified) {
+      window.__wakeNotified = true;
+      toast(`Wake word active — Say "${phrases[0]}" anytime`, 'ok');
     }
   } catch {}
 }
