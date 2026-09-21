@@ -1056,7 +1056,13 @@ function addTyping() {
 
 function removeTyping() { const el = document.getElementById('typing-indicator'); if (el) el.remove(); }
 
-function scrollChat() { const area = document.getElementById('chat-scroll'); setTimeout(() => area.scrollTop = area.scrollHeight, 50); }
+let _chatScrollRaf = null;
+function scrollChat() {
+  const area = document.getElementById('chat-scroll');
+  if (!area) return;
+  if (_chatScrollRaf) return;
+  _chatScrollRaf = requestAnimationFrame(() => { _chatScrollRaf = null; area.scrollTop = area.scrollHeight; });
+}
 
 function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
