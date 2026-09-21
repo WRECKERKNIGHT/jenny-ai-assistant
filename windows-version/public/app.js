@@ -615,7 +615,6 @@ function updateWelcomeVitals(cpu, ram, batt, uptime) {
 // ORB CANVAS
 // ================================================
 let orbState = 'idle';
-let orbFrame = 0;
 
 function startOrb() {
   const canvas = document.getElementById('orb-canvas');
@@ -624,15 +623,15 @@ function startOrb() {
   const W = canvas.width, H = canvas.height;
   const cx = W / 2, cy = H / 2;
   let lastDrawTime = 0;
+  let orbStartTime = performance.now();
   function draw() {
     requestAnimationFrame(draw);
     const now = performance.now();
     if (now - lastDrawTime < 33) return; // Throttled to ~30 FPS
     lastDrawTime = now;
 
-    orbFrame++;
     ctx.clearRect(0, 0, W, H);
-    const t = orbFrame * 0.016;
+    const t = (now - orbStartTime) / 1000;
     const isIdle = orbState === 'idle';
     const isListening = orbState === 'listening';
     const isThinking = orbState === 'thinking';
