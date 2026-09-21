@@ -51,6 +51,25 @@ activeDevices = {}
 pendingDeviceCommands = {}
 system_cache = {"cpu": 0, "ram": 0, "battery": 100, "charging": False, "disk": 0, "disk_free": "0", "disk_total": "0", "ram_used": "0", "ram_total": "0", "net_speed": "0 KB/s", "uptime": 0, "hostname": platform.node(), "platform": sys.platform}
 
+def _save_devices():
+    """Persist linked phones so approvals survive a server restart."""
+    try:
+        save_json(DATA_DIR / "devices.json", {"devices": list(activeDevices.values())})
+    except Exception:
+        pass
+
+def _load_devices():
+    try:
+        data = load_json(DATA_DIR / "devices.json", {})
+        for dev in data.get("devices", []):
+            did = dev.get("deviceId")
+            if did:
+                activeDevices[did] = dev
+    except Exception:
+        pass
+
+_load_devices()
+
 # Groq API usage/limit tracking (shared by the usage bars in every mode).
 GROQ_LIMITS = {"rpm_max": 30, "tpm_max": 6000}
 # Ordered candidate models: the first that the account can actually use wins.
@@ -1275,21 +1294,37 @@ def local_command_router(msg):
 
     # APP INTEGRATIONS (Spotify / Telegram / WhatsApp / Discord / VS Code / Chrome deep)
     # run BEFORE generic "open <app>" and master-volume handlers so integrations win.
+    def spotify_running_now() -> bool:
+        try:
+            import app_integrations
+            return app_integrations.spotify_running()
+        except Exception:
+            return False
     if any(w in lo for w in ["ring my phone", "call my phone", "buzz my phone", "ring the phone", "call the phone"]):
         return {"text": f"Ringing your phone, {boss}!", "speech": "Ringing your phone.", "command": {"action": "phone-ring", "value": ""}}
     m = re.search(r"(?:play|put on)\s+(.+?)\s+(?:on|in)\s+spotify\b", lo)
     if m:
         q = m.group(1).strip()
+        if not spotify_running_now():
+            return {"text": f"Spotify isn't running, {boss}. Say **open spotify** first, then I can play {q} for you.", "speech": f"Spotify isn't running. Say open spotify first.", "command": {"action": "open-app", "value": "spotify"}}
         return {"text": f"Playing **{q}** on Spotify, {boss}!", "speech": f"Playing {q} on Spotify.", "command": {"action": "spotify-search", "value": q}}
     if ("what song" in lo or "what's playing" in lo or "now playing" in lo or "currently playing" in lo) and "spotify" in lo:
         return {"text": f"Checking what's on Spotify, {boss}!", "speech": "Checking Spotify."}
     if any(w in lo for w in ["spotify next", "next on spotify"]):
+        if not spotify_running_now():
+            return {"text": f"Spotify isn't running, {boss}. Say **open spotify** first.", "speech": "Spotify isn't running.", "command": {"action": "open-app", "value": "spotify"}}
         return {"text": f"Next on Spotify, {boss}!", "speech": "Next track on Spotify.", "command": {"action": "spotify-action", "value": "next"}}
     if any(w in lo for w in ["spotify previous", "previous on spotify", "back on spotify"]):
+        if not spotify_running_now():
+            return {"text": f"Spotify isn't running, {boss}. Say **open spotify** first.", "speech": "Spotify isn't running.", "command": {"action": "open-app", "value": "spotify"}}
         return {"text": f"Going back, {boss}!", "speech": "Previous track.", "command": {"action": "spotify-action", "value": "previous"}}
     if any(w in lo for w in ["pause spotify", "pause the music", "pause music", "pause the song", "spotify pause", "stop spotify", "stop the music", "stop music", "stop the song"]):
+        if not spotify_running_now():
+            return {"text": f"Spotify isn't running, {boss}. Say **open spotify** first.", "speech": "Spotify isn't running.", "command": {"action": "open-app", "value": "spotify"}}
         return {"text": f"Pausing audio on Spotify, {boss}!", "speech": "Pausing Spotify.", "command": {"action": "spotify-action", "value": "pause"}}
     if any(w in lo for w in ["resume spotify", "resume the music", "resume music", "resume the song", "continue spotify", "play the music", "unpause"]):
+        if not spotify_running_now():
+            return {"text": f"Spotify isn't running, {boss}. Say **open spotify** first.", "speech": "Spotify isn't running.", "command": {"action": "open-app", "value": "spotify"}}
         return {"text": f"Resuming playback, {boss}!", "speech": "Resuming Spotify.", "command": {"action": "spotify-action", "value": "play"}}
     if any(w in lo for w in ["open spotify", "open spotify app", "launch spotify"]):
         return {"text": f"Opening Spotify, {boss}!", "speech": "Opening Spotify.", "command": {"action": "open-app", "value": "spotify"}}
@@ -2417,6 +2452,17 @@ def api_chat():
     msg = d.get("message", "").strip()
     if not msg:
         return jsonify({"success": False, "error": "No message"}), 400
+    # Phone-sourced chats are mirrored into the dashboard output box so a
+    # command sent from the phone is visible on the PC too.
+    src = (request.headers.get("X-Source") or "").lower()
+    if src == "phone" or d.get("deviceId"):
+        _ui_feed("user", f"[Phone] {msg}", source="phone")
+        reply = _assistant_reply(msg)
+        ev = {"kind": "assistant", "text": reply.get("text", "")}
+        if reply.get("command"):
+            ev["command"] = reply["command"]
+        _ui_feed("assistant", reply.get("text", ""), command=reply.get("command"), source="phone")
+        return jsonify({"success": True, "reply": reply})
     return jsonify({"success": True, "reply": _assistant_reply(msg)})
 
 @app.route("/api/smart-suggestions")
@@ -2433,6 +2479,23 @@ def api_user_habits():
 def api_control():
     d = request.get_json(force=True, silent=True) or {}
     action = d.get("action", ""); value = d.get("value", "")
+    # Mirror phone-originated control actions into the dashboard output box.
+    phone_src = (request.headers.get("X-Source") or "").lower() == "phone" or bool(d.get("deviceId"))
+    if phone_src:
+        from flask import after_this_request
+        @after_this_request
+        def _feed_phone_cmd(resp):
+            try:
+                import json as _json
+                body = _json.loads(resp.get_data(as_text=True) or "{}") if resp.get_data() else {}
+                if body.get("success"):
+                    label = "Phone → " + str(action)
+                    if value and isinstance(value, str) and value and not value.startswith("{"):
+                        label += " " + str(value)[:80]
+                    _ui_feed("cmd", label, source="phone")
+            except Exception:
+                pass
+            return resp
     lo = action.lower()
     if lo == "volume":
         try:
@@ -2617,6 +2680,13 @@ def api_control():
             import app_integrations
             ok, msg = app_integrations.run(lo, value)
             return jsonify({"success": bool(ok), "message": msg})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)})
+    if lo == "spotify-status":
+        try:
+            import app_integrations
+            st = app_integrations.spotify_status()
+            return jsonify({"success": True, **st})
         except Exception as e:
             return jsonify({"success": False, "error": str(e)})
     if lo in ("phone-ring", "phone-command"):
@@ -3049,6 +3119,15 @@ def api_local_ip():
 @app.route("/api/remote-status")
 def api_remote_status(): return jsonify({"success": True, "remoteMode": False, "hostname": platform.node()})
 
+@app.route("/api/spotify/status")
+def api_spotify_status():
+    try:
+        import app_integrations
+        st = app_integrations.spotify_status()
+        return jsonify({"success": True, **st})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
 @app.route("/api/devices")
 def api_devices():
     now = datetime.datetime.now()
@@ -3062,6 +3141,9 @@ def api_devices():
             last_dt = None
         alive = last_dt is not None and (now - last_dt).total_seconds() < 45
         dev["connected"] = bool(alive) and dev.get("status") == "approved"
+        # `linked` = approved and therefore selectable even if the heartbeat is
+        # briefly stale (background-tab throttling used to disarm the panel).
+        dev["linked"] = dev.get("status") == "approved"
         out.append(dev)
     return jsonify({"success": True, "devices": out})
 
@@ -3074,7 +3156,14 @@ def api_mobile_stats():
 def api_device_register():
     d = request.get_json(force=True, silent=True) or {}; did = d.get("deviceId", "")
     if not did: return jsonify({"success": False, "message": "deviceId required"})
-    if did not in activeDevices: activeDevices[did] = {"deviceId": did, "os": d.get("os", "Unknown"), "browser": d.get("browser", "Unknown"), "ip": request.remote_addr, "status": "pending", "lastActive": datetime.datetime.now().isoformat()}
+    if did not in activeDevices:
+        activeDevices[did] = {"deviceId": did, "os": d.get("os", "Unknown"), "browser": d.get("browser", "Unknown"), "ip": request.remote_addr, "status": "pending", "lastActive": datetime.datetime.now().isoformat()}
+    else:
+        activeDevices[did]["ip"] = request.remote_addr
+        activeDevices[did].setdefault("os", d.get("os", "Unknown"))
+        activeDevices[did].setdefault("browser", d.get("browser", "Unknown"))
+        activeDevices[did]["lastActive"] = datetime.datetime.now().isoformat()
+    _save_devices()
     return jsonify({"success": True, "device": activeDevices[did]})
 
 @app.route("/api/device/status/<did>", methods=["GET", "POST"])
@@ -3090,6 +3179,7 @@ def api_device_status(did):
                 dev["signal"] = str(d["signal"])[:40]
             if d.get("network") is not None:
                 dev["network"] = str(d["network"])[:40]
+            _save_devices()
         return jsonify({"success": True, "status": dev.get("status", "unknown") if dev else "unknown"})
     dev = activeDevices.get(did, {})
     return jsonify({"success": True, "status": dev.get("status", "unknown"), "os": dev.get("os", ""), "browser": dev.get("browser", ""), "ip": dev.get("ip", ""), "battery": dev.get("battery"), "signal": dev.get("signal"), "lastActive": dev.get("lastActive", "")})
@@ -3097,7 +3187,10 @@ def api_device_status(did):
 @app.route("/api/device/approve", methods=["POST"])
 def api_device_approve():
     d = request.get_json(force=True, silent=True) or {}; did = d.get("deviceId", "")
-    if did in activeDevices: activeDevices[did]["status"] = d.get("status", ""); return jsonify({"success": True})
+    if did in activeDevices:
+        activeDevices[did]["status"] = d.get("status", "")
+        _save_devices()
+        return jsonify({"success": True})
     return jsonify({"success": False}), 404
 
 @app.route("/api/device/command/send", methods=["POST"])
@@ -3127,7 +3220,11 @@ def api_pc_notifications():
     return jsonify({"success": True, "notifications": pc.get("items", [])})
 
 @app.route("/api/device/command/poll/<did>")
-def api_device_cmd_poll(did): return jsonify({"success": True, "commands": pendingDeviceCommands.pop(did, [])})
+def api_device_cmd_poll(did):
+    # Opening the phone page counts as activity so it re-links instantly.
+    if did in activeDevices:
+        activeDevices[did]["lastActive"] = datetime.datetime.now().isoformat()
+    return jsonify({"success": True, "commands": pendingDeviceCommands.pop(did, [])})
 
 @app.route("/api/device/location", methods=["POST"])
 def api_device_location():
@@ -3547,6 +3644,23 @@ def api_wake_toggle():
 
 _WAKE_EVENTS = []
 _WAKE_EVENTS_LOCK = threading.Lock()
+
+def _ui_feed(kind: str, text: str, command: dict | None = None, source: str = "") -> None:
+    """Append a UI event for the dashboard output box. This single feed powers
+    the wake-word conversation AND phone-originated commands, so everything the
+    assistant does is visible in the chat even when it happened elsewhere."""
+    if not text:
+        return
+    try:
+        with _WAKE_EVENTS_LOCK:
+            ev = {"kind": kind, "text": str(text)[:4000]}
+            if command:
+                ev["command"] = command
+            if source:
+                ev["source"] = source
+            _WAKE_EVENTS.append(ev)
+    except Exception:
+        pass
 
 @app.route("/api/wake/events")
 def api_wake_events():
