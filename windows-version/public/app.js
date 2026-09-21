@@ -736,7 +736,10 @@ function startSpeechWaves(stream) {
     if (container) container.classList.add('active');
     function animate() {
       speechAnalyser.getByteFrequencyData(data);
-      speechWaveBars.forEach((bar, i) => { bar.style.height = Math.max(2, (data[i] || 0) / 255 * 28) + 'px'; });
+      for (let i = 0; i < speechWaveBars.length; i++) {
+        const b = speechWaveBars[i];
+        if (b) { const v = Math.max(0.08, (data[i] || 0) / 255); b.style.transform = `scaleY(${v})`; }
+      }
       speechAnimFrame = requestAnimationFrame(animate);
     }
     animate();
@@ -747,7 +750,7 @@ function stopSpeechWaves() {
   if (speechAnimFrame) cancelAnimationFrame(speechAnimFrame);
   const container = document.getElementById('speech-waves');
   if (container) container.classList.remove('active');
-  speechWaveBars.forEach(bar => bar.style.height = '2px');
+  speechWaveBars.forEach(bar => { if (bar) bar.style.transform = 'scaleY(0.08)'; });
 }
 
 // ================================================
