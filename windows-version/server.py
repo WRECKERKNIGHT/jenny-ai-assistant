@@ -3817,7 +3817,15 @@ def _on_wake_detected(text: str, phrase: str):
         with _WAKE_EVENTS_LOCK:
             _WAKE_EVENTS.append({"kind": "wake", "text": phrase})
             _WAKE_EVENTS.append({"kind": "user", "text": phrase})
-        tts_engine.speak(f"Yes, {MODE_PROFILES.get(mode or 'friday', MODE_PROFILES['friday'])['boss']}?", mode or "friday", use_chime=True)
+        boss = MODE_PROFILES.get(mode or 'friday', MODE_PROFILES['friday'])['boss']
+        acks = [
+            f"Yes, {boss}?",
+            f"Listening, {boss}.",
+            f"I'm here, {boss}. Go ahead.",
+            f"Go ahead, {boss}.",
+            f"At your service, {boss}.",
+        ]
+        tts_engine.speak(random.choice(acks), mode or "friday", use_chime=True)
         res = speech_stt.record_and_transcribe(8, language=speech_stt.get_stt_language())
         if not res.get("success"):
             err = res.get("error", "I'm here. Go ahead.")
