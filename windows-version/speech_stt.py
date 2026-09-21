@@ -354,6 +354,9 @@ _wake_state = {
     "suspend": False,
     "stream_open": False,
     "last_error": "",
+    "reopen": False,
+    "device": "",
+    "errors": 0,
 }
 
 
@@ -385,10 +388,40 @@ def wake_last_heard() -> str:
 
 
 def wake_status() -> dict:
+    """Detailed real-time state for the dashboard (used by /api/wake/status).
+    The extra fields let the UI show *why* the listener might be silent, e.g.
+    a mic that's mid-hand-off or is blocked by another app."""
+    dev = ""
+    if sd is not None:
+        try:
+            i = default_mic_index()
+            if i is not None:
+                d = sd.query_devices(i)
+                dev = str(d.get("name", ""))
+        except Exception:
+            pass
     with _WAKE_LOCK:
         return {"on": bool(_wake_state["running"]),
                 "phrases": list(_wake_state["phrases"]),
-                "lastHeard": _wake_state["last_heard"]}
+                "lastHeard": _wake_state["last_heard"],
+                "streamOpen": bool(_wake_state["stream_open"]),
+                "suspended": bool(_wake_state["suspend"]),
+                "lastError": _wake_state["last_error"] or "",
+                "errors": _wake_state["errors"],
+                "device": _wake_state["device"] or dev or ""}
+
+
+def wake_restart() -> bool:
+    """Ask the wake loop to drop its microphone stream and re-open it cleanly
+    (recovers from stale host-API states after the mic fought another app)."""
+    with _WAKE_LOCK:
+        if not _wake_state["running"]:
+            return False
+        _wake_state["reopen"] = True
+        _wake_state["last_error"] = ""
+    with _REC_COND:
+        _REC_COND.notify_all()
+    return True
 
 
 def detect_wake_phrase(text: str) -> str:
@@ -420,6 +453,9 @@ def start_wake_listener(on_detected=None) -> bool:
         _wake_state["running"] = True
         _wake_state["on_detected"] = on_detected
         _wake_state["cooldown_until"] = 0.0
+        _wake_state["reopen"] = False
+        _wake_state["errors"] = 0
+        _wake_state["last_error"] = ""
         _wake_state["thread"] = threading.Thread(target=_wake_loop, daemon=True)
         _wake_state["thread"].start()
         return True
@@ -457,6 +493,10 @@ def _open_wake_stream():
         dev = pick_device()
         if dev is None:
             _rec_lock.release()
+            with _WAKE_LOCK:
+                _wake_state["device"] = ""
+                _wake_state["last_error"] = ("No microphone detected. Plug one in, then I'll pick it up automatically. "
+                                             "Also check Windows: Settings > Privacy & security > Microphone.")
             return None
         stream = sd.InputStream(samplerate=DEFAULT_SAMPLE_RATE, channels=DEFAULT_CHANNELS,
                                 dtype="int16", device=dev)
@@ -467,14 +507,31 @@ def _open_wake_stream():
         except Exception:
             pass
         with _WAKE_LOCK:
-            _wake_state["last_error"] = str(e)[:200]
+            _wake_state["last_error"] = _actionable_mic_error(e)
+            _wake_state["errors"] += 1
         return None
     with _REC_COND:
         _wake_state["stream_open"] = True
         _REC_COND.notify_all()
     with _WAKE_LOCK:
         _wake_state["last_error"] = ""
+        try:
+            d = sd.query_devices(dev)
+            _wake_state["device"] = str(d.get("name", ""))
+        except Exception:
+            _wake_state["device"] = ""
     return stream
+
+
+def _actionable_mic_error(e: Exception) -> str:
+    s = str(e).lower()
+    if any(t in s for t in ("host api error", "error opening", "invalid device",
+                            "stream error", "unavailable", "no device", "portaudio")):
+        return ("Microphone is busy or blocked. Close any app using the mic (teams, zoom, browser tabs), "
+                "or allow desktop mic access in Windows Settings > Privacy > Microphone.")
+    if "notfound" in s or "not found" in s:
+        return "No microphone found. Plug one in or check Windows mic privacy settings."
+    return (str(e)[:160] or e.__class__.__name__) + " — open Windows Settings > Privacy > Microphone if this keeps happening."
 
 
 def _release_wake_stream(stream) -> None:
@@ -547,6 +604,16 @@ def _wake_loop() -> None:
         with _WAKE_LOCK:
             if not _wake_state["running"]:
                 break
+            reopen = _wake_state["reopen"]
+            if reopen:
+                _wake_state["reopen"] = False
+        if reopen and stream is not None:
+            _release_wake_stream(stream)
+            stream = None
+            buf = []
+            had_speech = False
+            silent_cycles = 0
+            time.sleep(0.3)
         with _REC_COND:
             suspended = _wake_state["suspend"]
         if suspended:
