@@ -336,9 +336,40 @@ body:not(.mode-jarvis) .jarvis-only { display: none; }
 
 .particle-bg { position:absolute; inset:0; pointer-events:none; z-index:0; overflow:hidden; }
 
-.chat-scroll { flex:1; overflow-y:auto; padding:16px 24px; display:flex; flex-direction:column; position:relative; z-index:1; }
+.chat-scroll { flex:1; overflow-y:auto; padding:16px 24px; display:flex; flex-direction:column; position:relative; z-index:1; isolation:isolate; }
 
-.msgs { display:flex; flex-direction:column; gap:12px; max-width:680px; width:100%; margin:auto 0; justify-content:flex-end; }
+/* Output-box ambience: slow-drifting aurora blobs + a faint holo grid. */
+.chat-scroll::before {
+  content:''; position:absolute; inset:-70px; z-index:-1; pointer-events:none;
+  background:
+    radial-gradient(38% 34% at 22% 30%, var(--aur-1, rgba(255,215,0,0.06)) 0%, transparent 70%),
+    radial-gradient(30% 28% at 78% 20%, var(--aur-2, rgba(255,80,160,0.05)) 0%, transparent 70%),
+    radial-gradient(44% 40% at 60% 85%, var(--aur-3, rgba(0,190,255,0.045)) 0%, transparent 70%),
+    radial-gradient(26% 22% at 40% 60%, var(--aur-4, rgba(168,85,247,0.035)) 0%, transparent 70%);
+  animation: aurora-drift 16s ease-in-out infinite alternate;
+  will-change: transform;
+}
+.chat-scroll::after {
+  content:''; position:absolute; inset:0; z-index:-1; pointer-events:none;
+  background:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 34px 34px, 34px 34px;
+  -webkit-mask-image: radial-gradient(140% 110% at 50% 0%, #000 45%, transparent 100%);
+          mask-image: radial-gradient(140% 110% at 50% 0%, #000 45%, transparent 100%);
+  animation: grid-sweep 9s linear infinite;
+}
+@keyframes aurora-drift {
+  0%   { transform: translate3d(0,0,0) scale(1); }
+  50%  { transform: translate3d(1.6%, -0.8%, 0) scale(1.06); }
+  100% { transform: translate3d(-1.4%, 1%, 0) scale(1.12); }
+}
+@keyframes grid-sweep {
+  0%   { background-position: 0 0, 0 0; }
+  100% { background-position: 0 0, 0 34px; }
+}
+
+.msgs { display:flex; flex-direction:column; gap:12px; max-width:680px; width:100%; margin:auto 0; justify-content:flex-end; position:relative; z-index:1; }
 
 /* Welcome screen */
 .welcome-screen { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; transition:opacity 0.4s ease; z-index:2; }
@@ -648,6 +679,10 @@ body.light-mode {
   --txt3: rgba(0,0,0,0.35);
   --cyan: #0891b2;
   --pink: #db2777;
+  --aur-1: rgba(8, 145, 178, 0.07);
+  --aur-2: rgba(219, 39, 119, 0.05);
+  --aur-3: rgba(212, 175, 55, 0.05);
+  --aur-4: rgba(124, 58, 237, 0.04);
 }
 body.light-mode .holo-panel { background: rgba(255,255,255,0.85); }
 body.light-mode .chat-panel { background: rgba(245,245,247,0.95); }
@@ -1444,6 +1479,10 @@ body.mode-jarvis {
   --panel-bg: rgba(0, 20, 40, 0.85);
   --glass-bg: rgba(0, 30, 60, 0.6);
   --glow-color: rgba(0, 212, 255, 0.3);
+  --aur-1: rgba(0, 212, 255, 0.07);
+  --aur-2: rgba(0, 119, 182, 0.06);
+  --aur-3: rgba(0, 160, 255, 0.05);
+  --aur-4: rgba(0, 212, 255, 0.035);
 }
 
 body.mode-jarvis .holo-header { background: linear-gradient(135deg, rgba(0,100,180,0.15), rgba(0,50,100,0.05)); border-color: rgba(0,212,255,0.25); }
@@ -1488,6 +1527,10 @@ body.mode-friday {
   --panel-bg: rgba(15, 8, 25, 0.85);
   --glass-bg: rgba(25, 12, 40, 0.6);
   --glow-color: rgba(168, 85, 247, 0.3);
+  --aur-1: rgba(168, 85, 247, 0.07);
+  --aur-2: rgba(236, 72, 153, 0.06);
+  --aur-3: rgba(120, 80, 255, 0.05);
+  --aur-4: rgba(192, 132, 252, 0.04);
 }
 
 body.mode-friday .holo-header { background: linear-gradient(135deg, rgba(124,58,237,0.15), rgba(109,40,217,0.05)); border-color: rgba(168,85,247,0.25); }
@@ -1542,7 +1585,7 @@ body.mode-friday .wave-bar { background: rgba(168,85,247,0.4); }
 /* ================================================
    U.L.T.R.O.N. MODE — Red/Orange Aggressive Theme
    ================================================ */
-body.mode-ultron { --accent: #ff3e3e; --accent2: #ff6b35; --accent3: #ff1744; }
+body.mode-ultron { --accent: #ff3e3e; --accent2: #ff6b35; --accent3: #ff1744; --aur-1: rgba(255,62,62,0.07); --aur-2: rgba(255,140,60,0.06); --aur-3: rgba(255,23,68,0.05); --aur-4: rgba(255,107,53,0.04); }
 body.mode-ultron .boot-title { text-shadow: 0 0 30px rgba(255,62,62,0.6), 0 0 60px rgba(255,62,62,0.3); }
 body.mode-ultron .boot-sub { color: rgba(255,62,62,0.7); }
 body.mode-ultron .boot-bar-fill { background: linear-gradient(90deg, #ff3e3e, #ff6b35); box-shadow: 0 0 20px rgba(255,62,62,0.5); }
