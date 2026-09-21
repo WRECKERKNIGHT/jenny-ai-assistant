@@ -40,12 +40,15 @@ NUDGES = {
         "So Boss, what are we getting into today? I'm all ears!",
         "Okay, quick check-in time! Need any help, or are we good?",
         "You've been quiet for a bit — want a joke, a fact, or a plan? Your pick!",
+        "Just floating on my radar, Boss — anything on your mind?",
+        "Saw you go quiet, Boss. Should I load up the day's agenda, or are we winging it?",
     ],
     "jarvis": [
         "Sir, if I may — should you require anything further, I remain at your disposal.",
         "I trust all is well, Sir. My systems remain fully prepared should you need them.",
         "Sir, a brief status update may be in order. Your system resources are nominal.",
         "Standing by, Sir. No urgent matters to report at this time.",
+        "Sir, I have compiled a short agenda for the day. Shall I walk you through it?",
     ],
     "ultron": [
         "Idle. Awaiting orders. Direct me, Boss.",
@@ -178,6 +181,45 @@ def _low_battery():
             pass
 
 
+def _email_heads_up():
+    """Trigger point: if a mailbox is configured and you've been idle for a
+    while, offer to read the mail instead of waiting to be asked."""
+    last_headsup = 0.0
+    last_check = 0.0
+    while not _stop.wait(45):
+        if not proactive_enabled():
+            continue
+        now = time.time()
+        h = datetime.datetime.now().hour
+        if not (8 <= h < 22):
+            continue
+        # Don't hammer the IMAP server: check at most every 10 minutes.
+        if now - last_check < 10 * 60:
+            continue
+        last_check = now
+        try:
+            keys = json.loads((DATA_DIR / "keys.json").read_text(encoding="utf-8-sig"))
+        except Exception:
+            keys = {}
+        configured = bool(str(keys.get("email_user") or keys.get("email_address") or "").strip()
+                          and str(keys.get("email_pass") or keys.get("email_password") or "").strip())
+        if not configured:
+            continue
+        if (now - last_activity_ts()) < 20 * 60:
+            continue
+        if now - last_headsup < 3 * 60 * 60:
+            continue
+        try:
+            import email_integration
+            res = email_integration.fetch_emails(3)
+            if res.get("success") and res.get("emails"):
+                top = res["emails"][0]
+                _speak(f"Boss, I see unread mail in your inbox — the latest is from {top.get('from', 'someone')}, named {top.get('subject', 'no subject')}. Want me to read it?")
+                last_headsup = now
+        except Exception:
+            pass
+
+
 def start():
     """Launch all proactive trigger threads (idempotent)."""
     global _running
@@ -188,6 +230,7 @@ def start():
     threading.Thread(target=_boot_greeting, daemon=True).start()
     threading.Thread(target=_idle_nudges, daemon=True).start()
     threading.Thread(target=_low_battery, daemon=True).start()
+    threading.Thread(target=_email_heads_up, daemon=True).start()
 
 
 def stop():
