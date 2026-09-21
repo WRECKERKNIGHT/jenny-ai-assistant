@@ -38,6 +38,12 @@ DEFAULT_SAMPLE_RATE = 16000
 DEFAULT_CHANNELS = 1
 
 _rec_lock = threading.Lock()
+# Coordinates hand-offs of the single microphone between the always-on wake
+# listener and every on-demand capture (mic button, live session, wake command).
+# The wake loop keeps ONE persistent InputStream open and holds `_rec_lock`
+# while it streams. On-demand captures call suspend_wake_microphone() to make
+# the listener pause and release the lock, then release_microphone() when done.
+_REC_COND = threading.Condition()
 
 
 def get_mics() -> list[dict]:
@@ -292,50 +298,32 @@ def transcribe(wav_bytes: bytes, language: str = "") -> tuple[str, str]:
 
 
 def record_and_transcribe(seconds: int = 5, device: int | None = None, language: str = "") -> dict:
-    """One-shot microphone capture + transcription (used by the mic button)."""
-    if _rec_lock.acquire(blocking=False):
-        try:
-            if not get_mics():
-                return {"success": False, "error": "No microphone detected. Plug one in or check Windows privacy settings."}
-            try:
-                wav = record_seconds(seconds, device=device)
-            except RuntimeError as e:
-                code = str(e)
-                if code == "no_mic":
-                    return {"success": False, "error": "No microphone detected. Check mic privacy settings."}
-                if code == "device_busy":
-                    return {"success": False, "error": "Microphone is busy (another app is using it). Close that app and retry."}
-                return {"success": False, "error": "Microphone capture failed. Check mic privacy settings."}
-            if not wav:
-                return {"success": False, "error": "No speech detected. Please speak louder or choose another mic.", "level": "quiet"}
-            text, engine = transcribe(wav, language)
-            if not text:
-                return {"success": False, "error": "Could not recognize speech. Please try again.", "text": "", "engine": engine}
-            return {"success": True, "text": text, "engine": engine, "seconds": seconds, "language": get_stt_language() if not language else language}
-        finally:
-            _rec_lock.release()
-    return {"success": False, "error": "Microphone busy. Try again in a moment."}
+    """One-shot microphone capture + transcription (used by the mic button).
 
-
-def capture_transcribe_loop(seconds_per_chunk: int = 4, max_chunks: int = 6) -> list[str]:
-    """Record several consecutive chunks and transcribe each (for the
-    wake-word listener). Returns a list of transcribed texts."""
-    if sd is None:
-        return []
-    texts = []
-    for _ in range(max_chunks):
+    Asks the always-on wake listener to pause first so this capture owns the
+    mic; the listener resumes automatically afterwards."""
+    if not suspend_wake_microphone(timeout=8.0):
+        return {"success": False, "error": "Microphone busy. Try again in a moment."}
+    try:
+        if not get_mics():
+            return {"success": False, "error": "No microphone detected. Plug one in or check Windows privacy settings."}
         try:
-            wav = record_seconds(seconds_per_chunk)
-        except Exception:
-            break
+            wav = record_seconds(seconds, device=device)
+        except RuntimeError as e:
+            code = str(e)
+            if code == "no_mic":
+                return {"success": False, "error": "No microphone detected. Check mic privacy settings."}
+            if code == "device_busy":
+                return {"success": False, "error": "Microphone is busy (another app is using it). Close that app and retry."}
+            return {"success": False, "error": "Microphone capture failed. Check mic privacy settings."}
         if not wav:
-            time.sleep(0.4)
-            continue
-        text, _engine = transcribe(wav)
-        if text:
-            texts.append(text)
-        time.sleep(0.15)
-    return texts
+            return {"success": False, "error": "No speech detected. Please speak louder or choose another mic.", "level": "quiet"}
+        text, engine = transcribe(wav, language)
+        if not text:
+            return {"success": False, "error": "Could not recognize speech. Please try again.", "text": "", "engine": engine}
+        return {"success": True, "text": text, "engine": engine, "seconds": seconds, "language": get_stt_language() if not language else language}
+    finally:
+        release_microphone()
 
 
 # ---------------------------------------------------------------------------
@@ -344,9 +332,11 @@ def capture_transcribe_loop(seconds_per_chunk: int = 4, max_chunks: int = 6) -> 
 # The browser wake word only works while the dashboard is open and focused.
 # This listener runs in the background on the server itself, so the assistant
 # stays "completely active" — just say "hey jenny" (etc.) and it responds
-# immediately even when no dashboard page is attached. It shares one rule with
-# the mic button: every capture goes through `_rec_lock`, and the loop uses a
-# non-blocking acquire so it never fights with an in-progress mic capture.
+# immediately even when no dashboard page is attached. It keeps ONE persistent
+# InputStream open and watches for speech utterances; on-demand captures
+# (mic button, live sessions, wake commands) temporarily suspend it via
+# suspend_wake_microphone()/release_microphone() so it never fights with an
+# in-progress capture and never dies from repeated open/close cycles.
 # ---------------------------------------------------------------------------
 
 DEFAULT_WAKE_PHRASES = [
@@ -361,6 +351,9 @@ _wake_state = {
     "phrases": list(DEFAULT_WAKE_PHRASES),
     "cooldown_until": 0.0,
     "last_heard": "",
+    "suspend": False,
+    "stream_open": False,
+    "last_error": "",
 }
 
 
@@ -444,34 +437,183 @@ def wake_cooldown(seconds: float = 5.0) -> None:
         _wake_state["cooldown_until"] = time.time() + max(1.0, seconds)
 
 
+# ---------------------------------------------------------------------------
+# Microphone hand-off between the wake listener and on-demand captures.
+#
+# The wake loop keeps ONE persistent InputStream open and holds `_rec_lock`
+# while it streams (repeatedly opening/closing a stream every ~3s on Windows
+# caused "host api error" flakiness and made wake die after the first hit).
+# On-demand captures (mic button, live session, wake command) call
+# suspend_wake_microphone() so the listener closes its stream and releases the
+# lock; once the capture finishes they call release_microphone() and the wake
+# listener re-opens its stream automatically.
+# ---------------------------------------------------------------------------
+
+def _open_wake_stream():
+    """Open the persistent wake-listener InputStream. Returns the stream or None."""
+    if not _rec_lock.acquire(blocking=False):
+        return None
+    try:
+        dev = pick_device()
+        if dev is None:
+            _rec_lock.release()
+            return None
+        stream = sd.InputStream(samplerate=DEFAULT_SAMPLE_RATE, channels=DEFAULT_CHANNELS,
+                                dtype="int16", device=dev)
+        stream.start()
+    except Exception as e:
+        try:
+            _rec_lock.release()
+        except Exception:
+            pass
+        with _WAKE_LOCK:
+            _wake_state["last_error"] = str(e)[:200]
+        return None
+    with _REC_COND:
+        _wake_state["stream_open"] = True
+        _REC_COND.notify_all()
+    with _WAKE_LOCK:
+        _wake_state["last_error"] = ""
+    return stream
+
+
+def _release_wake_stream(stream) -> None:
+    """Close the persistent wake stream and free the capture lock."""
+    if stream is not None:
+        try:
+            stream.stop()
+            stream.close()
+        except Exception:
+            pass
+    try:
+        _rec_lock.release()
+    except RuntimeError:
+        pass
+    with _REC_COND:
+        _wake_state["stream_open"] = False
+        _REC_COND.notify_all()
+
+
+def suspend_wake_microphone(timeout: float = 8.0) -> bool:
+    """Pause the always-on wake listener so the caller can own the mic.
+
+    On success the caller OWNS `_rec_lock` until it calls release_microphone().
+    Returns False if the mic could not be grabbed within `timeout`."""
+    start = time.time()
+    with _REC_COND:
+        _wake_state["suspend"] = True
+        _REC_COND.notify_all()
+        deadline = start + max(2.0, timeout)
+        while _wake_state["stream_open"] and time.time() < deadline:
+            _REC_COND.wait(0.2)
+    try:
+        got = _rec_lock.acquire(blocking=True, timeout=max(1.0, timeout))
+    except Exception:
+        got = False
+    if not got:
+        with _REC_COND:
+            _wake_state["suspend"] = False
+            _REC_COND.notify_all()
+        return False
+    return True
+
+
+def release_microphone() -> None:
+    """Release the mic taken with suspend_wake_microphone() and let the wake
+    listener resume streaming."""
+    try:
+        _rec_lock.release()
+    except RuntimeError:
+        pass
+    with _REC_COND:
+        _wake_state["suspend"] = False
+        _REC_COND.notify_all()
+
+
+# 0.5s analysis blocks for the wake loop; keeps the last ~4s rolling window.
+_WAKE_BLOCK = int(0.5 * DEFAULT_SAMPLE_RATE)
+_WAKE_WINDOW = int(4.0 / 0.5)   # number of blocks held
+_WAKE_QUIET_BLOCKS = 2          # ~1s of trailing silence ends an utterance
+
+
 def _wake_loop() -> None:
+    stream = None
+    buf: list = []
+    had_speech = False
+    since_voice = 0
+    last_check_at = 0.0
+    silent_cycles = 0
     while True:
         with _WAKE_LOCK:
             if not _wake_state["running"]:
                 break
-            cooldown = time.time() < _wake_state["cooldown_until"]
-        if cooldown:
-            time.sleep(0.4)
+        with _REC_COND:
+            suspended = _wake_state["suspend"]
+        if suspended:
+            if stream is not None:
+                _release_wake_stream(stream)
+                stream = None
+                buf = []
+                had_speech = False
+                silent_cycles = 0
+            with _REC_COND:
+                _REC_COND.wait(0.4)
             continue
-        # Never steal the mic mid-capture; just skip this cycle.
-        if not _rec_lock.acquire(blocking=False):
-            time.sleep(0.3)
-            continue
+        if stream is None:
+            # Be gentle: if the previouly-listed device just failed (another
+            # app grabbed the mic), back off a little instead of hammering.
+            if _wake_state["last_error"]:
+                time.sleep(1.0)
+            stream = _open_wake_stream()
+            if stream is None:
+                time.sleep(0.6)
+                continue
+            buf = []
+            had_speech = False
+            since_voice = 0
+            silent_cycles = 0
         try:
-            if not get_mics():
-                time.sleep(3.0)
-                continue
-            try:
-                wav = record_seconds(3)
-            except Exception:
-                time.sleep(0.5)
-                continue
-            if not wav:
-                time.sleep(0.15)
-                continue
-            text, _engine = transcribe(wav)
-        finally:
-            _rec_lock.release()
+            in_data, _ = stream.read(_WAKE_BLOCK)
+        except Exception:
+            _release_wake_stream(stream)
+            stream = None
+            buf = []
+            time.sleep(0.5)
+            continue
+        silent_cycles += 1
+        lvl = peak_level(in_data, DEFAULT_SAMPLE_RATE)
+        buf.append(in_data)
+        if len(buf) > _WAKE_WINDOW:
+            buf.pop(0)
+        if lvl > 0.003:
+            had_speech = True
+            since_voice = 0
+        else:
+            since_voice += 1
+        now = time.time()
+        with _WAKE_LOCK:
+            cooldown = now < _wake_state["cooldown_until"]
+        # During cooldown just keep buffering silently (never re-trigger).
+        if cooldown:
+            continue
+        # Decide when to transcribe: end of a spoken utterance (quiet tail) or
+        # a safety cadence while someone keeps talking for >~3s.
+        transcribe_now = had_speech and since_voice >= _WAKE_QUIET_BLOCKS
+        if not transcribe_now and had_speech and len(buf) >= _WAKE_WINDOW and (now - last_check_at) >= 2.6:
+            transcribe_now = True
+        if not transcribe_now:
+            continue
+        last_check_at = now
+        had_speech = False
+        since_voice = 0
+        text = ""
+        try:
+            data = np.concatenate([np.asarray(f, dtype=np.int16) for f in buf[-6:]])
+            wav = _to_wav(data, DEFAULT_SAMPLE_RATE)
+            if wav:
+                text, _engine = transcribe(wav)
+        except Exception:
+            text = ""
         if not text:
             continue
         with _WAKE_LOCK:
@@ -479,9 +621,12 @@ def _wake_loop() -> None:
             cb = _wake_state["on_detected"]
         phrase = detect_wake_phrase(text)
         if phrase:
-            wake_cooldown(5.0)
+            wake_cooldown(6.0)
             if cb:
                 threading.Thread(target=cb, args=(text, phrase), daemon=True).start()
+    # Loop exits only when the listener was told to stop.
+    if stream is not None:
+        _release_wake_stream(stream)
 
 
 # ---------------------------------------------------------------------------
@@ -512,9 +657,9 @@ def start_live_session(seconds: int = 12, device: int | None = None,
     dev = pick_device(device)
     if dev is None:
         return {"success": False, "error": "No microphone detected. Check mic privacy settings."}
-    # The always-on wake listener can briefly hold the capture lock; wait a
-    # few seconds for it to release rather than failing the orb tap instantly.
-    if not _rec_lock.acquire(blocking=True, timeout=8.0):
+    # The always-on wake listener can briefly hold the capture lock; pause it
+    # (waiting a few seconds) rather than failing the orb tap instantly.
+    if not suspend_wake_microphone(timeout=8.0):
         return {"success": False, "error": "Microphone busy. Try again in a moment."}
     sid = f"{int(time.time() * 1000)}{threading.get_ident()}"
     session = {
@@ -593,10 +738,7 @@ def _live_worker(sid: str, session: dict, dev: int, seconds: int, language: str)
         session["done"] = True
         with _LIVE_SESSIONS_LOCK:
             _LIVE_SESSIONS.pop(sid, None)
-        try:
-            _rec_lock.release()
-        except RuntimeError:
-            pass
+        release_microphone()
 
 
 def _transcribe_audio(frames: list, samplerate: int, language: str) -> str:
