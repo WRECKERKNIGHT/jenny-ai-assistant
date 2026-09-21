@@ -301,6 +301,8 @@
       border-left: 3px solid var(--gold);
       color: var(--txt2);
     }
+    .typing-dots { letter-spacing: 2px; animation: blink-dots 1.2s infinite; }
+    @keyframes blink-dots { 0%,100% { opacity: .2; } 50% { opacity: 1; } }
 
     /* PENDING AUTHORIZATION OVERLAYS */
     .auth-overlay {
@@ -657,6 +659,7 @@
       <div class="orb-hint" id="orb-hint">TAP ORB FOR VOICE COMMAND</div>
       <div class="mic-lang-row">
         <button id="mic-lang-btn" class="mic-lang-chip" onclick="toggleMicLang()"><i class="fa-solid fa-language"></i> <span id="mic-lang-txt">EN</span></button>
+        <button id="voice-chip" class="mic-lang-chip" onclick="toggleVoiceReplies()"><i class="fa-solid fa-volume-up"></i> <span id="voice-chip-txt">VOICE</span></button>
         <span class="mic-lang-note">Hi/EN toggle for PC-mic voice</span>
       </div>
       <button id="start-call-btn" style="margin-top:10px;width:100%;background:radial-gradient(circle at 50% 50%, rgba(0,212,230,0.2), rgba(0,0,0,0.6));border:1px solid rgba(0,212,230,0.5);border-radius:14px;padding:12px;color:#00d4e6;font-family:var(--mono);font-size:12px;letter-spacing:2px;font-weight:700;">
@@ -805,6 +808,25 @@
     window._speechUtteranceStore = [];
     window._speechHeartbeat = null;
 
+    // Voice replies flag — persisted on the phone. When on, Jenny's replies
+    // stream from the PC in a natural neural voice (/api/speak);
+    window.__voiceReplies = (localStorage.getItem('jenny_voice') || 'on') !== 'off';
+    function syncVoiceChip() {
+      const el = document.getElementById('voice-chip-txt');
+      if (el) el.textContent = window.__voiceReplies ? 'VOICE ON' : 'VOICE OFF';
+      const chip = document.getElementById('voice-chip');
+      if (chip) {
+        chip.style.color = window.__voiceReplies ? '#ffd700' : '#666';
+        chip.style.borderColor = window.__voiceReplies ? 'rgba(255,215,0,0.5)' : 'rgba(255,255,255,0.2)';
+      }
+    }
+    function toggleVoiceReplies() {
+      window.__voiceReplies = !window.__voiceReplies;
+      localStorage.setItem('jenny_voice', window.__voiceReplies ? 'on' : 'off');
+      syncVoiceChip();
+      showMobileToast(window.__voiceReplies ? 'Voice replies ON — PC neural voice' : 'Voice replies OFF');
+    }
+
     function speakMobile(text) {
       if (!('speechSynthesis' in window) || !text) return;
       
@@ -857,6 +879,13 @@
       };
 
       window.speechSynthesis.speak(u);
+    }
+
+    async function speakReply(text) {
+      if (window.__voiceReplies === false) return;
+      if (!text) return;
+      const ok = await playServerTts(String(text));
+      if (!ok) speakMobile(String(text));
     }
 
     // ================================================
@@ -956,7 +985,7 @@
         deniedScreen.classList.add('hidden');
         if (!window.__mobileGreeted) {
           window.__mobileGreeted = true;
-          setTimeout(function() { speakMobile('Link established. Jenny ready on your device, Boss.'); }, 700);
+          setTimeout(function() { speakReply('Link established. Jenny ready on your device, Boss.'); }, 700);
         }
       } else if (status === 'denied') {
         pendingScreen.classList.add('hidden');
@@ -1136,11 +1165,29 @@
     checkDeviceAuth();
     setInterval(pollAuthStatus, 1500);
     syncMicLang();
+    syncVoiceChip();
+
+    function setJennyTyping(on) {
+      let t = document.getElementById('jenny-typing');
+      if (on) {
+        if (!t) {
+          t = document.createElement('div');
+          t.id = 'jenny-typing';
+          t.className = 'log-item jenny';
+          t.innerHTML = '<strong>JENNY:</strong> <span class="typing-dots">•••</span>';
+          logFeed.appendChild(t);
+        }
+        logFeed.scrollTop = logFeed.scrollHeight;
+      } else if (t) {
+        t.remove();
+      }
+    }
 
     async function executeRemote(cmd) {
       if (!cmd.trim()) return;
       appendLog('USER', cmd);
       termInput.value = '';
+      setJennyTyping(true);
 
       try {
         const res = await fetch(`${serverUrl}/api/chat`, {
@@ -1150,8 +1197,9 @@
         });
         const d = await res.json();
         if (d.success && d.reply) {
+          setJennyTyping(false);
           appendLog('JENNY', d.reply.text);
-          speakMobile(d.reply.speech || d.reply.text);
+          speakReply(d.reply.speech || d.reply.text);
           if (d.reply.command && d.reply.command.action !== 'vault-save') {
             await fetch(`${serverUrl}/api/control`, {
               method: 'POST',
@@ -1159,8 +1207,12 @@
               body: JSON.stringify({ ...d.reply.command, deviceId: getDeviceId() })
             });
           }
+        } else {
+          setJennyTyping(false);
+          appendLog('JENNY', 'No reply received. Please try again.');
         }
       } catch (e) {
+        setJennyTyping(false);
         appendLog('JENNY', 'Connection error to Mac.');
       }
     }
