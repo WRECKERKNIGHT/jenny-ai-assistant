@@ -26,7 +26,9 @@ def start_server(port=PORT):
     from waitress import serve
     sys.path.insert(0, str(BASE_DIR))
     import server
-    threading.Thread(target=server.update_telemetry, daemon=True).start()
+    # Shared always-on routines (wake word, proactive speaker, telemetry) so
+    # JENNY stays alive in the background even when this window is closed.
+    server.start_background_services()
     serve(server.app, host="0.0.0.0", port=port, threads=16)
 
 
