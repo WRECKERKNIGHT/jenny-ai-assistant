@@ -57,14 +57,10 @@ def is_port_open(port, host="127.0.0.1", timeout=0.3):
 def start_server(port=PORT):
     sys.path.insert(0, str(BASE_DIR))
     import server
-    threading.Thread(target=server.update_telemetry, daemon=True).start()
-    threading.Thread(target=server.gesture_watchdog, daemon=True).start()
-    import tts_engine
-    threading.Thread(target=server.prewarm_speak_phrases, daemon=True).start()
-    threading.Thread(target=server.prewarm_voice_engines, daemon=True).start()
-    threading.Thread(target=tts_engine.prewarm, daemon=True).start()
-    import proactive as _proactive
-    _proactive.start()
+    # Shared always-on routines: telemetry, proactive speaker, wake-word
+    # listener (restored from settings) — so JENNY keeps listening in the
+    # background even while the user is in another app.
+    server.start_background_services()
     from waitress import serve
     serve(server.app, host="0.0.0.0", port=port, threads=16)
 

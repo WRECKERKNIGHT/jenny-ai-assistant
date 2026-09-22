@@ -120,20 +120,37 @@ if (-not $NoAutostart) {
 }
 
 # ---------------------------------------------------------------------------
-# 4. Desktop shortcut
+# 4. Start Menu + Desktop shortcut (make JENNY a normal installed app)
 # ---------------------------------------------------------------------------
 try {
-    $desktop = [Environment]::GetFolderPath("Desktop")
+    $StartMenuDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
+    $ShName = "J.E.N.N.Y v2.0.lnk"
+    $Icon = Join-Path $PSScriptRoot "public\logo.png"
+    $Launcher = Join-Path $PSScriptRoot "Jenny.bat"
     $wsh = New-Object -ComObject WScript.Shell
+
+    # Start Menu entry (primary — appears in Windows Search / Start)
+    $smLnk = $wsh.CreateShortcut((Join-Path $StartMenuDir $ShName))
+    $smLnk.TargetPath = $Launcher
+    $smLnk.WorkingDirectory = $PSScriptRoot
+    $smLnk.IconLocation = "$Icon,0"
+    $smLnk.Description = "J.E.N.N.Y v2.0 - AI Assistant"
+    $smLnk.WindowStyle = 7
+    $smLnk.Save()
+    Write-Host "  [+] Start Menu app created." -ForegroundColor Green
+
+    # Desktop shortcut (optional convenience)
+    $desktop = [Environment]::GetFolderPath("Desktop")
     $lnk = $wsh.CreateShortcut("$desktop\J.E.N.N.Y v2.0.lnk")
-    $lnk.TargetPath = "$PSScriptRoot\Jenny.bat"
+    $lnk.TargetPath = $Launcher
     $lnk.WorkingDirectory = $PSScriptRoot
-    $lnk.IconLocation = "$PSScriptRoot\public\logo.png,0"
+    $lnk.IconLocation = "$Icon,0"
     $lnk.Description = "J.E.N.N.Y v2.0 - AI Assistant"
+    $lnk.WindowStyle = 7
     $lnk.Save()
     Write-Host "  [+] Desktop shortcut created." -ForegroundColor Green
 } catch {
-    Write-Host "  [!] Could not create desktop shortcut: $_" -ForegroundColor Yellow
+    Write-Host "  [!] Could not create shortcuts: $_" -ForegroundColor Yellow
 }
 
 # ---------------------------------------------------------------------------
@@ -177,6 +194,6 @@ if (-not $Silent) {
 }
 
 Write-Host ""
-Write-Host "  Done! Launch anytime: double-click Jenny.bat or the desktop shortcut." -ForegroundColor Green
+Write-Host "  Done! Launch J.E.N.N.Y from the Start Menu or double-click the desktop shortcut." -ForegroundColor Green
 Write-Host "  To remove auto-start later: run: python scripts\startup.py --uninstall" -ForegroundColor DarkGray
 Write-Host ""
