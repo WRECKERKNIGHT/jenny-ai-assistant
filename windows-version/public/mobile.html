@@ -1131,6 +1131,28 @@
         try { window.open(u, '_blank'); } catch (e) {}
       }
 
+      if (action === 'sms') {
+        let num = '', body = '';
+        try {
+          const v = typeof value === 'string' ? JSON.parse(value) : value;
+          num = String(v.number || v.to || '').trim();
+          body = String(v.body || v.message || v.text || '').trim();
+        } catch (e) { num = String(value || '').trim(); }
+        if (!num) { showMobileToast('No SMS number provided.'); return; }
+        const smsUrl = 'sms:' + num + (body ? '?body=' + encodeURIComponent(body).replace(/%20/g, '+') : '');
+        try {
+          const a = document.createElement('a');
+          a.href = smsUrl;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } catch (e) {
+          showMobileToast('SMS composer could not be opened.');
+          return;
+        }
+        showMobileToast('Opening SMS to ' + num + (body ? '…' : ''));
+      }
+
       if (action === 'toast') {
         showMobileToast(value || 'System ping, BOSS!');
       }

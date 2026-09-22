@@ -1401,9 +1401,9 @@ def local_command_router(msg):
         return {"text": f"Resuming playback, {boss}!", "speech": "Resuming Spotify.", "command": {"action": "spotify-action", "value": "play"}}
     if any(w in lo for w in ["open spotify", "open spotify app", "launch spotify"]):
         return {"text": f"Opening Spotify, {boss}!", "speech": "Opening Spotify.", "command": {"action": "open-app", "value": "spotify"}}
-    m = re.search(r"(?:send|message|text)\s+(.+?)\s+to\s+(.+?)\s+(?:on|via)\s+(telegram|whatsapp|discord)\b(?:\s*[:,-]\s*(.*))?$", lo)
+    m = re.search(r"(?:send|message|text)\s+(.+?)\s+to\s+(.+?)\s+(?:on|via)\s+(telegram|whatsapp|discord|sms|text message)\b(?:\s*[:,-]\s*(.*))?$", lo)
     if not m:
-        m = re.search(r"(?:send|message|text)\s+(.+?)\s+(?:on|via)\s+(telegram|whatsapp|discord)\b\s*[:,-]\s*(.+)$", lo)
+        m = re.search(r"(?:send|message|text)\s+(.+?)\s+(?:on|via)\s+(telegram|whatsapp|discord|sms|text message)\b\s*[:,-]\s*(.+)$", lo)
     if m:
         groups = m.groups()
         if len(groups) == 4:
@@ -1422,6 +1422,8 @@ def local_command_router(msg):
             return {"text": f"Sending to **{contact.strip()}** on Telegram, {boss}!", "speech": f"Sending to {contact.strip()} on Telegram.", "command": {"action": "telegram-send", "value": f"{contact.strip()}|{message}"}}
         if platform_name == "whatsapp":
             return {"text": f"Opening WhatsApp for **{contact.strip()}**, {boss}!", "speech": "Opening WhatsApp Web.", "command": {"action": "whatsapp-open", "value": ""}}
+        if platform_name in ("sms", "text message"):
+            return {"text": f"Preparing SMS for **{contact.strip()}** on your phone, {boss}!", "speech": f"Preparing SMS for {contact.strip()} on your phone.", "command": {"action": "phone-command", "value": {"action": "sms", "value": {"number": contact.strip(), "body": message}}}}
         return {"text": f"Opening Discord, {boss}!", "speech": "Opening Discord.", "command": {"action": "discord-open", "value": ""}}
     if any(w in lo for w in ["open whatsapp", "launch whatsapp", "whatsapp web"]):
         return {"text": f"Opening WhatsApp, {boss}!", "speech": "Opening WhatsApp.", "command": {"action": "whatsapp-open", "value": ""}}
@@ -2770,7 +2772,8 @@ def api_control():
         if lo == "phone-ring":
             pendingDeviceCommands.setdefault(did, []).append({"action": "call", "value": "", "timestamp": int(time.time() * 1000)})
             return jsonify({"success": True, "message": "Ringing phone."})
-        pendingDeviceCommands.setdefault(did, []).append({"action": str(value.get("action", "toast")), "value": str(value.get("value", "")), "timestamp": int(time.time() * 1000)})
+        val = value.get("value", "") if isinstance(value, dict) else value
+        pendingDeviceCommands.setdefault(did, []).append({"action": str(value.get("action", "toast") if isinstance(value, dict) else "toast"), "value": val, "timestamp": int(time.time() * 1000)})
         return jsonify({"success": True, "message": "Command sent to phone."})
     if lo in ("discord-send", "whatsapp-send"):
         if lo == "discord-send":
@@ -3431,7 +3434,32 @@ def api_notifications_push():
 
 @app.route("/api/device/sms/send", methods=["POST"])
 def api_device_sms():
-    return jsonify({"success": True, "message": "SMS feature coming soon"})
+    """Queue an SMS compose command to a linked phone.
+
+    The phone page can't touch the radio directly, but it CAN open the native
+    SMS composer via an sms:<number>?body=<text> intent, so we hand the target
+    phone an `sms` command through the same poll bus used for calls/toasts.
+    """
+    d = request.get_json(force=True, silent=True) or {}
+    did = d.get("deviceId", "")
+    number = str(d.get("number") or d.get("to") or "").strip()
+    body = str(d.get("body") or d.get("message") or d.get("text") or "").strip()
+    if not number:
+        return jsonify({"success": False, "error": "No phone number given to send SMS to."})
+    dev = activeDevices.get(did)
+    if did and dev and dev.get("status") != "approved":
+        return jsonify({"success": False, "error": "Device not approved"})
+    if not did or not activeDevices.get(did):
+        approved = [x for x, dv in activeDevices.items() if dv.get("status") == "approved"]
+        if not approved:
+            return jsonify({"success": False, "error": "No approved phone linked."})
+        did = approved[0]
+    pendingDeviceCommands.setdefault(did, []).append({
+        "action": "sms",
+        "value": json.dumps({"number": number, "body": body}, ensure_ascii=False),
+        "timestamp": int(time.time() * 1000),
+    })
+    return jsonify({"success": True, "message": f"SMS composer opening for {number} on the phone."})
 
 # =====================================================================
 # PHONE->PC VOICE CALL BRIDGE ("dial JENNY", talk, she answers from the PC)
