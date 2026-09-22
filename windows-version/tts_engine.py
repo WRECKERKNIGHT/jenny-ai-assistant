@@ -33,7 +33,7 @@ CACHE_DIR = DATA_DIR / "speak_cache"
 # Per-persona neural voice + speaking rate. Rate applies on top of neutral.
 # Tuple: (voice, rate, pitch, volume)
 MODE_VOICES = {
-    "friday": ("en-US-JennyNeural",      "+10%", "+0Hz", "+0%"),
+    "friday": ("en-US-JennyNeural",      "+14%", "+2Hz", "+0%"),
     "jarvis": ("en-GB-RyanNeural",       "-4%", "-2Hz", "+0%"),
     "ultron": ("en-US-ChristopherNeural", "-12%", "-5Hz", "-10%"),
 }
