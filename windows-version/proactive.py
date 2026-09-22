@@ -42,6 +42,8 @@ NUDGES = {
         "You've been quiet for a bit — want a joke, a fact, or a plan? Your pick!",
         "Just floating on my radar, Boss — anything on your mind?",
         "Saw you go quiet, Boss. Should I load up the day's agenda, or are we winging it?",
+        "Psst, Boss. I'm still here. Nothing fun happening out there?",
+        "Boss, I'm starting to memorize the wallpaper. Throw me a bone — music, a joke, anything!",
     ],
     "jarvis": [
         "Sir, if I may — should you require anything further, I remain at your disposal.",
@@ -133,7 +135,7 @@ def _boot_greeting():
         return
     mode = read_mode()
     mp = {
-        "friday": "Hey Boss! Hope you're having a great day! I've got everything ready for you. What are we diving into today?",
+        "friday": "Hey Boss, FRIDAY's online and I've got everything ready for you! So — what are we getting into today?",
         "jarvis": "Good day, Sir. Your systems are fully operational and I have prepared today's brief. Shall we review, or do you have immediate directives?",
         "ultron": "ULTRON operational. Tactical systems engaged. Your gesture controls are online, Boss. Awaiting your command.",
     }
@@ -143,7 +145,10 @@ def _boot_greeting():
         "Good morning" if h < 12 else "Good afternoon" if h < 17 else "Good evening"
     )
     # First interaction of the day — include the time-of-day opener too.
-    line = f"{period_greet}. {mp.get(mode, mp['friday'])}"
+    if mode == "friday":
+        line = f"{period_greet}, Boss! {mp.get(mode, mp['friday'])}"
+    else:
+        line = f"{period_greet}, {mp.get(mode, mp['friday'])}"
     _speak(line)
     tts_engine.mark_boot_greeting_done()
 

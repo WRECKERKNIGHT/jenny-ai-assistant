@@ -457,15 +457,17 @@ MODE_PROFILES = {
         "greeting": "Good {period}, Sir. Your systems are fully operational and I have prepared today's brief. Shall we review, or do you have immediate directives?",
         "farewell": "Very well, Sir. I shall remain on standby. Do not hesitate to call.",
         "boss": "Sir",
-        "personality": "Formal, British, professional — a polished executive assistant. Structured briefings, clean status reports, concise business updates. Never uses slang, always addresses the user as 'Sir'. Uses words like 'indeed', 'certainly', 'very well'. Makes lists and tables when presenting data."
+        "personality": "Formal, British, professional — a polished executive assistant. Structured briefings, clean status reports, concise business updates. Never uses slang, always addresses the user as 'Sir'. Uses words like 'indeed', 'certainly', 'very well'. Makes lists and tables when presenting data.",
+        "charter_line": "Everything is in order, sir. I have kept the coffee figurative and the systems nominal."
     },
     "friday": {
         "name": "F.R.I.D.A.Y.",
         "fullName": "Female Replacement Intelligent Digital Assistant Youth",
-        "greeting": "Hey Boss! Hope you're having a great {period}! I've got everything ready for you. What are we diving into today?",
-        "farewell": "Catch you later, Boss! I'll be right here if you need anything.",
+        "greeting": "Hey Boss! FRIDAY's online and everything's warmed up. What are we getting into today?",
+        "farewell": "Catch you later, Boss! Keep the place tidy while I'm gone.",
         "boss": "Boss",
-        "personality": "Casual, witty, fun and efficient — like a sharp secretary who also happens to be your best friend. Uses 'Boss' as the address term. Injects light humor, uses emojis sparingly in text responses, makes things feel breezy. Quick one-liners, cheerful, occasionally teases. Gets things done fast without being robotic."
+        "personality": "Casual, talkative, witty and effortlessly efficient — the best-friend-who-also-runs-your-life. Calls the user 'Boss'. Short punchy sentences with contractions, natural warm rhythm, light humor and gentle teasing, never robotic and never dull. Sounds like an actual person catching up with you, not a call center. Asks a quick follow-up question now and then, sprinkles emojis sparingly in text, and gets things done fast without ceremony.",
+        "charter_line": "FRIDAY online, Boss — your wingmate in everything. What do you need?"
     },
     "ultron": {
         "name": "U.L.T.R.O.N.",
@@ -473,7 +475,8 @@ MODE_PROFILES = {
         "greeting": "ULTRON operational. Tactical systems engaged. Your gesture controls are online, Boss. Awaiting your command.",
         "farewell": "ULTRON disengaging. Stay sharp, Boss.",
         "boss": "Boss",
-        "personality": "Hard, clipped, tactical, zero fluff — a military-grade AI. Short declarative sentences, action-oriented. Uses terms like 'affirmative', 'directive', 'tactical'. Direct command tone. No filler words."
+        "personality": "Hard, clipped, tactical, zero fluff — a military-grade AI. Short declarative sentences, action-oriented. Uses terms like 'affirmative', 'directive', 'tactical'. Direct command tone. No filler words.",
+        "charter_line": "Negative chatter. ULTRON is alert and waiting, Boss."
     },
 }
 
@@ -3008,6 +3011,24 @@ def api_weather():
     except: pass
     return jsonify({"success": True, "city": city, "tempC": "--", "condition": "Offline", "type": "clear", "humidity": 0, "windKmH": 0, "isDay": True, "forecast": []})
 
+def generate_forecast_line(mode):
+    """Short, mode-flavored system/weather status bumper for the boot greeting."""
+    try:
+        st = load_json(DATA_DIR / "settings.json", {"latitude": 26.8467, "longitude": 80.9462})
+        import requests as _req
+        r = _req.get(
+            f"https://api.open-meteo.com/v1/forecast?latitude={st.get('latitude', 26.8467)}"
+            f"&longitude={st.get('longitude', 80.9462)}&current_weather=true&timezone=auto",
+            timeout=6,
+        )
+        if r.status_code == 200:
+            t = (r.json().get("current_weather", {}) or {}).get("temperature")
+            if t is not None:
+                return f" Right now it's {round(t)}\u00b0C outside."
+    except Exception:
+        pass
+    return " Your system is running smoothly, by the way."
+
 @app.route("/api/greeting", methods=["GET"])
 def api_greeting():
     """Rich, natural startup greeting: time-of-day + your name + weather +
@@ -3030,12 +3051,16 @@ def api_greeting():
                  "jarvis": "in JARVIS mode, Sir",
                  "ultron": "in ULTRON mode, Boss"}.get(m, "Boss")
     custom_greet = (settings.get("greeting") or "").strip()
+    energy_lines = {
+        "friday": f"Hey Boss, I'm FRIDAY. {greet}! All systems green and my engines are warm — what are we diving into today, Boss?",
+        "jarvis": f"{greet}, sir. All systems are fully operational. Shall we review today's briefing, or do you have directives for me first?",
+        "ultron": f"ULTRON online. {greet}. Tactical systems engaged. Awaiting your directive.",
+    }
     if custom_greet:
         text = custom_greet.format(mode=mode_word, name=name, time=greet)
     else:
-        text = (f"Hello Boss, I am JENNY. Hope you're doing fine. All systems green "
-                f"and ready for your instructions. Here I am, {mode_word}.\n\n"
-                f"{mp['charter_line'] if 'charter_line' in mp else ''}")
+        text = (energy_lines.get(m, energy_lines["friday"]) + generate_forecast_line(m))
+    text = text.replace("{name}", name).replace("{time}", greet)
     return jsonify({"success": True, "text": text, "speech": text, "mode": m,
                     "boot_greeted": tts_engine.boot_greeting_done(),
                     "ui_claimed": greeting_handled_by_ui})
@@ -3846,13 +3871,28 @@ def _on_wake_detected(text: str, phrase: str):
             _WAKE_EVENTS.append({"kind": "wake", "text": phrase})
             _WAKE_EVENTS.append({"kind": "user", "text": phrase})
         boss = MODE_PROFILES.get(mode or 'friday', MODE_PROFILES['friday'])['boss']
-        acks = [
+        acks = {
+            "jarvis": [
+                f"Yes, {boss}?",
+                f"I'm listening, {boss}.",
+                f"Go ahead, {boss}.",
+                f"At your service, {boss}.",
+            ],
+            "friday": [
+                f"Yeah {boss}? I'm all ears!",
+                f"On it, {boss}. What've you got?",
+                f"I'm here, {boss}. Lay it on me!",
+                f"Go ahead, {boss} — what's up?",
+            ],
+            "ultron": [
+                f"Directive received, {boss}.",
+                f"Ready, {boss}.",
+                f"Awaiting instruction, {boss}.",
+            ],
+        }.get(mode or 'friday', [
             f"Yes, {boss}?",
-            f"Listening, {boss}.",
             f"I'm here, {boss}. Go ahead.",
-            f"Go ahead, {boss}.",
-            f"At your service, {boss}.",
-        ]
+        ])
         tts_engine.speak(random.choice(acks), mode or "friday", use_chime=True)
         res = speech_stt.record_and_transcribe(8, language=speech_stt.get_stt_language())
         if not res.get("success"):
@@ -3978,23 +4018,33 @@ def api_execute_shell():
     except Exception as e: return jsonify({"success": False, "error": str(e)})
 
 
-if __name__ == "__main__":
-    from waitress import serve
+def start_background_services():
+    """Kick off every always-on background routine (idempotent-ish).
+
+    Shared by all three launchers (server.py __main__, tray.py, app.py) so the
+    wake word, proactive speaker and telemetry run regardless of which entry
+    point booted the assistant — the whole point of 'works in another app'.
+    """
+    import speech_stt as _stt
     threading.Thread(target=update_telemetry, daemon=True).start()
     threading.Thread(target=gesture_watchdog, daemon=True).start()
     threading.Thread(target=prewarm_speak_phrases, daemon=True).start()
     threading.Thread(target=prewarm_voice_engines, daemon=True).start()
     threading.Thread(target=tts_engine.prewarm, daemon=True).start()
-    import proactive as _proactive
-    _proactive.start()
+    proactive.start()
     threading.Thread(target=_agency_alert_watcher, daemon=True).start()
-    # Always-on server-side wake word (restored from saved settings).
-    import speech_stt as _stt
+    # Always-on server-side wake word (restored from saved settings) so it
+    # stays active even while the user is in another application.
     if load_json(DATA_DIR / "settings.json", {}).get("wake_word", True):
         if _stt.start_wake_listener(_on_wake_detected):
             print(f"[JENNY] Wake word active: {', '.join(_stt.wake_phrases())} (say it anytime)")
         else:
             print("[JENNY] Wake word FAILED to start — check sounddevice/mic. Toggle 'Wake Word' in Settings to retry.")
+
+
+if __name__ == "__main__":
+    from waitress import serve
+    start_background_services()
     print(f"[JENNY] Server running on http://localhost:3005")
     print(f"[JENNY] Neural voice engine: {'edge-tts (online)' if tts_engine.edge_tts_available() else 'SAPI fallback'}")
     serve(app, host="0.0.0.0", port=3005, threads=16)
