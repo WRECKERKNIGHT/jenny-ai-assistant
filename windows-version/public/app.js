@@ -615,7 +615,6 @@ function updateWelcomeVitals(cpu, ram, batt, uptime) {
 // ORB CANVAS
 // ================================================
 let orbState = 'idle';
-let orbFrame = 0;
 
 function startOrb() {
   const canvas = document.getElementById('orb-canvas');
@@ -624,15 +623,15 @@ function startOrb() {
   const W = canvas.width, H = canvas.height;
   const cx = W / 2, cy = H / 2;
   let lastDrawTime = 0;
+  let orbStartTime = performance.now();
   function draw() {
     requestAnimationFrame(draw);
     const now = performance.now();
     if (now - lastDrawTime < 33) return; // Throttled to ~30 FPS
     lastDrawTime = now;
 
-    orbFrame++;
     ctx.clearRect(0, 0, W, H);
-    const t = orbFrame * 0.016;
+    const t = (now - orbStartTime) / 1000;
     const isIdle = orbState === 'idle';
     const isListening = orbState === 'listening';
     const isThinking = orbState === 'thinking';
@@ -736,7 +735,10 @@ function startSpeechWaves(stream) {
     if (container) container.classList.add('active');
     function animate() {
       speechAnalyser.getByteFrequencyData(data);
-      speechWaveBars.forEach((bar, i) => { bar.style.height = Math.max(2, (data[i] || 0) / 255 * 28) + 'px'; });
+      for (let i = 0; i < speechWaveBars.length; i++) {
+        const b = speechWaveBars[i];
+        if (b) { const v = Math.max(0.08, (data[i] || 0) / 255); b.style.transform = `scaleY(${v})`; }
+      }
       speechAnimFrame = requestAnimationFrame(animate);
     }
     animate();
@@ -747,7 +749,7 @@ function stopSpeechWaves() {
   if (speechAnimFrame) cancelAnimationFrame(speechAnimFrame);
   const container = document.getElementById('speech-waves');
   if (container) container.classList.remove('active');
-  speechWaveBars.forEach(bar => bar.style.height = '2px');
+  speechWaveBars.forEach(bar => { if (bar) bar.style.transform = 'scaleY(0.08)'; });
 }
 
 // ================================================
@@ -766,7 +768,25 @@ function startClock() {
   setInterval(tick, 1000);
 }
 
-function startAmbientBar() { fetchAmbientData(); setInterval(fetchAmbientData, 8000); }
+function startAmbientBar() { fetchAmbientData(); fetchSpotifyStatus(); setInterval(fetchAmbientData, 8000); setInterval(fetchSpotifyStatus, 10000); }
+
+async function fetchSpotifyStatus() {
+  try {
+    const res = await fetch('/api/spotify/status', { cache: 'no-store' });
+    const d = await res.json();
+    if (!d) return;
+    const chip = document.getElementById('ambient-spotify');
+    const txt = document.getElementById('ambient-spotify-text');
+    if (!chip || !txt) return;
+    const running = !!(d.running || d.connected);
+    txt.textContent = running ? 'Spotify connected' : 'Spotify offline';
+    chip.style.borderColor = running ? 'rgba(29,185,84,0.45)' : 'rgba(255,255,255,0.08)';
+    chip.style.background = running ? 'rgba(29,185,84,0.08)' : '';
+    const icon = chip.querySelector('i');
+    if (icon) icon.style.color = running ? '#1db954' : '';
+    chip.title = d.message || '';
+  } catch {}
+}
 
 async function fetchAmbientData() {
   try {
@@ -1036,7 +1056,13 @@ function addTyping() {
 
 function removeTyping() { const el = document.getElementById('typing-indicator'); if (el) el.remove(); }
 
-function scrollChat() { const area = document.getElementById('chat-scroll'); setTimeout(() => area.scrollTop = area.scrollHeight, 50); }
+let _chatScrollRaf = null;
+function scrollChat() {
+  const area = document.getElementById('chat-scroll');
+  if (!area) return;
+  if (_chatScrollRaf) return;
+  _chatScrollRaf = requestAnimationFrame(() => { _chatScrollRaf = null; area.scrollTop = area.scrollHeight; });
+}
 
 function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -1714,6 +1740,22 @@ function loadSettingsPanel(el) {
     </div>
   `;
   
+  // Connected services & permissions (permanent-app control center)
+  html += `
+    <div style="border-top:1px solid rgba(255,255,255,0.06); margin:8px 0; padding-top:8px;">
+      <div style="font-family:var(--mono); font-size:8px; color:var(--txt3); letter-spacing:1px; margin-bottom:8px;">CONNECTED SERVICES & PERMISSIONS</div>
+      <div id="services-status" style="font-family:var(--mono); font-size:9px; color:var(--txt2); margin-bottom:8px;">Loading...</div>
+      <div class="setting-row"><label></label><button id="services-refresh-btn" style="padding:4px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:var(--txt3);font-family:var(--mono);font-size:9px;cursor:pointer;">REFRESH STATUS</button></div>
+      <div class="setting-row"><label>DISCORD WEBHOOK URL</label><input type="text" id="discord-webhook-input" placeholder="https://discord.com/api/webhooks/..." style="flex:1;min-width:0;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:var(--txt);border-radius:6px;padding:3px 7px;font-family:var(--mono);font-size:9px;"></div>
+      <div class="setting-row"><label>WHATSAPP NUMBER</label><input type="text" id="whatsapp-input" placeholder="+91 xxxxxxxxxx" style="flex:1;min-width:0;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:var(--txt);border-radius:6px;padding:3px 7px;font-family:var(--mono);font-size:9px;"></div>
+      <div class="setting-row"><label>AGENCY OS URL</label><input type="text" id="agency-url-input" placeholder="http://localhost:3200" style="flex:1;min-width:0;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:var(--txt);border-radius:6px;padding:3px 7px;font-family:var(--mono);font-size:9px;"></div>
+      <div class="setting-row"><label>AUTO-APPROVE PHONES</label><input type="checkbox" id="auto-approve-toggle"></div>
+      <div class="setting-row"><label>START WITH WINDOWS</label><input type="checkbox" id="autostart-toggle"></div>
+      <div class="setting-row"><label>MIC AIM</label><button id="wake-restart-btn" style="padding:4px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:var(--txt3);font-family:var(--mono);font-size:9px;cursor:pointer;">Restart Wake Listener</button></div>
+      <div class="setting-row"><label></label><button id="save-services-btn" style="padding:5px 12px;background:rgba(229,193,88,0.1);border:1px solid rgba(229,193,88,0.35);border-radius:6px;color:var(--gold);font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;">SAVE SERVICES</button></div>
+    </div>
+  `;
+
   // Permissions section
   html += `
     <div style="border-top:1px solid rgba(255,255,255,0.06); margin:8px 0; padding-top:8px;">
@@ -1801,6 +1843,68 @@ function loadSettingsPanel(el) {
   // API keys details button
   document.getElementById('show-keys-btn').addEventListener('click', () => showKeyDetails());
   
+  // Connected services — status + controls
+  async function refreshServicesStatus() {
+    const el = document.getElementById('services-status');
+    if (!el) return;
+    el.innerHTML = 'Loading...';
+    try {
+      const res = await fetch('/api/services');
+      const d = await res.json();
+      if (!d.success) { el.innerHTML = `<span style="color:var(--pink)">${String(d.error||'services error').slice(0,160)}</span>`; return; }
+      const s = d.services || {};
+      const chip = (ok, label) => `<span style="display:inline-block;padding:2px 8px;border-radius:10px;margin:2px 4px 2px 0;border:1px solid ${ok ? 'rgba(74,222,128,0.4)' : 'rgba(255,159,28,0.4)'};color:${ok ? '#4ade80' : '#ff9f1c'};font-size:9px;letter-spacing:1px;"><i class="fa-solid fa-circle" style="font-size:5px;vertical-align:middle;"></i> ${label.toUpperCase()}</span>`;
+      const rows = [
+        ['Email', s.email ? (s.email.configured ? 'configured' : 'not configured') : '—'],
+        ['Discord', s.discord ? (s.discord.configured ? 'configured' : 'add webhook') : '—'],
+        ['WhatsApp', s.whatsapp ? (s.whatsapp.configured ? 'ready' : 'add number') : '—'],
+        ['Agency OS', s.agency ? (s.agency.online ? 'online' : 'offline') : '—'],
+        ['Start with Windows', s.autostart ? (s.autostart.enabled ? 'enabled' : 'off') : '—'],
+        ['Wake Word', s.wake ? (s.wake.enabled ? 'on' : 'off') : '—'],
+      ];
+      el.innerHTML = rows.map(([n, v]) => {
+        const ok = v === 'configured' || v === 'ready' || v === 'online' || v === 'enabled' || v === 'on';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px dashed rgba(255,255,255,0.04);"><span>${n}</span>${chip(ok, v)}</div>`;
+      }).join('');
+      const auto = document.getElementById('auto-approve-toggle');
+      if (auto) fetch('/api/settings').then(r=>r.json()).then(x => { if (x.success && x.settings) auto.checked = x.settings.auto_approve_phones !== false; }).catch(()=>{});
+      const as = document.getElementById('autostart-toggle');
+      if (as && s.autostart) as.checked = !!s.autostart.enabled;
+      const ws = document.getElementById('whatsapp-input');
+      if (ws) fetch('/api/settings').then(r=>r.json()).then(x => { if (x.success && x.settings) ws.value = x.settings.whatsapp_number || ''; }).catch(()=>{});
+      const au = document.getElementById('agency-url-input');
+      if (au) { au.value = (s.agency && s.agency.url) || 'http://localhost:3200'; if (!au.closest('.setting-row')) {} }
+      if (s.agency && !s.agency.online && s.agency.error && el) el.innerHTML += `<div style="margin-top:6px;color:var(--pink);font-size:9px;word-break:break-word;">${String(s.agency.error).slice(0,180)}</div>`;
+    } catch(e) { el.innerHTML = `<span style="color:var(--pink)">services unavailable</span>`; }
+  }
+  refreshServicesStatus();
+
+  document.getElementById('services-refresh-btn').addEventListener('click', refreshServicesStatus);
+  document.getElementById('wake-restart-btn').addEventListener('click', async () => {
+    try {
+      const r = await fetch('/api/wake/restart', { method: 'POST' });
+      const d = await r.json();
+      toast(d.restarted ? 'Wake listener restarted.' : 'Wake listener is off — enable it first.', d.restarted ? 'ok' : 'info');
+      syncWakeStatus();
+      refreshServicesStatus();
+    } catch { toast('Restart failed', 'err'); }
+  });
+  document.getElementById('save-services-btn').addEventListener('click', async () => {
+    const payload = {
+      auto_approve_phones: document.getElementById('auto-approve-toggle').checked,
+      autostart: document.getElementById('autostart-toggle').checked,
+      agency_url: (document.getElementById('agency-url-input').value || '').trim(),
+      whatsapp_number: (document.getElementById('whatsapp-input').value || '').trim(),
+    };
+    try {
+      await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const dw = (document.getElementById('discord-webhook-input').value || '').trim();
+      if (dw) await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ discord_webhook_url: dw }) });
+      toast('Services saved.', 'ok');
+      refreshServicesStatus();
+    } catch { toast('Save failed', 'err'); }
+  });
+
   // Permissions check button
   document.getElementById('check-perms-btn').addEventListener('click', async () => {
     try {
@@ -2496,11 +2600,14 @@ async function startListening() {
     if (d && d.success && d.sessionId) { sid = d.sessionId; _liveSid = sid; _liveHandled = false; }
     else { toast('Mic: ' + (d.error || 'could not start'), 'err'); stopListening(); return; }
   } catch {
-    // Server STT unavailable -> browser Web Speech fallback.
-    if (!recognition) recognition = initRecognition();
+    // Server STT unavailable -> browser Web Speech fallback. NOTE: a
+    // SpeechRecognition instance can only be started once in Chromium; reuse
+    // silently does nothing, so we always build a brand-new instance here.
+    try { recognition?.abort(); } catch {}
+    recognition = initRecognition();
     if (!recognition) { stopListening(); toast('Speech recognition not supported', 'err'); return; }
     showSpeechPreview('listening');
-    try { recognition.start(); } catch {}
+    try { recognition.start(); } catch (err) { console.warn('[JENNY] WS start failed:', err); }
     return;
   }
 
@@ -2545,6 +2652,7 @@ function stopListening() {
   stopSpeechWaves();
   if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
   try { recognition?.stop(); } catch {}
+  recognition = null;
 }
 
 // ================================================
@@ -3018,11 +3126,11 @@ async function pollDevices() {
     const devices = data.devices;
     
     const pending = devices.find(d => d.status === 'pending');
-    const approved = devices.find(d => d.status === 'approved' && d.connected);
+    const approved = devices.find(d => d.linked);
 
     const activeCount = document.getElementById('phone-active-count');
     if (activeCount) {
-      const approvedCount = devices.filter(d => d.status === 'approved' && d.connected).length;
+      const approvedCount = devices.filter(d => d.status === 'approved').length;
       activeCount.textContent = `${approvedCount} linked`;
     }
 
@@ -3049,7 +3157,8 @@ async function pollDevices() {
       document.getElementById('linked-device-name').textContent = approved.os;
       const batTxt = approved.battery != null ? ` · 🔋 ${approved.battery}%` : '';
       const sigTxt = approved.signal ? ` · ${approved.signal}` : '';
-      document.getElementById('linked-device-meta').textContent = `${approved.browser} · ${approved.ip}${batTxt}${sigTxt}`;
+      const liveTxt = approved.connected ? '' : ` · offline`;
+      document.getElementById('linked-device-meta').textContent = `${approved.browser} · ${approved.ip}${batTxt}${sigTxt}${liveTxt}`;
       document.getElementById('linked-revoke-btn').dataset.deviceId = approved.deviceId;
 
       const batEl = document.getElementById('phone-stat-battery');
@@ -3951,9 +4060,23 @@ function updateWakeWordUI() {
   const btn = document.getElementById('wake-word-btn');
   if (btn) {
     btn.classList.toggle('active', wakeWordActive);
-    btn.title = wakeWordActive ? 'Wake word ON — Click to disable' : 'Wake word OFF — Click to enable';
+    const d = wakeDiagnostics || {};
+    const bits = [];
+    if (wakeWordActive) {
+      bits.push('Wake word ON — Say "Hey Jenny" anytime');
+      if (d.streamOpen) bits.push('MIC STREAM OPEN');
+      else bits.push('MIC STREAM CLOSED');
+      if (d.device) bits.push('device: ' + d.device);
+      if (d.lastError) bits.push('lastError: ' + d.lastError);
+    } else {
+      bits.push('Wake word OFF — Click to enable');
+      if (d.lastError) bits.push('lastError: ' + d.lastError);
+    }
+    btn.title = bits.join(' · ');
   }
 }
+
+let wakeDiagnostics = null;
 
 async function syncWakeStatus() {
   try {
@@ -3961,10 +4084,16 @@ async function syncWakeStatus() {
     const d = await r.json();
     const phrases = (d && d.phrases) || WAKE_WORDS;
     const on = !!(d && d.on);
+    if (d) wakeDiagnostics = { streamOpen: !!d.streamOpen, device: d.device || '', lastError: d.lastError || '' };
     if (on !== wakeWordActive) {
       wakeWordActive = on;
       updateWakeWordUI();
-      if (on) toast(`Wake word active — Say "${phrases[0]}" anytime`, 'ok');
+    } else {
+      updateWakeWordUI();
+    }
+    if (on && !window.__wakeNotified) {
+      window.__wakeNotified = true;
+      toast(`Wake word active — Say "${phrases[0]}" anytime`, 'ok');
     }
   } catch {}
 }
@@ -4026,10 +4155,15 @@ async function pollWakeEvents() {
         setOrbState('listening');
         setTimeout(() => setOrbState('idle'), 600);
       } else if (ev.kind === 'user') {
-        addUserMessage(ev.text);
+        addUserMessage(ev.source === 'phone' ? '[Phone] ' + ev.text : ev.text);
+      } else if (ev.kind === 'cmd') {
+        // A phone control action executed on the PC — show it as a compact note.
+        addAIMessage(ev.text || '');
       } else if (ev.kind === 'assistant') {
         addAIMessage(ev.text || '');
-        if (ev.command && ev.command.action && ev.command.action !== 'vault-save') {
+        // Phone-originated commands are already executed by the phone itself;
+        // only run the command here when it came from the local wake pipeline.
+        if (ev.command && ev.command.action && ev.command.action !== 'vault-save' && ev.source !== 'phone') {
           executeCommandAction(ev.command);
         }
       }

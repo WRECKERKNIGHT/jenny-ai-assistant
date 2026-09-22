@@ -301,6 +301,8 @@
       border-left: 3px solid var(--gold);
       color: var(--txt2);
     }
+    .typing-dots { letter-spacing: 2px; animation: blink-dots 1.2s infinite; }
+    @keyframes blink-dots { 0%,100% { opacity: .2; } 50% { opacity: 1; } }
 
     /* PENDING AUTHORIZATION OVERLAYS */
     .auth-overlay {
@@ -657,6 +659,7 @@
       <div class="orb-hint" id="orb-hint">TAP ORB FOR VOICE COMMAND</div>
       <div class="mic-lang-row">
         <button id="mic-lang-btn" class="mic-lang-chip" onclick="toggleMicLang()"><i class="fa-solid fa-language"></i> <span id="mic-lang-txt">EN</span></button>
+        <button id="voice-chip" class="mic-lang-chip" onclick="toggleVoiceReplies()"><i class="fa-solid fa-volume-up"></i> <span id="voice-chip-txt">VOICE</span></button>
         <span class="mic-lang-note">Hi/EN toggle for PC-mic voice</span>
       </div>
       <button id="start-call-btn" style="margin-top:10px;width:100%;background:radial-gradient(circle at 50% 50%, rgba(0,212,230,0.2), rgba(0,0,0,0.6));border:1px solid rgba(0,212,230,0.5);border-radius:14px;padding:12px;color:#00d4e6;font-family:var(--mono);font-size:12px;letter-spacing:2px;font-weight:700;">
@@ -805,6 +808,25 @@
     window._speechUtteranceStore = [];
     window._speechHeartbeat = null;
 
+    // Voice replies flag — persisted on the phone. When on, Jenny's replies
+    // stream from the PC in a natural neural voice (/api/speak);
+    window.__voiceReplies = (localStorage.getItem('jenny_voice') || 'on') !== 'off';
+    function syncVoiceChip() {
+      const el = document.getElementById('voice-chip-txt');
+      if (el) el.textContent = window.__voiceReplies ? 'VOICE ON' : 'VOICE OFF';
+      const chip = document.getElementById('voice-chip');
+      if (chip) {
+        chip.style.color = window.__voiceReplies ? '#ffd700' : '#666';
+        chip.style.borderColor = window.__voiceReplies ? 'rgba(255,215,0,0.5)' : 'rgba(255,255,255,0.2)';
+      }
+    }
+    function toggleVoiceReplies() {
+      window.__voiceReplies = !window.__voiceReplies;
+      localStorage.setItem('jenny_voice', window.__voiceReplies ? 'on' : 'off');
+      syncVoiceChip();
+      showMobileToast(window.__voiceReplies ? 'Voice replies ON — PC neural voice' : 'Voice replies OFF');
+    }
+
     function speakMobile(text) {
       if (!('speechSynthesis' in window) || !text) return;
       
@@ -857,6 +879,13 @@
       };
 
       window.speechSynthesis.speak(u);
+    }
+
+    async function speakReply(text) {
+      if (window.__voiceReplies === false) return;
+      if (!text) return;
+      const ok = await playServerTts(String(text));
+      if (!ok) speakMobile(String(text));
     }
 
     // ================================================
@@ -956,7 +985,7 @@
         deniedScreen.classList.add('hidden');
         if (!window.__mobileGreeted) {
           window.__mobileGreeted = true;
-          setTimeout(function() { speakMobile('Link established. Jenny ready on your device, Boss.'); }, 700);
+          setTimeout(function() { speakReply('Link established. Jenny ready on your device, Boss.'); }, 700);
         }
       } else if (status === 'denied') {
         pendingScreen.classList.add('hidden');
@@ -1020,6 +1049,45 @@
       }
     }
 
+    // PC-side TTS streamed to the phone: an <audio> element works over plain
+    // http:// LAN (no secure-context requirement), unlike speechSynthesis.
+    function playServerTts(text) {
+      if (!text) return;
+      return new Promise((resolve) => {
+        try {
+          const url = serverUrl + '/api/speak?text=' + encodeURIComponent(String(text).slice(0, 6000)) + '&fmt=mp3&t=' + Date.now();
+          const au = new Audio(url);
+          au.onended = () => { au.remove(); resolve(true); };
+          au.onerror = () => { au.remove(); resolve(false); };
+          au.play().catch(() => resolve(false));
+        } catch (e) { resolve(false); }
+      });
+    }
+
+    // Tappable OPAQUE banner for remote links: a real user tap defeats the
+    // browser popup-blocker that otherwise swallows window.open() inside an
+    // async fetch callback.
+    let _openUrlBanner = null;
+    function promptOpenUrl(url) {
+      if (_openUrlBanner) _openUrlBanner.remove();
+      const b = document.createElement('div');
+      b.style.cssText = 'position:fixed;left:16px;right:16px;bottom:140px;z-index:999998;background:rgba(208,132,0,0.97);border:1px solid #ffd700;border-radius:16px;padding:14px 16px;box-shadow:0 0 30px rgba(208,132,0,0.5);font-family:monospace;color:#fff;';
+      const safe = String(url).slice(0, 90);
+      b.innerHTML = '<div style="font-size:10px;letter-spacing:2px;color:#ffe9b8;margin-bottom:6px;">REMOTE LINK</div>' +
+        '<div style="font-size:12px;word-break:break-all;margin-bottom:10px;">' + safe.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div>' +
+        '<div style="display:flex;gap:8px;">' +
+        '<button id="ob-open" style="flex:1;background:#fff;color:#8a5400;border:none;border-radius:10px;padding:10px;font-family:monospace;font-weight:bold;font-size:12px;">OPEN</button>' +
+        '<button id="ob-cancel" style="flex:1;background:rgba(255,255,255,0.12);color:#fff;border:1px solid rgba(255,255,255,0.35);border-radius:10px;padding:10px;font-family:monospace;font-size:12px;">DISMISS</button>' +
+        '</div>';
+      document.body.appendChild(b);
+      b.querySelector('#ob-open').addEventListener('click', () => {
+        try { window.open(String(url), '_blank'); showMobileToast('Opening link…'); } catch (e) { showMobileToast('Could not open link.'); }
+        b.remove(); _openUrlBanner = null;
+      });
+      b.querySelector('#ob-cancel').addEventListener('click', () => { b.remove(); _openUrlBanner = null; });
+      _openUrlBanner = b;
+    }
+
     function executePhoneCommand(action, value) {
       appendLog('HOST_CMD', `Received remote action: ${action.toUpperCase()}`);
 
@@ -1038,26 +1106,51 @@
       }
 
       if (action === 'speak') {
-        try {
-          const tt = value || 'Hello, Boss';
-          speechSynthesis.cancel();
-          const u = new SpeechSynthesisUtterance(tt);
-          u.lang = 'en-US';
-          speechSynthesis.speak(u);
-          showMobileToast('Speaking: ' + tt.slice(0, 40) + (tt.length > 40 ? '…' : ''));
-        } catch (err) {
-          showMobileToast('Speech synthesis failed.');
-        }
+        const tt = value || 'Hello, Boss';
+        playServerTts(tt).then((ok) => {
+          if (ok) showMobileToast('Speaking: ' + tt.slice(0, 40) + (tt.length > 40 ? '…' : ''));
+          else {
+            // Fall back to the local voice engine if the PC TTS isn't reachable.
+            try {
+              speechSynthesis.cancel();
+              const u = new SpeechSynthesisUtterance(tt);
+              u.lang = 'en-US';
+              speechSynthesis.speak(u);
+              showMobileToast('Speaking: ' + tt.slice(0, 40) + (tt.length > 40 ? '…' : ''));
+            } catch (err) {
+              showMobileToast('Speech unavailable on this phone.');
+            }
+          }
+        });
       }
 
       if (action === 'open-url') {
+        const u = value || 'https://www.google.com';
+        promptOpenUrl(u);
+        // Best-effort immediate open too (some browsers allow it).
+        try { window.open(u, '_blank'); } catch (e) {}
+      }
+
+      if (action === 'sms') {
+        let num = '', body = '';
         try {
-          const u = value || 'https://www.google.com';
-          window.open(u, '_blank');
-          showMobileToast('Opening link...');
-        } catch (err) {
-          showMobileToast('Could not open link.');
+          const v = typeof value === 'string' ? JSON.parse(value) : value;
+          num = String(v.number || v.to || '').trim();
+          body = String(v.body || v.message || v.text || '').trim();
+        } catch (e) { num = String(value || '').trim(); }
+        if (!num) { showMobileToast('No SMS number provided.'); return; }
+        const smsUrl = 'sms:' + num + (body ? '?body=' + encodeURIComponent(body).replace(/%20/g, '+') : '');
+        try {
+          const a = document.createElement('a');
+          a.href = smsUrl;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } catch (e) {
+          showMobileToast('SMS composer could not be opened.');
+          return;
         }
+        showMobileToast('Opening SMS to ' + num + (body ? '…' : ''));
       }
 
       if (action === 'toast') {
@@ -1065,7 +1158,7 @@
       }
 
       if (action === 'volume') {
-        showMobileToast(`Volume updated remotely to ${value}%`);
+        showMobileToast('Remote volume: on iPhone/Android web pages can\u2019t change system volume — use the side buttons.');
       }
     }
 
@@ -1094,31 +1187,54 @@
     checkDeviceAuth();
     setInterval(pollAuthStatus, 1500);
     syncMicLang();
+    syncVoiceChip();
+
+    function setJennyTyping(on) {
+      let t = document.getElementById('jenny-typing');
+      if (on) {
+        if (!t) {
+          t = document.createElement('div');
+          t.id = 'jenny-typing';
+          t.className = 'log-item jenny';
+          t.innerHTML = '<strong>JENNY:</strong> <span class="typing-dots">•••</span>';
+          logFeed.appendChild(t);
+        }
+        logFeed.scrollTop = logFeed.scrollHeight;
+      } else if (t) {
+        t.remove();
+      }
+    }
 
     async function executeRemote(cmd) {
       if (!cmd.trim()) return;
       appendLog('USER', cmd);
       termInput.value = '';
+      setJennyTyping(true);
 
       try {
         const res = await fetch(`${serverUrl}/api/chat`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Source': 'phone' },
           body: JSON.stringify({ message: cmd, deviceId: getDeviceId() })
         });
         const d = await res.json();
         if (d.success && d.reply) {
+          setJennyTyping(false);
           appendLog('JENNY', d.reply.text);
-          speakMobile(d.reply.speech || d.reply.text);
+          speakReply(d.reply.speech || d.reply.text);
           if (d.reply.command && d.reply.command.action !== 'vault-save') {
             await fetch(`${serverUrl}/api/control`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', 'X-Source': 'phone' },
               body: JSON.stringify({ ...d.reply.command, deviceId: getDeviceId() })
             });
           }
+        } else {
+          setJennyTyping(false);
+          appendLog('JENNY', 'No reply received. Please try again.');
         }
       } catch (e) {
+        setJennyTyping(false);
         appendLog('JENNY', 'Connection error to Mac.');
       }
     }
@@ -1138,7 +1254,7 @@
       try {
         await fetch(`${serverUrl}/api/control`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Source': 'phone' },
           body: JSON.stringify({ action: 'media', value: 'previous', deviceId: getDeviceId() })
         });
       } catch (e) {}
@@ -1147,7 +1263,7 @@
       try {
         await fetch(`${serverUrl}/api/control`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Source': 'phone' },
           body: JSON.stringify({ action: 'media', value: 'playpause', deviceId: getDeviceId() })
         });
       } catch (e) {}
@@ -1156,7 +1272,7 @@
       try {
         await fetch(`${serverUrl}/api/control`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Source': 'phone' },
           body: JSON.stringify({ action: 'media', value: 'next', deviceId: getDeviceId() })
         });
       } catch (e) {}

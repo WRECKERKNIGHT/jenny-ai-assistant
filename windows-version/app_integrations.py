@@ -146,27 +146,68 @@ def spotify_running() -> bool:
     return _app_exe_running("spotify")
 
 
-def spotify_action(action: str) -> tuple[bool, str]:
-    """playpause / next / previous / stop / volume-up / volume-down using media keys."""
-    keys = {
-        "playpause": "playpause",
-        "play": "play",
-        "pause": "pause",
-        "next": "next",
-        "previous": "previous",
-        "stop": "stop",
+def spotify_status() -> dict:
+    """Report whether Spotify is installed/running so the GUI can show it as
+    'connected'. (Real playback state needs the Spotify Web API + OAuth keys,
+    which aren't configured, so we surface process-level connectivity.)"""
+    running = spotify_running()
+    return {
+        "running": running,
+        "engine": "media_keys",
+        "connected": running,
+        "message": ("Spotify is running and controllable via media keys (play/pause/next/prev)."
+                    if running else
+                    "Spotify is not running. Say \"open spotify\" to launch it, then \"play music\"."),
     }
-    target = "spotify"
-    from pc_actions import media_play_pause, media_next, media_prev
-    fn = {
-        "playpause": media_play_pause, "play": media_play_pause,
-        "pause": media_play_pause, "stop": media_play_pause,
-        "next": media_next, "previous": media_prev,
-    }.get(action)
-    if not fn:
-        return False, "Unknown media action"
-    focus_window(target)
-    return fn() or True, f"Media {action} sent"
+
+
+# Windows Virtual-Key codes for the global media keys. These drive whatever
+# media session owns the keyboard (Spotify registers one) directly through
+# user32 — no pyautogui, no window focus required, works even when the app
+# is in the background.
+VK_MEDIA_PLAY_PAUSE = 0xB3
+VK_MEDIA_STOP = 0xB2
+VK_MEDIA_NEXT_TRACK = 0xB0
+VK_MEDIA_PREV_TRACK = 0xB1
+VK_MEDIA_PLAY = 0xFA
+VK_MEDIA_PAUSE = 0xB3
+
+
+def _send_media_key(vk: int) -> bool:
+    try:
+        import ctypes
+        ctypes.windll.user32.keybd_event(vk, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(vk, 0, 2, 0)
+        return True
+    except Exception:
+        return False
+
+
+def spotify_action(action: str) -> tuple[bool, str]:
+    """playpause / play / pause / next / previous / stop using global media keys.
+
+    Reports the REAL outcome so the assistant never claims success when the
+    keystroke couldn't be sent (the old code masked errors with `fn() or True`)."""
+    keymap = {
+        "playpause": VK_MEDIA_PLAY_PAUSE,
+        "play": VK_MEDIA_PLAY,
+        "pause": VK_MEDIA_PLAY_PAUSE,
+        "stop": VK_MEDIA_STOP,
+        "next": VK_MEDIA_NEXT_TRACK,
+        "previous": VK_MEDIA_PREV_TRACK,
+        "prev": VK_MEDIA_PREV_TRACK,
+    }
+    vk = keymap.get(action)
+    if vk is None:
+        return False, f"Unknown media action '{action}'"
+    if not spotify_running():
+        return False, ("Spotify isn't running. Say \"open spotify\" first, then try again.")
+    # Prefer focusing the app if it's around, but don't fail if we can't.
+    if action in ("play", "pause", "next", "previous", "prev", "stop"):
+        focus_window("spotify")
+    if _send_media_key(vk):
+        return True, f"Media {action} sent to Spotify"
+    return False, "Could not send the media key (Windows blocked it)."
 
 
 def spotify_search_play(query: str) -> tuple[bool, str]:
