@@ -209,6 +209,50 @@ body.mode-jarvis .timer-pill { display:none; }
 body.mode-jarvis .orb-section { flex:0 0 auto; padding:0; overflow:hidden; }
 body.mode-jarvis .holo-dock { margin-top:0; border-top:1px solid rgba(0,212,255,0.15); }
 
+/* ============================================================
+   FRIDAY WINGMATE DASHBOARD — enhances the shared FRIDAY layout
+   (sys-monitor + orb stay). Distinct purple look, only in friday.
+   ============================================================ */
+.friday-dashboard {
+  position:relative; z-index:2;
+  flex:0 0 auto; display:none; flex-direction:column; gap:10px;
+  padding:12px 18px 8px; border-bottom:1px solid rgba(168,85,247,0.18);
+  max-height:38%; overflow-y:auto;
+}
+body.mode-friday .friday-dashboard { display:flex; }
+
+.fd-top { display:flex; align-items:center; justify-content:space-between; padding-bottom:8px; border-bottom:1px solid rgba(168,85,247,0.18); }
+.fd-identity { display:flex; align-items:center; gap:10px; }
+.fd-mark { width:38px; height:38px; border-radius:8px; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg, rgba(168,85,247,0.18), rgba(109,40,217,0.1)); border:1px solid rgba(168,85,247,0.35); box-shadow:0 0 16px rgba(168,85,247,0.25), inset 0 0 12px rgba(168,85,247,0.12); color:#a855f7; font-size:17px; }
+.fd-word { font-family:var(--orbitron); font-size:14px; font-weight:900; letter-spacing:3px; color:#f3e8ff; text-shadow:0 0 16px rgba(168,85,247,0.5); }
+.fd-sub { font-family:var(--mono); font-size:8px; letter-spacing:2px; color:rgba(168,85,247,0.6); margin-top:2px; }
+.fd-status { font-family:var(--mono); font-size:9px; letter-spacing:2px; color:#a855f7; padding:4px 10px; border:1px solid rgba(168,85,247,0.4); border-radius:20px; background:rgba(168,85,247,0.08); animation:fd-pulse 2.4s ease-in-out infinite; }
+@keyframes fd-pulse { 0%,100% { box-shadow:0 0 6px rgba(168,85,247,0.2); } 50% { box-shadow:0 0 18px rgba(168,85,247,0.5); } }
+
+.fd-clockrow { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+.fd-clock { font-family:var(--orbitron); font-size:28px; font-weight:900; letter-spacing:2px; color:#ffffff; text-shadow:0 0 24px rgba(168,85,247,0.55); }
+.fd-date { font-family:var(--mono); font-size:10px; color:rgba(168,85,247,0.7); text-align:right; letter-spacing:1px; }
+
+.fd-greet { font-family:var(--rajdhani); font-size:13px; font-weight:600; color:#e9d5ff; letter-spacing:0.3px; }
+
+.fd-section-label { display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:9px; letter-spacing:2px; color:#c084fc; margin-top:2px; }
+.fd-section-label i { font-size:10px; }
+.fd-section-label::after { content:""; flex:1; height:1px; background:linear-gradient(90deg, rgba(168,85,247,0.4), transparent); }
+
+.fd-cards { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; }
+.fd-card { display:flex; align-items:center; gap:10px; background:linear-gradient(160deg, rgba(168,85,247,0.06), rgba(109,40,217,0.1)); border:1px solid rgba(168,85,247,0.22); border-radius:10px; padding:9px 10px; overflow:hidden; }
+.fd-card-icon { width:30px; height:30px; flex-shrink:0; border-radius:7px; display:flex; align-items:center; justify-content:center; background:rgba(168,85,247,0.12); border:1px solid rgba(168,85,247,0.25); color:#c084fc; font-size:12px; }
+.fd-card-val { font-family:var(--orbitron); font-size:15px; font-weight:900; color:#f5f0ff; line-height:1; }
+.fd-card-lbl { font-family:var(--mono); font-size:7.5px; letter-spacing:1px; color:rgba(168,85,247,0.65); text-transform:uppercase; margin-top:3px; }
+
+.fd-cmds { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; }
+.fd-cmd { display:flex; align-items:center; gap:9px; background:rgba(168,85,247,0.05); border:1px solid rgba(168,85,247,0.22); border-radius:10px; padding:9px 12px; cursor:pointer; transition:all 0.2s cubic-bezier(0.16, 1, 0.3, 1); color:#ecd9ff; font-family:var(--mono); font-size:10px; letter-spacing:0.5px; text-align:left; }
+.fd-cmd i { font-size:13px; color:#a855f7; text-shadow:0 0 10px rgba(168,85,247,0.5); }
+.fd-cmd:hover { background:rgba(168,85,247,0.14); border-color:#a855f7; box-shadow:0 0 16px rgba(168,85,247,0.25); transform:translateY(-1px); color:#ffffff; }
+
+body.mode-jarvis .friday-dashboard { display:none; }
+body.mode-ultron .friday-dashboard { display:none; }
+
 /* SYSTEM MONITOR */
 .sys-monitor { flex:0 0 auto; padding:18px 24px; display:flex; flex-direction:column; gap:16px; border-bottom:1px solid rgba(229,193,88,0.15); overflow-y:auto; min-height:0; }
 .sys-graph-row { display:flex; gap:12px; }

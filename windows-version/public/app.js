@@ -70,12 +70,34 @@ const sfx = {
   hover: () => playTone(800, 0.03, 'triangle', 0.02),
   confirm: () => { playTone(600, 0.08, 'sine', 0.04); setTimeout(() => playTone(900, 0.12, 'sine', 0.04), 70); },
   error: () => { playTone(200, 0.12, 'sawtooth', 0.04); setTimeout(() => playTone(150, 0.15, 'sawtooth', 0.04), 80); },
-  boot: () => { [261.63, 329.63, 392, 523.25].forEach((f, i) => { setTimeout(() => playTone(f, 0.35, 'sine', 0.04), i * 100); }); },
+  boot: () => {
+    // Energized power-on: quick riser arpeggio into a confident triad stab.
+    [220, 277.18, 329.63, 440, 554.37].forEach((f, i) => { setTimeout(() => playTone(f, 0.22, 'sine', 0.05, 0.008, 0.05), i * 55); });
+    setTimeout(() => { playChord(523.25, 1.4, 'sine', 0.05); }, 340);
+  },
   timer: () => { [880, 1100, 880].forEach((f, i) => { setTimeout(() => playTone(f, 0.2, 'sine', 0.06), i * 200); }); },
   jarvis: () => { [784, 987.77, 1174.66].forEach((f, i) => { setTimeout(() => playTone(f, 0.12, 'sine', 0.05), i * 80); }); },
   startupMusic: () => {
-    const notes = [[261.63, 0], [329.63, 0.14], [392.00, 0.28], [493.88, 0.42], [587.33, 0.56], [659.25, 0.7]]; // Cmaj9 Ambient Chord
-    notes.forEach(([freq, off]) => setTimeout(() => playChord(freq, 2.6, 'sine', 0.045), off * 1000));
+    // Cinematic HER-style swell: warm low pad builds up and resolves upward.
+    const ctx = getCtx();
+    const t0 = ctx.currentTime;
+    [130.81, 196.0, 261.63].forEach((f, i) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = f;
+      const start = t0 + i * 0.12;
+      g.gain.setValueAtTime(0, start);
+      g.gain.linearRampToValueAtTime(0.055, start + 1.1);
+      g.gain.exponentialRampToValueAtTime(0.001, start + 3.4);
+      o.connect(g).connect(masterGain || ctx.destination);
+      o.start(start);
+      o.stop(start + 3.4);
+    });
+    [261.63, 329.63, 392.0, 523.25, 659.25].forEach((f, i) => {
+      setTimeout(() => playTone(f, 0.5, 'triangle', 0.035, 0.02, 0.12), 900 + i * 120);
+    });
+    setTimeout(() => playChord(659.25, 1.8, 'sine', 0.045), 1720);
   },
   modeStartup: (mode) => {
     if (mode === 'ultron') {
@@ -87,8 +109,9 @@ const sfx = {
       [523.25, 659.25, 783.99].forEach((f, i) => setTimeout(() => playTone(f, 0.14, 'triangle', 0.04, 0.01, 0.05), i * 90));
       setTimeout(() => playTone(1046.5, 0.4, 'sine', 0.045, 0.03, 0.15), 280);
     } else {
-      // FRIDAY — warm, cheerful major arpeggio.
-      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => setTimeout(() => playTone(f, 0.16, 'sine', 0.04, 0.012, 0.06), i * 70));
+      // FRIDAY — warm, cheerful major arpeggio with a sparkle on top.
+      [523.25, 659.25, 783.99, 1046.5, 1318.51].forEach((f, i) => setTimeout(() => playTone(f, 0.16, 'sine', 0.04, 0.012, 0.06), i * 70));
+      setTimeout(() => playChord(1046.5, 1.2, 'sine', 0.035), 300);
     }
   }
 };
@@ -305,6 +328,7 @@ async function runBoot() {
       card.addEventListener('click', () => { const cmd = card.dataset.cmd; if (cmd) sendMessage(cmd); });
     });
     await loadMode();
+    if (currentMode === 'friday') initFridayDashboard();
     greetAfterBoot();
     return;
   }
@@ -334,16 +358,16 @@ async function runBoot() {
 
   const steps = [
     [15, 'INITIALIZING NEURAL CORE...'],
-    [35, 'LOADING HOLOGRAPHIC DISPLAY...'],
+    [35, 'WAKING HOLOGRAPHIC DISPLAY...'],
     [55, 'ESTABLISHING ENCRYPTED CHANNEL...'],
-    [75, 'RUNNING DIAGNOSTICS...'],
+    [75, 'CALIBRATING VOICE SYNTHESIS...'],
     [90, 'LOADING MEMORY VAULT...'],
     [100, 'ALL SYSTEMS: PASS'],
   ];
   for (const [pct, msg] of steps) {
     if (loadFill) loadFill.style.width = pct + '%';
     if (loadText) loadText.textContent = msg;
-    await sleep(400 + Math.random() * 200);
+    await sleep(300 + Math.random() * 220);
   }
 
   try { sfx.boot(); } catch(e) {}
@@ -385,6 +409,7 @@ async function runBoot() {
     card.addEventListener('click', () => { const cmd = card.dataset.cmd; if (cmd) sendMessage(cmd); });
   });
   await loadMode();
+  if (currentMode === 'friday') initFridayDashboard();
   greetAfterBoot();
 }
 
@@ -410,9 +435,9 @@ async function greetAfterBoot() {
   // Single-voice rule: if the server's proactive thread already spoke the
   // boot greeting, the UI only shows the text - never speaks over it.
   if (serverSpoke) return;
-  // Soft sci-fi jingle first, then the spoken greeting after the music tails off.
+  // Cinematic opening: warm swell first, spoken greeting rides on top.
   setTimeout(() => { try { sfx.startupMusic(); } catch(e) {} }, 120);
-  setTimeout(() => { if (typeof speak === 'function') speak(speech); }, 1800);
+  setTimeout(() => { if (typeof speak === 'function') speak(speech); }, 2100);
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -421,12 +446,25 @@ function getGreeting() {
   const mem = loadOfflineMemory();
   const name = mem.name ? ` ${mem.name}` : '';
   const hour = new Date().getHours();
+  const mode = document.body.classList.contains('mode-jarvis') ? 'jarvis'
+    : document.body.classList.contains('mode-ultron') ? 'ultron' : 'friday';
   let timeOfDay;
   if (hour >= 5 && hour < 12) timeOfDay = 'morning';
   else if (hour >= 12 && hour < 17) timeOfDay = 'afternoon';
   else if (hour >= 17 && hour < 21) timeOfDay = 'evening';
   else timeOfDay = 'night';
-  return `Good ${timeOfDay}${name}, BOSS. I am JENNY, your personal assistant. All Systems are working fine. What are we doing today, BOSS?`;
+  if (mode === 'jarvis') {
+    return `Good ${timeOfDay}${name}, sir. I am JARVIS, at your service. All systems are operational. How may I assist you this ${timeOfDay}?`;
+  }
+  if (mode === 'ultron') {
+    return `ULTRON online. ${timeOfDay.toUpperCase()} protocols engaged. State your directive, Boss.`;
+  }
+  const items = [
+    `Hey${name}!, FRIDAY online and ready. All systems are green — so what are we getting into today, Boss?`,
+    `Good ${timeOfDay}${name}! FRIDAY's up and running. I tried to keep it quiet but the fans are excited. What's the plan for today?`,
+    `Hey${name}, welcome back! Systems are green, coffee's figurative, and I'm fully charged. What are we doing first today, Boss?`,
+  ];
+  return items[Math.floor(Math.random() * items.length)];
 }
 
 // ================================================
@@ -3490,11 +3528,11 @@ const modeConfig = {
   friday: {
     name: 'F.R.I.D.A.Y.',
     fullName: 'Female Replacement Intelligent Digital Assistant Youth',
-    greeting: 'Hey Boss! FRIDAY online and ready.',
+    greeting: 'Hey Boss! FRIDAY online and ready. What are we doing today?',
     standby: 'Ready when you are, Boss.',
-    thinking: 'Crunching that for you, Boss...',
+    thinking: 'On it, Boss — give me a sec...',
     farewell: 'Catch you later, Boss!',
-    personality: 'Casual, witty, efficient',
+    personality: 'Casual, witty, talkative, efficient',
     accent: '#a855f7'
   },
   ultron: {
@@ -3521,8 +3559,15 @@ async function loadMode() {
         modeMotifPlayed = true;
         setTimeout(() => { try { sfx.modeStartup(currentMode); } catch(e) {} }, 400);
       }
+      return;
     }
-  } catch(e) {}
+    throw new Error('no mode');
+  } catch(e) {
+    // API unreachable → assume FRIDAY (the default) so the shell still renders.
+    if (!document.body.classList.contains('mode-jarvis') && !document.body.classList.contains('mode-friday') && !document.body.classList.contains('mode-ultron')) {
+      applyMode('friday');
+    }
+  }
 }
 
 const MODE_WELCOME_CARDS = {
@@ -3561,7 +3606,7 @@ function renderModeWelcome(mode) {
     ? "Agency OS online — systems nominal, boss. At your command."
     : mode === 'ultron'
     ? "Defense systems active. State your directive."
-    : "What can I help you with, BOSS?";
+    : "Hey Boss! FRIDAY's here — what are we doing today?";
 
   // Live clock row (boot back when hidden / refreshed).
   const clockrow = ws.querySelector('.welcome-clockrow');
@@ -3627,6 +3672,122 @@ function applyMode(mode) {
   toggleAgencyPanel(mode === 'jarvis');
   loadVoiceBadge();
   if (mode === 'jarvis') initJarvisDashboard();
+  if (mode === 'friday') initFridayDashboard();
+}
+
+// ================================================
+// FRIDAY WINGMATE DASHBOARD — quick look cards +
+// quick runs. Lives in the FRIDAY left panel on
+// top of the shared sys-monitor + orb.
+// ================================================
+let fdClockTimer = null;
+let fdRefreshTimer = null;
+
+const FD_RUNS = [
+  { cmd: "briefing", icon: "fa-clipboard-list", label: "Briefing" },
+  { cmd: "what's the weather", icon: "fa-cloud-sun", label: "Weather" },
+  { cmd: "tell me a joke", icon: "fa-face-laugh", label: "Joke" },
+  { cmd: "set a timer for 5 minutes", icon: "fa-stopwatch", label: "Timer" },
+  { cmd: "play some music", icon: "fa-music", label: "Music" },
+  { cmd: "check emails", icon: "fa-envelope", label: "Emails" },
+  { cmd: "take a screenshot", icon: "fa-camera", label: "Shot" },
+  { cmd: "what can you do", icon: "fa-terminal", label: "Everything" },
+];
+
+function initFridayDashboard() {
+  const dash = document.getElementById('friday-dashboard');
+  if (!dash) return;
+
+  if (fdClockTimer) clearInterval(fdClockTimer);
+  const clockEl = document.getElementById('fd-clock');
+  const dateEl = document.getElementById('fd-date');
+  const tick = () => {
+    const n = new Date();
+    if (clockEl) clockEl.textContent = n.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    if (dateEl) dateEl.textContent = n.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+  tick();
+  fdClockTimer = setInterval(tick, 1000);
+
+  // Quick runs grid.
+  const cmdsEl = document.getElementById('fd-cmds');
+  if (cmdsEl) {
+    cmdsEl.innerHTML = FD_RUNS.map(d =>
+      `<button class="fd-cmd" data-fd="${d.cmd}"><i class="fa-solid ${d.icon}"></i><span>${d.label}</span></button>`
+    ).join('');
+    cmdsEl.querySelectorAll('.fd-cmd').forEach(btn => {
+      btn.onclick = () => { if (typeof sendMessage === 'function') sendMessage(btn.dataset.fd); };
+    });
+  }
+
+  refreshFridayCards();
+  if (fdRefreshTimer) clearInterval(fdRefreshTimer);
+  fdRefreshTimer = setInterval(refreshFridayCards, 60000);
+
+  // Casual greeting flavored by time of day.
+  const greetEl = document.getElementById('fd-greet');
+  if (greetEl) {
+    const h = new Date().getHours();
+    const openings = [
+      "Firing up the engines for the day — what's the plan, Boss?",
+      "Alright Boss, give it to me straight — what are we doing today?",
+      "Green across the board. Point me anywhere, Boss.",
+      "I'm warmed up and ready. What's today's move, Boss?",
+    ];
+    const period = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
+    if (['morning', 'afternoon'].includes(period)) {
+      greetEl.textContent = `Good ${period}, Boss! ${openings[Math.floor(Math.random() * 2)]}`;
+    } else {
+      greetEl.textContent = `Good ${period}, Boss! ${openings[2 + (Math.floor(Math.random() * 2))]}`;
+    }
+  }
+}
+
+async function refreshFridayCards() {
+  try {
+    const [sysRes, briefRes] = await Promise.all([
+      fetch('/api/system-status', { cache: 'no-store' }),
+      fetch('/api/briefing', { cache: 'no-store' }).catch(() => null),
+    ]);
+    const sys = sysRes.ok ? await sysRes.json() : {};
+    const brief = briefRes && briefRes.ok ? await briefRes.json() : {};
+    const b = brief.briefing || {};
+
+    const batteryEl = document.getElementById('fd-battery-val');
+    if (batteryEl) {
+      const lvl = sys.battery?.level ?? b.battery?.replace('%', '');
+      batteryEl.textContent = lvl != null && lvl !== '' ? `${Math.round(+lvl)}%` : '--';
+      const card = document.getElementById('fd-card-battery');
+      if (card && sys.battery) {
+        card.querySelector('.fd-card-icon i').className = `fa-solid ${sys.battery.charging ? 'fa-bolt' : 'fa-battery-three-quarters'}`;
+      }
+    }
+
+    const upEl = document.getElementById('fd-uptime-val');
+    if (upEl) {
+      const up = sys.uptime || 0;
+      upEl.textContent = up ? `${Math.floor(up / 3600)}h ${Math.floor((up % 3600) / 60)}m` : '--';
+    }
+
+    const memEl = document.getElementById('fd-memory-val');
+    if (memEl) memEl.textContent = b.vaultCount != null ? b.vaultCount : '--';
+  } catch(e) {}
+
+  try {
+    const w = await fetch('/api/weather', { cache: 'no-store' });
+    const d = await w.json();
+    const valEl = document.getElementById('fd-weather-val');
+    const lblEl = document.getElementById('fd-weather-lbl');
+    if (valEl && d.tempC != null) {
+      valEl.textContent = `${d.tempC}\u00b0`;
+      if (lblEl) lblEl.textContent = `${d.condition || 'Weather'}${d.city ? ' \u00b7 ' + d.city : ''}`;
+      const icon = document.querySelector('#fd-card-weather .fd-card-icon i');
+      if (icon) {
+        const glyph = d.type === 'rain' ? 'fa-cloud-rain' : d.type === 'cloudy' ? 'fa-cloud-sun' : d.isDay ? 'fa-sun' : 'fa-moon';
+        icon.className = `fa-solid ${glyph}`;
+      }
+    }
+  } catch(e) {}
 }
 
 // ================================================
@@ -3772,7 +3933,7 @@ async function switchMode(mode) {
         return;
       }
       applyMode(mode);
-      const g = { jarvis: 'Switching to Jarvis mode. At your service, Sir.', friday: 'Switching to Friday mode. Ready when you are, Boss.' }[mode];
+      const g = { jarvis: 'Switching to Jarvis mode. At your service, Sir.', friday: 'Friday mode engaged. Ready when you are, Boss!' }[mode];
       if (g && typeof speakTrigger === 'function') speakTrigger(g, 300);
     }
   } catch(e) {
