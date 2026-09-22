@@ -51,6 +51,98 @@ activeDevices = {}
 pendingDeviceCommands = {}
 system_cache = {"cpu": 0, "ram": 0, "battery": 100, "charging": False, "disk": 0, "disk_free": "0", "disk_total": "0", "ram_used": "0", "ram_total": "0", "net_speed": "0 KB/s", "uptime": 0, "hostname": platform.node(), "platform": sys.platform}
 
+def _save_devices():
+    """Persist linked phones so approvals survive a server restart."""
+    try:
+        save_json(DATA_DIR / "devices.json", {"devices": list(activeDevices.values())})
+    except Exception:
+        pass
+
+def _load_devices():
+    try:
+        data = load_json(DATA_DIR / "devices.json", {})
+        for dev in data.get("devices", []):
+            did = dev.get("deviceId")
+            if did:
+                activeDevices[did] = dev
+    except Exception:
+        pass
+
+_load_devices()
+
+AUTOSTART_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+AUTOSTART_NAME = "JENNY Assistant"
+
+def _autostart_command() -> str:
+    """Launch command registered at login: pythonw tray.py --auto."""
+    py = sys.executable or "python"
+    pyw = str(Path(py).with_name("pythonw.exe"))
+    runner = pyw if os.path.exists(pyw) else py
+    script = str(BASE_DIR / "tray.py")
+    flag = " --auto" if "--auto" not in script else ""
+    return f'"{runner}" "{script}"{flag}'
+
+def _autostart_enabled() -> bool:
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, AUTOSTART_RUN_KEY) as k:
+            winreg.QueryValueEx(k, AUTOSTART_NAME)
+            return True
+    except Exception:
+        return False
+
+def _autostart_set(on: bool) -> bool:
+    """Create/remove the HKCU Run entry so JENNY starts with Windows."""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, AUTOSTART_RUN_KEY, 0, winreg.KEY_SET_VALUE) as k:
+            if on:
+                winreg.SetValueEx(k, AUTOSTART_NAME, 0, winreg.REG_SZ, _autostart_command())
+            else:
+                try:
+                    winreg.DeleteValue(k, AUTOSTART_NAME)
+                except FileNotFoundError:
+                    pass
+        return True
+    except Exception:
+        return False
+
+def _services_status() -> dict:
+    """Connected-services status used by the dashboard panel and boot greeting."""
+    keys = load_json(DATA_DIR / "keys.json", {})
+    settings = load_json(DATA_DIR / "settings.json", {})
+    email_configured = bool(str(keys.get("email_user") or keys.get("email_address") or "").strip()
+                            and str(keys.get("email_pass") or keys.get("email_password") or "").strip())
+    discord_ok = False
+    discord_url = str(keys.get("discord_webhook_url") or "").strip()
+    if discord_url:
+        try:
+            req = urllib.request.Request(discord_url + "?wait=0", method="GET",
+                                         headers={"Accept": "application/json"})
+            with urllib.request.urlopen(req, timeout=4) as r:
+                discord_ok = r.status == 200 or True
+        except Exception:
+            discord_ok = False
+    wa = str(settings.get("whatsapp_number") or "").strip()
+    agency_url = (str(settings.get("agency_url") or os.environ.get("AGENCY_OS_URL", "") or "http://localhost:3200").strip().rstrip("/"))
+    agency = {"url": agency_url, "online": False, "error": ""}
+    try:
+        import agency_client as _ac
+        _ac.AGENCY_BASE = agency_url
+        agency["online"] = bool(_ac.agency_online())
+        if not agency["online"]:
+            agency["error"] = f"No server at {agency_url}. Start the Agency OS app, or set agency_url in Settings."
+    except Exception as e:
+        agency["error"] = str(e)[:120]
+    return {
+        "email": {"configured": email_configured, "note": "Configured for IMAP/Outlook reads" if email_configured else "Add email_user / email_pass (and email_imap_host) in Settings > Keys"},
+        "discord": {"configured": bool(discord_url), "online": discord_ok or None, "note": "Webhook configured — 'post to discord ...'" if discord_url else "Add a Discord webhook URL to post messages to a channel"},
+        "whatsapp": {"configured": bool(wa), "note": ("Sends via wa.me link to " + wa) if wa else "Add whatsapp_number to open chat + send drafts"},
+        "agency": agency,
+        "autostart": {"enabled": _autostart_enabled(), "note": "Runs JENNY at Windows login"},
+        "wake": {"enabled": bool(speech_stt.wake_listener_active())},
+    }
+
 # Groq API usage/limit tracking (shared by the usage bars in every mode).
 GROQ_LIMITS = {"rpm_max": 30, "tpm_max": 6000}
 # Ordered candidate models: the first that the account can actually use wins.
@@ -1275,27 +1367,43 @@ def local_command_router(msg):
 
     # APP INTEGRATIONS (Spotify / Telegram / WhatsApp / Discord / VS Code / Chrome deep)
     # run BEFORE generic "open <app>" and master-volume handlers so integrations win.
+    def spotify_running_now() -> bool:
+        try:
+            import app_integrations
+            return app_integrations.spotify_running()
+        except Exception:
+            return False
     if any(w in lo for w in ["ring my phone", "call my phone", "buzz my phone", "ring the phone", "call the phone"]):
         return {"text": f"Ringing your phone, {boss}!", "speech": "Ringing your phone.", "command": {"action": "phone-ring", "value": ""}}
     m = re.search(r"(?:play|put on)\s+(.+?)\s+(?:on|in)\s+spotify\b", lo)
     if m:
         q = m.group(1).strip()
+        if not spotify_running_now():
+            return {"text": f"Spotify isn't running, {boss}. Say **open spotify** first, then I can play {q} for you.", "speech": f"Spotify isn't running. Say open spotify first.", "command": {"action": "open-app", "value": "spotify"}}
         return {"text": f"Playing **{q}** on Spotify, {boss}!", "speech": f"Playing {q} on Spotify.", "command": {"action": "spotify-search", "value": q}}
     if ("what song" in lo or "what's playing" in lo or "now playing" in lo or "currently playing" in lo) and "spotify" in lo:
         return {"text": f"Checking what's on Spotify, {boss}!", "speech": "Checking Spotify."}
     if any(w in lo for w in ["spotify next", "next on spotify"]):
+        if not spotify_running_now():
+            return {"text": f"Spotify isn't running, {boss}. Say **open spotify** first.", "speech": "Spotify isn't running.", "command": {"action": "open-app", "value": "spotify"}}
         return {"text": f"Next on Spotify, {boss}!", "speech": "Next track on Spotify.", "command": {"action": "spotify-action", "value": "next"}}
     if any(w in lo for w in ["spotify previous", "previous on spotify", "back on spotify"]):
+        if not spotify_running_now():
+            return {"text": f"Spotify isn't running, {boss}. Say **open spotify** first.", "speech": "Spotify isn't running.", "command": {"action": "open-app", "value": "spotify"}}
         return {"text": f"Going back, {boss}!", "speech": "Previous track.", "command": {"action": "spotify-action", "value": "previous"}}
     if any(w in lo for w in ["pause spotify", "pause the music", "pause music", "pause the song", "spotify pause", "stop spotify", "stop the music", "stop music", "stop the song"]):
+        if not spotify_running_now():
+            return {"text": f"Spotify isn't running, {boss}. Say **open spotify** first.", "speech": "Spotify isn't running.", "command": {"action": "open-app", "value": "spotify"}}
         return {"text": f"Pausing audio on Spotify, {boss}!", "speech": "Pausing Spotify.", "command": {"action": "spotify-action", "value": "pause"}}
     if any(w in lo for w in ["resume spotify", "resume the music", "resume music", "resume the song", "continue spotify", "play the music", "unpause"]):
+        if not spotify_running_now():
+            return {"text": f"Spotify isn't running, {boss}. Say **open spotify** first.", "speech": "Spotify isn't running.", "command": {"action": "open-app", "value": "spotify"}}
         return {"text": f"Resuming playback, {boss}!", "speech": "Resuming Spotify.", "command": {"action": "spotify-action", "value": "play"}}
     if any(w in lo for w in ["open spotify", "open spotify app", "launch spotify"]):
         return {"text": f"Opening Spotify, {boss}!", "speech": "Opening Spotify.", "command": {"action": "open-app", "value": "spotify"}}
-    m = re.search(r"(?:send|message|text)\s+(.+?)\s+to\s+(.+?)\s+(?:on|via)\s+(telegram|whatsapp|discord)\b(?:\s*[:,-]\s*(.*))?$", lo)
+    m = re.search(r"(?:send|message|text)\s+(.+?)\s+to\s+(.+?)\s+(?:on|via)\s+(telegram|whatsapp|discord|sms|text message)\b(?:\s*[:,-]\s*(.*))?$", lo)
     if not m:
-        m = re.search(r"(?:send|message|text)\s+(.+?)\s+(?:on|via)\s+(telegram|whatsapp|discord)\b\s*[:,-]\s*(.+)$", lo)
+        m = re.search(r"(?:send|message|text)\s+(.+?)\s+(?:on|via)\s+(telegram|whatsapp|discord|sms|text message)\b\s*[:,-]\s*(.+)$", lo)
     if m:
         groups = m.groups()
         if len(groups) == 4:
@@ -1314,6 +1422,8 @@ def local_command_router(msg):
             return {"text": f"Sending to **{contact.strip()}** on Telegram, {boss}!", "speech": f"Sending to {contact.strip()} on Telegram.", "command": {"action": "telegram-send", "value": f"{contact.strip()}|{message}"}}
         if platform_name == "whatsapp":
             return {"text": f"Opening WhatsApp for **{contact.strip()}**, {boss}!", "speech": "Opening WhatsApp Web.", "command": {"action": "whatsapp-open", "value": ""}}
+        if platform_name in ("sms", "text message"):
+            return {"text": f"Preparing SMS for **{contact.strip()}** on your phone, {boss}!", "speech": f"Preparing SMS for {contact.strip()} on your phone.", "command": {"action": "phone-command", "value": {"action": "sms", "value": {"number": contact.strip(), "body": message}}}}
         return {"text": f"Opening Discord, {boss}!", "speech": "Opening Discord.", "command": {"action": "discord-open", "value": ""}}
     if any(w in lo for w in ["open whatsapp", "launch whatsapp", "whatsapp web"]):
         return {"text": f"Opening WhatsApp, {boss}!", "speech": "Opening WhatsApp.", "command": {"action": "whatsapp-open", "value": ""}}
@@ -2417,6 +2527,17 @@ def api_chat():
     msg = d.get("message", "").strip()
     if not msg:
         return jsonify({"success": False, "error": "No message"}), 400
+    # Phone-sourced chats are mirrored into the dashboard output box so a
+    # command sent from the phone is visible on the PC too.
+    src = (request.headers.get("X-Source") or "").lower()
+    if src == "phone" or d.get("deviceId"):
+        _ui_feed("user", f"[Phone] {msg}", source="phone")
+        reply = _assistant_reply(msg)
+        ev = {"kind": "assistant", "text": reply.get("text", "")}
+        if reply.get("command"):
+            ev["command"] = reply["command"]
+        _ui_feed("assistant", reply.get("text", ""), command=reply.get("command"), source="phone")
+        return jsonify({"success": True, "reply": reply})
     return jsonify({"success": True, "reply": _assistant_reply(msg)})
 
 @app.route("/api/smart-suggestions")
@@ -2433,6 +2554,23 @@ def api_user_habits():
 def api_control():
     d = request.get_json(force=True, silent=True) or {}
     action = d.get("action", ""); value = d.get("value", "")
+    # Mirror phone-originated control actions into the dashboard output box.
+    phone_src = (request.headers.get("X-Source") or "").lower() == "phone" or bool(d.get("deviceId"))
+    if phone_src:
+        from flask import after_this_request
+        @after_this_request
+        def _feed_phone_cmd(resp):
+            try:
+                import json as _json
+                body = _json.loads(resp.get_data(as_text=True) or "{}") if resp.get_data() else {}
+                if body.get("success"):
+                    label = "Phone → " + str(action)
+                    if value and isinstance(value, str) and value and not value.startswith("{"):
+                        label += " " + str(value)[:80]
+                    _ui_feed("cmd", label, source="phone")
+            except Exception:
+                pass
+            return resp
     lo = action.lower()
     if lo == "volume":
         try:
@@ -2619,6 +2757,13 @@ def api_control():
             return jsonify({"success": bool(ok), "message": msg})
         except Exception as e:
             return jsonify({"success": False, "error": str(e)})
+    if lo == "spotify-status":
+        try:
+            import app_integrations
+            st = app_integrations.spotify_status()
+            return jsonify({"success": True, **st})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)})
     if lo in ("phone-ring", "phone-command"):
         dids = [d for d, dev in activeDevices.items() if dev.get("status") == "approved"]
         if not dids:
@@ -2627,8 +2772,38 @@ def api_control():
         if lo == "phone-ring":
             pendingDeviceCommands.setdefault(did, []).append({"action": "call", "value": "", "timestamp": int(time.time() * 1000)})
             return jsonify({"success": True, "message": "Ringing phone."})
-        pendingDeviceCommands.setdefault(did, []).append({"action": str(value.get("action", "toast")), "value": str(value.get("value", "")), "timestamp": int(time.time() * 1000)})
+        val = value.get("value", "") if isinstance(value, dict) else value
+        pendingDeviceCommands.setdefault(did, []).append({"action": str(value.get("action", "toast") if isinstance(value, dict) else "toast"), "value": val, "timestamp": int(time.time() * 1000)})
         return jsonify({"success": True, "message": "Command sent to phone."})
+    if lo in ("discord-send", "whatsapp-send"):
+        if lo == "discord-send":
+            text = (value or "").replace("\n", " ")
+            webhook = str(load_json(DATA_DIR / "keys.json", {}).get("discord_webhook_url") or "").strip()
+            if not webhook:
+                return jsonify({"success": False, "error": "No Discord webhook configured (Settings > Services)."})
+            try:
+                payload = json.dumps({"content": str(text)[:1900]}).encode("utf-8")
+                req = urllib.request.Request(webhook, data=payload, method="POST",
+                                             headers={"Content-Type": "application/json", "User-Agent": "JENNY"})
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    ok = 200 <= int(r.status) < 300
+                return jsonify({"success": ok, "message": "Posted to Discord." if ok else "Discord rejected the message."})
+            except Exception as e:
+                return jsonify({"success": False, "error": f"Discord send failed: {str(e)[:120]}"})
+        # whatsapp-send: open a wa.me conversation with the draft pre-filled.
+        num = str(load_json(DATA_DIR / "settings.json", {}).get("whatsapp_number") or "").strip()
+        target = str(value.get("to") or num or "").strip() if isinstance(value, dict) else ""
+        text = (value.get("text") if isinstance(value, dict) else str(value or "")).strip()
+        if not target:
+            return jsonify({"success": False, "error": "No WhatsApp number set (Settings > Services)."})
+        target = re.sub(r"[^0-9]", "", target)
+        url = f"https://wa.me/{target}" + (("?text=" + urllib.parse.quote(text)) if text else "")
+        try:
+            webbrowser.open(url)
+            return jsonify({"success": True, "message": "Opened WhatsApp chat with draft ready."})
+        except Exception:
+            return jsonify({"success": False, "error": "Could not open WhatsApp."})
+
     if lo in ("chrome-open", "chrome-search", "chrome-youtube", "chrome-list",
               "chrome-activate", "chrome-close", "chrome-back", "chrome-forward",
               "chrome-reload", "chrome-new-tab", "chrome-close-tab", "chrome-fullscreen"):
@@ -2911,6 +3086,19 @@ def api_settings():
     d = request.get_json(force=True, silent=True) or {}; s = load_json(DATA_DIR / "settings.json", {"latitude": 26.8467, "longitude": 80.9462, "cityName": "Lucknow"})
     for k in ["latitude", "longitude", "cityName"]:
         if k in d: s[k] = d[k]
+    # Behaviour / permission preferences (permanent app defaults).
+    for k in ("auto_approve_phones", "proactive", "wake_word"):
+        if k in d: s[k] = bool(d[k])
+    for k in ("agency_url", "whatsapp_number"):
+        if k in d and isinstance(d[k], str): s[k] = d[k].strip()
+    # Secrets live in the git-ignored keys file.
+    if "discord_webhook_url" in d:
+        keys = load_json(DATA_DIR / "keys.json", {})
+        keys["discord_webhook_url"] = str(d["discord_webhook_url"]).strip()
+        save_json(DATA_DIR / "keys.json", keys)
+    if "autostart" in d:
+        _autostart_set(bool(d["autostart"]))
+        s["autostart"] = bool(d["autostart"])
     save_json(DATA_DIR / "settings.json", s); return jsonify({"success": True, "settings": s})
 
 @app.route("/api/settings/keys", methods=["POST"])
@@ -2933,6 +3121,16 @@ def api_get_settings_keys():
         else:
             masked[k] = "SET" if v else "NOT SET"
     return jsonify({"success": True, "keys": masked})
+
+
+@app.route("/api/services")
+def api_services():
+    """Connected-services dashboard: email / discord / whatsapp / agency /
+    autostart / wake — the 'permission health' view for the Permanent App."""
+    try:
+        return jsonify({"success": True, **{"services": _services_status()}})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 @app.route("/api/gemini-keys")
 def api_gemini_keys():
@@ -3049,6 +3247,15 @@ def api_local_ip():
 @app.route("/api/remote-status")
 def api_remote_status(): return jsonify({"success": True, "remoteMode": False, "hostname": platform.node()})
 
+@app.route("/api/spotify/status")
+def api_spotify_status():
+    try:
+        import app_integrations
+        st = app_integrations.spotify_status()
+        return jsonify({"success": True, **st})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
 @app.route("/api/devices")
 def api_devices():
     now = datetime.datetime.now()
@@ -3062,6 +3269,9 @@ def api_devices():
             last_dt = None
         alive = last_dt is not None and (now - last_dt).total_seconds() < 45
         dev["connected"] = bool(alive) and dev.get("status") == "approved"
+        # `linked` = approved and therefore selectable even if the heartbeat is
+        # briefly stale (background-tab throttling used to disarm the panel).
+        dev["linked"] = dev.get("status") == "approved"
         out.append(dev)
     return jsonify({"success": True, "devices": out})
 
@@ -3074,7 +3284,17 @@ def api_mobile_stats():
 def api_device_register():
     d = request.get_json(force=True, silent=True) or {}; did = d.get("deviceId", "")
     if not did: return jsonify({"success": False, "message": "deviceId required"})
-    if did not in activeDevices: activeDevices[did] = {"deviceId": did, "os": d.get("os", "Unknown"), "browser": d.get("browser", "Unknown"), "ip": request.remote_addr, "status": "pending", "lastActive": datetime.datetime.now().isoformat()}
+    auto = load_json(DATA_DIR / "settings.json", {}).get("auto_approve_phones", True) is not False
+    if did not in activeDevices:
+        activeDevices[did] = {"deviceId": did, "os": d.get("os", "Unknown"), "browser": d.get("browser", "Unknown"), "ip": request.remote_addr, "status": "approved" if auto else "pending", "lastActive": datetime.datetime.now().isoformat()}
+    else:
+        activeDevices[did]["ip"] = request.remote_addr
+        activeDevices[did].setdefault("os", d.get("os", "Unknown"))
+        activeDevices[did].setdefault("browser", d.get("browser", "Unknown"))
+        activeDevices[did]["lastActive"] = datetime.datetime.now().isoformat()
+        if activeDevices[did].get("status") == "pending" and auto:
+            activeDevices[did]["status"] = "approved"
+    _save_devices()
     return jsonify({"success": True, "device": activeDevices[did]})
 
 @app.route("/api/device/status/<did>", methods=["GET", "POST"])
@@ -3090,6 +3310,7 @@ def api_device_status(did):
                 dev["signal"] = str(d["signal"])[:40]
             if d.get("network") is not None:
                 dev["network"] = str(d["network"])[:40]
+            _save_devices()
         return jsonify({"success": True, "status": dev.get("status", "unknown") if dev else "unknown"})
     dev = activeDevices.get(did, {})
     return jsonify({"success": True, "status": dev.get("status", "unknown"), "os": dev.get("os", ""), "browser": dev.get("browser", ""), "ip": dev.get("ip", ""), "battery": dev.get("battery"), "signal": dev.get("signal"), "lastActive": dev.get("lastActive", "")})
@@ -3097,7 +3318,10 @@ def api_device_status(did):
 @app.route("/api/device/approve", methods=["POST"])
 def api_device_approve():
     d = request.get_json(force=True, silent=True) or {}; did = d.get("deviceId", "")
-    if did in activeDevices: activeDevices[did]["status"] = d.get("status", ""); return jsonify({"success": True})
+    if did in activeDevices:
+        activeDevices[did]["status"] = d.get("status", "")
+        _save_devices()
+        return jsonify({"success": True})
     return jsonify({"success": False}), 404
 
 @app.route("/api/device/command/send", methods=["POST"])
@@ -3127,7 +3351,11 @@ def api_pc_notifications():
     return jsonify({"success": True, "notifications": pc.get("items", [])})
 
 @app.route("/api/device/command/poll/<did>")
-def api_device_cmd_poll(did): return jsonify({"success": True, "commands": pendingDeviceCommands.pop(did, [])})
+def api_device_cmd_poll(did):
+    # Opening the phone page counts as activity so it re-links instantly.
+    if did in activeDevices:
+        activeDevices[did]["lastActive"] = datetime.datetime.now().isoformat()
+    return jsonify({"success": True, "commands": pendingDeviceCommands.pop(did, [])})
 
 @app.route("/api/device/location", methods=["POST"])
 def api_device_location():
@@ -3206,7 +3434,32 @@ def api_notifications_push():
 
 @app.route("/api/device/sms/send", methods=["POST"])
 def api_device_sms():
-    return jsonify({"success": True, "message": "SMS feature coming soon"})
+    """Queue an SMS compose command to a linked phone.
+
+    The phone page can't touch the radio directly, but it CAN open the native
+    SMS composer via an sms:<number>?body=<text> intent, so we hand the target
+    phone an `sms` command through the same poll bus used for calls/toasts.
+    """
+    d = request.get_json(force=True, silent=True) or {}
+    did = d.get("deviceId", "")
+    number = str(d.get("number") or d.get("to") or "").strip()
+    body = str(d.get("body") or d.get("message") or d.get("text") or "").strip()
+    if not number:
+        return jsonify({"success": False, "error": "No phone number given to send SMS to."})
+    dev = activeDevices.get(did)
+    if did and dev and dev.get("status") != "approved":
+        return jsonify({"success": False, "error": "Device not approved"})
+    if not did or not activeDevices.get(did):
+        approved = [x for x, dv in activeDevices.items() if dv.get("status") == "approved"]
+        if not approved:
+            return jsonify({"success": False, "error": "No approved phone linked."})
+        did = approved[0]
+    pendingDeviceCommands.setdefault(did, []).append({
+        "action": "sms",
+        "value": json.dumps({"number": number, "body": body}, ensure_ascii=False),
+        "timestamp": int(time.time() * 1000),
+    })
+    return jsonify({"success": True, "message": f"SMS composer opening for {number} on the phone."})
 
 # =====================================================================
 # PHONE->PC VOICE CALL BRIDGE ("dial JENNY", talk, she answers from the PC)
@@ -3545,8 +3798,32 @@ def api_wake_toggle():
     speech_stt.stop_wake_listener()
     return jsonify({"success": True, "on": False})
 
+@app.route("/api/wake/restart", methods=["POST"])
+def api_wake_restart():
+    """Force the wake listener to re-open its microphone stream (self-heal)."""
+    import speech_stt as _stt
+    ok = _stt.wake_restart()
+    return jsonify({"success": True, "restarted": ok, **(_stt.wake_status())})
+
 _WAKE_EVENTS = []
 _WAKE_EVENTS_LOCK = threading.Lock()
+
+def _ui_feed(kind: str, text: str, command: dict | None = None, source: str = "") -> None:
+    """Append a UI event for the dashboard output box. This single feed powers
+    the wake-word conversation AND phone-originated commands, so everything the
+    assistant does is visible in the chat even when it happened elsewhere."""
+    if not text:
+        return
+    try:
+        with _WAKE_EVENTS_LOCK:
+            ev = {"kind": kind, "text": str(text)[:4000]}
+            if command:
+                ev["command"] = command
+            if source:
+                ev["source"] = source
+            _WAKE_EVENTS.append(ev)
+    except Exception:
+        pass
 
 @app.route("/api/wake/events")
 def api_wake_events():
@@ -3568,7 +3845,15 @@ def _on_wake_detected(text: str, phrase: str):
         with _WAKE_EVENTS_LOCK:
             _WAKE_EVENTS.append({"kind": "wake", "text": phrase})
             _WAKE_EVENTS.append({"kind": "user", "text": phrase})
-        tts_engine.speak(f"Yes, {MODE_PROFILES.get(mode or 'friday', MODE_PROFILES['friday'])['boss']}?", mode or "friday", use_chime=True)
+        boss = MODE_PROFILES.get(mode or 'friday', MODE_PROFILES['friday'])['boss']
+        acks = [
+            f"Yes, {boss}?",
+            f"Listening, {boss}.",
+            f"I'm here, {boss}. Go ahead.",
+            f"Go ahead, {boss}.",
+            f"At your service, {boss}.",
+        ]
+        tts_engine.speak(random.choice(acks), mode or "friday", use_chime=True)
         res = speech_stt.record_and_transcribe(8, language=speech_stt.get_stt_language())
         if not res.get("success"):
             err = res.get("error", "I'm here. Go ahead.")
@@ -3608,6 +3893,55 @@ def _wake_mode_for_phrase(phrase: str) -> str:
     if "jarvis" in p:
         return "jarvis"
     return "friday"
+
+_AGENCY_SNAPSHOT = {"replies": 0, "pending": 0, "interested": 0, "online": False}
+_AGENCY_WATCH_LOCK = threading.Lock()
+
+def _agency_alert_watcher() -> None:
+    """Poll Agency OS and speak + show a dashboard note when there is NEW work:
+    more replies, freshly interested leads, or new pending outreach. This gives
+    J.A.R.V.I.S a live agency voice so the business dashboard 'talks' too."""
+    while True:
+        time.sleep(120)
+        if not proactive.proactive_enabled():
+            continue
+        try:
+            url = (load_json(DATA_DIR / "settings.json", {}).get("agency_url") or "http://localhost:3200").strip().rstrip("/")
+            agency_client.AGENCY_BASE = url
+            st = agency_client.agency_state(cached=0)
+            s = agency_client.summarize_state(st) if st else None
+            online = s is not None
+            with _AGENCY_WATCH_LOCK:
+                prev = dict(_AGENCY_SNAPSHOT)
+                _AGENCY_SNAPSHOT.update({
+                    "replies": (s or {}).get("replies", 0),
+                    "pending": (s or {}).get("pending_approval", 0),
+                    "interested": (s or {}).get("interested", 0),
+                    "online": online,
+                })
+            if not online or not s:
+                if prev["online"] and not online:
+                    tts_engine.speak("Sir, Agency OS has gone offline.", "jarvis")
+                    _ui_feed("assistant", "[Agency] Went offline.", source="agency")
+                continue
+            mode = get_mode()
+            if mode != "jarvis" and not mode:
+                mode = "jarvis"
+            notes = []
+            if s["replies"] > prev["replies"]:
+                notes.append(f"{s['replies'] - prev['replies']} new replies from leads")
+            if s["pending_approval"] > prev["pending"]:
+                notes.append(f"{s['pending_approval'] - prev['pending']} new outreach items await approval")
+            if s["interested"] > prev["interested"]:
+                notes.append(f"{s['interested'] - prev['interested']} more interested institutions")
+            if not prev["online"] and online:
+                notes.append(f"Agency OS is back online with {s['leads_today']} leads today")
+            if notes:
+                line = "Sir, " + ", and ".join(notes) + "."
+                tts_engine.speak(line, "jarvis")
+                _ui_feed("assistant", "[Agency] " + line, source="agency")
+        except Exception:
+            continue
 
 @app.route("/api/sleep", methods=["POST"])
 def api_sleep():
@@ -3653,11 +3987,14 @@ if __name__ == "__main__":
     threading.Thread(target=tts_engine.prewarm, daemon=True).start()
     import proactive as _proactive
     _proactive.start()
+    threading.Thread(target=_agency_alert_watcher, daemon=True).start()
     # Always-on server-side wake word (restored from saved settings).
     import speech_stt as _stt
     if load_json(DATA_DIR / "settings.json", {}).get("wake_word", True):
         if _stt.start_wake_listener(_on_wake_detected):
             print(f"[JENNY] Wake word active: {', '.join(_stt.wake_phrases())} (say it anytime)")
+        else:
+            print("[JENNY] Wake word FAILED to start — check sounddevice/mic. Toggle 'Wake Word' in Settings to retry.")
     print(f"[JENNY] Server running on http://localhost:3005")
     print(f"[JENNY] Neural voice engine: {'edge-tts (online)' if tts_engine.edge_tts_available() else 'SAPI fallback'}")
-    serve(app, host="0.0.0.0", port=3005, threads=8)
+    serve(app, host="0.0.0.0", port=3005, threads=16)

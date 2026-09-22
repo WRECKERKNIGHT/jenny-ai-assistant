@@ -22,8 +22,28 @@ AGENCY_TIMEOUT = 6
 _state_cache = {"t": 0, "data": None}
 
 
+def _load_settings():
+    try:
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "settings.json")
+        return json.load(open(p, encoding="utf-8-sig"))
+    except Exception:
+        return {}
+
+
+def configured_base() -> str:
+    """Resolve the Agency OS URL — settings.json `agency_url` wins over the
+    AGENCY_OS_URL env var, with localhost:3200 as the final fallback."""
+    global AGENCY_BASE
+    s = _load_settings()
+    url = str(s.get("agency_url") or "").strip()
+    if url:
+        AGENCY_BASE = url.rstrip("/")
+    return AGENCY_BASE
+
+
 def _get(path, timeout=AGENCY_TIMEOUT):
     try:
+        configured_base()
         req = urllib.request.Request(f"{AGENCY_BASE}{path}", headers={"Accept": "application/json"})
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read().decode("utf-8"))
@@ -33,6 +53,7 @@ def _get(path, timeout=AGENCY_TIMEOUT):
 
 def _post(path, payload, timeout=AGENCY_TIMEOUT):
     try:
+        configured_base()
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
             f"{AGENCY_BASE}{path}", data=data,
