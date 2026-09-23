@@ -257,6 +257,12 @@ body.mode-friday .friday-dashboard { display:flex; }
 body.mode-jarvis .friday-dashboard { display:none; }
 body.mode-ultron .friday-dashboard { display:none; }
 
+/* FRIDAY: keep the mic orb + dock icons on screen. Cap the wingmate dashboard
+   and sys-monitor so the flexible orb-section never collapses to zero height. */
+body.mode-friday .friday-dashboard { max-height: 26%; }
+body.mode-friday .sys-monitor { flex: 0 1 auto; max-height: 30%; }
+body.mode-friday .orb-section { min-height: 240px; }
+
 /* SYSTEM MONITOR */
 .sys-monitor { flex:0 0 auto; padding:18px 24px; display:flex; flex-direction:column; gap:16px; border-bottom:1px solid rgba(139,104,255,0.15); overflow-y:auto; min-height:0; }
 .sys-graph-row { display:flex; gap:12px; }
