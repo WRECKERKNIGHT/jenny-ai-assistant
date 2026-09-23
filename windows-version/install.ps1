@@ -129,7 +129,7 @@ try {
     $Launcher = Join-Path $PSScriptRoot "Jenny.bat"
     $wsh = New-Object -ComObject WScript.Shell
 
-    # Start Menu entry (primary — appears in Windows Search / Start)
+    # Start Menu entry (primary - appears in Windows Search / Start)
     $smLnk = $wsh.CreateShortcut((Join-Path $StartMenuDir $ShName))
     $smLnk.TargetPath = $Launcher
     $smLnk.WorkingDirectory = $PSScriptRoot

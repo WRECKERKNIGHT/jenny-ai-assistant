@@ -1,4 +1,4 @@
-# J.E.N.N.Y v2.0 — Start Menu + Desktop shortcut installer
+# J.E.N.N.Y v2.0 - Start Menu + Desktop shortcut installer
 #   - Puts J.E.N.N.Y in the Start Menu like a normal installed app
 #   - Optionally adds a Desktop shortcut and/or Windows auto-start
 #
@@ -59,8 +59,8 @@ try {
 # ---- Desktop shortcut ------------------------------------------------------
 if ($Desktop) {
     try {
-        $desktop = [Environment]::GetFolderPath("Desktop")
-        $lnk2 = $ws.CreateShortcut((Join-Path $desktop $ShName))
+        $deskDir = [Environment]::GetFolderPath("Desktop")
+        $lnk2 = $ws.CreateShortcut((Join-Path $deskDir $ShName))
         $lnk2.TargetPath = $Launcher
         $lnk2.WorkingDirectory = $Base
         $lnk2.IconLocation = "$Icon,0"
@@ -83,7 +83,7 @@ if ($Autostart) {
             Set-ItemProperty -Path $runKey -Name "JENNY" -Value "`"$py`" -w `"$Base\tray.py`" --auto"
             Write-Host "[+] Registered to auto-start with Windows." -ForegroundColor Green
         } else {
-            Write-Host "[!] Python not found on PATH — skipping auto-start." -ForegroundColor Yellow
+            Write-Host "[!] Python not found on PATH - skipping auto-start." -ForegroundColor Yellow
         }
     } catch {
         Write-Host "[!] Could not write auto-start entry: $_" -ForegroundColor Yellow
