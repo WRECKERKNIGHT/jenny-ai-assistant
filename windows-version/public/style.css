@@ -891,6 +891,10 @@ body.light-mode .phone-link-panel {
   border-left-color: rgba(0,0,0,0.1);
 }
 
+/* Phone access is a J.A.R.V.I.S exclusive command-center feature. Hidden in
+   FRIDAY / ULTRON; voice commands still control the phone in any mode. */
+body:not(.mode-jarvis) .phone-link-panel { display: none !important; }
+
 .phone-panel-header {
   position: relative; z-index: 2;
   display: flex; align-items: center; justify-content: space-between;
