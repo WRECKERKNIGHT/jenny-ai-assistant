@@ -301,11 +301,20 @@ initBootParticles();
 splashGate.classList.add('hidden');
 
 // Cinematic intro plays automatically (skip button + auto-finish inside the
-// engine). If the engine is missing (stale cache) we reveal modes directly.
-if (window.runJennyCinematic) {
-  window.runJennyCinematic({ onDone: revealModes });
+// engine). cinematic.js is loaded with `defer`, so it isn't defined until
+// after parsing completes — wait for DOMContentLoaded before launching the
+// intro, otherwise the engine check always fails and the intro never plays.
+function startCinematic() {
+  if (window.runJennyCinematic) {
+    window.runJennyCinematic({ onDone: revealModes });
+  } else {
+    setTimeout(revealModes, 1200);
+  }
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startCinematic);
 } else {
-  setTimeout(revealModes, 1200);
+  startCinematic();
 }
 bootScreen.addEventListener('click', revealModes);
 window.addEventListener('keydown', (e) => {
