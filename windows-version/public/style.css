@@ -1844,7 +1844,10 @@ body.mode-ultron.pc-call-active .call-phone-btn { animation-name: call-btn-breat
   .chat-area::before, .particle-bg, .proj-line, .press-start-ring,
   .orb-rgb-glow, .speech-waves .wave-bar, .typing-dot, .sun-orbit,
   .sp-dot, .dot-pulse, .mode-badge, .voice-badge, .jd-status,
-  .ambient-chip, .holo-status, .welcome-card {
+  .ambient-chip, .holo-status, .welcome-card,
+  .orb-click-zone, .fd-status, .fd-card, .fd-cmd, .dock-btn,
+  .sys-graph-card, .sys-info-chip, .sys-media-btn, .qd-card,
+  .qr-scan-laser, .qr-orbit-ring, .phone-status-pulse .pulse-ring {
     animation: none !important;
     transition-duration: 0.01s !important;
   }
