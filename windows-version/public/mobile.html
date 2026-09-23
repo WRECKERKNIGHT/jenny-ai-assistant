@@ -5,30 +5,38 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>J.E.N.N.Y. Mobile Remote</title>
   <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#000000">
+  <meta name="theme-color" content="#05060c">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
     :root {
-      --bg: #000000;
-      --glass-bg: rgba(0, 0, 0, 0.6);
-      --glass-card: rgba(255, 255, 255, 0.04);
-      --glass-border: rgba(229, 193, 88, 0.3);
-      --gold: #e5c158;
-      --gold-dim: rgba(229, 193, 88, 0.2);
-      --silver: #c0c0c0;
+      --bg: #05060c;
+      --glass-bg: rgba(8, 10, 20, 0.62);
+      --glass-card: rgba(109, 139, 255, 0.05);
+      --glass-border: rgba(109, 139, 255, 0.28);
+      --gold: #a78bfa;
+      --gold-dim: rgba(109, 139, 255, 0.18);
+      --silver: #aeb6cf;
       --txt: #ffffff;
-      --txt2: #d1d5db;
-      --mono: -apple-system, BlinkMacSystemFont, 'SF Mono', monospace;
+      --txt2: #d6dcf0;
+      --mono: 'Share Tech Mono', -apple-system, BlinkMacSystemFont, 'SF Mono', monospace;
+      --orbitron: 'Orbitron', -apple-system, sans-serif;
+      --rajdhani: 'Rajdhani', -apple-system, sans-serif;
+      --holo-1: #6d8bff;
+      --holo-2: #a855f7;
+      --holo-3: #22d3ee;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
     body {
-      background: #000000;
+      background: #05060c;
       color: var(--txt);
-      font-family: var(--mono);
+      font-family: var(--rajdhani);
       height: 100vh;
       width: 100vw;
       overflow: hidden;
@@ -36,14 +44,26 @@
       flex-direction: column;
       -webkit-tap-highlight-color: transparent;
     }
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(900px 600px at 12% -8%, rgba(109,139,255,0.16), transparent 60%),
+        radial-gradient(800px 600px at 105% 12%, rgba(168,85,247,0.13), transparent 60%),
+        radial-gradient(700px 500px at 50% 115%, rgba(34,211,238,0.07), transparent 60%),
+        linear-gradient(rgba(109,139,255,0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(109,139,255,0.035) 1px, transparent 1px);
+      background-size: auto, auto, auto, 44px 44px, 44px 44px;
+    }
 
     /* NATIVE MOBILE HEADER */
     .app-header {
+      position: relative; z-index: 2;
       padding: env(safe-area-inset-top, 16px) 20px 14px;
-      background: rgba(0,0,0,0.7);
+      background: rgba(6, 8, 18, 0.68);
       backdrop-filter: blur(30px);
       -webkit-backdrop-filter: blur(30px);
-      border-bottom: 1px solid var(--glass-border);
+      border-bottom: 1px solid rgba(109,139,255,0.25);
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -54,29 +74,36 @@
       gap: 12px;
     }
     .app-logo {
-      width: 32px;
-      height: 32px;
-      border-radius: 10px;
-      border: 1px solid var(--glass-border);
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      border: 1px solid rgba(109,139,255,0.45);
+      box-shadow: 0 0 18px rgba(109,139,255,0.35);
+      object-fit: cover;
     }
     .app-title {
-      font-size: 14px;
-      font-weight: 800;
-      letter-spacing: 3px;
-      color: #fff;
+      font-family: var(--orbitron);
+      font-size: 15px;
+      font-weight: 900;
+      letter-spacing: 4px;
+      background: linear-gradient(135deg, #9db4ff, #c4b5fd, #22d3ee);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
     }
     .app-status {
       font-size: 9px;
       color: var(--gold);
-      letter-spacing: 1px;
+      letter-spacing: 2px;
     }
     .net-badge {
       font-size: 9px;
-      padding: 4px 10px;
+      padding: 5px 12px;
       border-radius: 12px;
-      background: var(--gold-dim);
-      border: 1px solid var(--glass-border);
-      color: var(--gold);
+      background: rgba(109,139,255,0.12);
+      border: 1px solid rgba(109,139,255,0.3);
+      color: #c4b5fd;
+      font-family: var(--mono);
     }
 
     /* MAIN APP BODY */
@@ -92,8 +119,8 @@
     /* ORB TOUCH SECTION */
     .orb-stage {
       background: var(--glass-card);
-      border: 1px solid var(--glass-border);
-      border-radius: 20px;
+      border: 1px solid rgba(109,139,255,0.28);
+      border-radius: 22px;
       padding: 20px 16px;
       display: flex;
       flex-direction: column;
@@ -101,40 +128,49 @@
       justify-content: center;
       gap: 12px;
       position: relative;
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      overflow: hidden;
+    }
+    .orb-stage::after {
+      content: '';
+      position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(220px 120px at 50% 0%, rgba(109,139,255,0.14), transparent 70%);
     }
     .mic-orb {
-      width: 90px;
-      height: 90px;
+      width: 96px;
+      height: 96px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(229,193,88,0.3) 0%, rgba(0,0,0,0.8) 70%);
-      border: 2px solid var(--gold);
-      box-shadow: 0 0 30px var(--gold-dim);
+      background: radial-gradient(circle at 35% 30%, rgba(109,139,255,0.4) 0%, rgba(168,85,247,0.2) 45%, rgba(5,6,12,0.95) 75%);
+      border: 2px solid rgba(109,139,255,0.7);
+      box-shadow: 0 0 34px rgba(109,139,255,0.45), inset 0 0 26px rgba(168,85,247,0.25);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 28px;
-      color: var(--gold);
+      font-size: 30px;
+      color: #dbe7ff;
       cursor: pointer;
-      transition: all 0.3s ease;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .mic-orb:active {
-      transform: scale(0.92);
-      box-shadow: 0 0 50px var(--gold);
+      transform: scale(0.9);
+      box-shadow: 0 0 60px rgba(109,139,255,0.65);
     }
     .mic-orb.listening {
-      border-color: #ff3b30;
-      color: #ff3b30;
-      box-shadow: 0 0 40px rgba(255, 59, 48, 0.5);
-      animation: pulse-red 1.2s infinite;
+      border-color: #22d3ee;
+      color: #22d3ee;
+      box-shadow: 0 0 46px rgba(34, 211, 238, 0.55);
+      animation: pulse-cy 1.2s infinite;
     }
-    @keyframes pulse-red {
+    @keyframes pulse-cy {
       0%, 100% { transform: scale(1); }
       50% { transform: scale(1.08); }
     }
     .orb-hint {
+      font-family: var(--mono);
       font-size: 10px;
-      color: var(--silver);
-      letter-spacing: 1.5px;
+      color: #b7c3ea;
+      letter-spacing: 2px;
       text-transform: uppercase;
       font-weight: 600;
     }
@@ -148,18 +184,18 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      background: var(--gold-dim);
-      border: 1px solid var(--glass-border);
+      background: rgba(109,139,255,0.12);
+      border: 1px solid rgba(109,139,255,0.32);
       border-radius: 12px;
       padding: 6px 12px;
-      color: var(--gold);
+      color: #c4b5fd;
       font-family: var(--mono);
       font-size: 11px;
       font-weight: 700;
       letter-spacing: 1px;
       cursor: pointer;
     }
-    .mic-lang-chip:active { opacity: 0.7; }
+    .mic-lang-chip:active { opacity: 0.7; transform: scale(0.97); }
     .mic-lang-note {
       font-size: 9px;
       color: var(--silver);
@@ -174,31 +210,45 @@
     }
     .telemeter {
       background: var(--glass-card);
-      border: 1px solid var(--glass-border);
-      border-radius: 14px;
-      padding: 10px;
+      border: 1px solid rgba(109,139,255,0.22);
+      border-radius: 16px;
+      padding: 12px 10px;
       text-align: center;
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
     }
     .meter-val {
-      font-size: 16px;
+      font-family: var(--orbitron);
+      font-size: 17px;
       font-weight: 800;
       color: #fff;
       margin-top: 4px;
+      text-shadow: 0 0 14px rgba(109,139,255,0.35);
     }
     .meter-lbl {
+      font-family: var(--mono);
       font-size: 8px;
-      color: var(--silver);
-      letter-spacing: 1px;
+      color: #8d9cc9;
+      letter-spacing: 1.5px;
     }
 
     /* POWER CONTROL GRID */
     .section-title {
+      font-family: var(--mono);
       font-size: 10px;
-      color: var(--gold);
-      letter-spacing: 2px;
+      color: #c4b5fd;
+      letter-spacing: 2.5px;
       text-transform: uppercase;
       font-weight: 700;
-      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 2px;
+    }
+    .section-title i {
+      color: var(--holo-3);
+      font-size: 12px;
+      text-shadow: 0 0 12px rgba(34,211,238,0.5);
     }
     .control-grid {
       display: grid;
@@ -206,38 +256,41 @@
       gap: 10px;
     }
     .ctrl-card {
-      background: var(--glass-card);
-      border: 1px solid var(--glass-border);
-      border-radius: 14px;
-      padding: 14px 10px;
+      background: linear-gradient(160deg, rgba(109,139,255,0.06), rgba(168,85,247,0.05));
+      border: 1px solid rgba(109,139,255,0.22);
+      border-radius: 16px;
+      padding: 14px 8px;
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 8px;
       color: var(--txt2);
       font-size: 10px;
+      font-weight: 600;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .ctrl-card:active {
-      background: var(--gold);
-      color: #000;
-      transform: scale(0.95);
+      background: linear-gradient(160deg, rgba(109,139,255,0.35), rgba(168,85,247,0.3));
+      color: #fff;
+      transform: scale(0.94);
+      box-shadow: 0 0 22px rgba(109,139,255,0.4);
     }
     .ctrl-card i {
-      font-size: 16px;
-      color: var(--gold);
+      font-size: 17px;
+      color: #a78bfa;
+      text-shadow: 0 0 14px rgba(168,85,247,0.6);
     }
     .ctrl-card:active i {
-      color: #000;
+      color: #fff;
     }
 
     /* COMMAND TERMINAL INPUT */
     .terminal-box {
       display: flex;
       gap: 10px;
-      background: rgba(0,0,0,0.6);
-      border: 1px solid var(--glass-border);
+      background: rgba(8,10,20,0.6);
+      border: 1px solid rgba(109,139,255,0.28);
       border-radius: 16px;
       padding: 6px;
     }
@@ -256,19 +309,20 @@
     .terminal-btn {
       width: 44px;
       height: 44px;
-      background: var(--gold-dim);
-      border: 1px solid var(--glass-border);
+      background: rgba(109,139,255,0.16);
+      border: 1px solid rgba(109,139,255,0.35);
       border-radius: 12px;
-      color: var(--gold);
+      color: #a78bfa;
       font-size: 14px;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
+      transition: all 0.2s ease;
     }
     .terminal-btn:active {
-      background: var(--gold);
-      color: #000;
+      background: rgba(109,139,255,0.4);
+      color: #fff;
     }
 
     /* RESPONSE LOG FEED */
@@ -292,13 +346,15 @@
     }
     .log-item.user {
       align-self: flex-end;
-      background: rgba(255,255,255,0.08);
+      background: rgba(109,139,255,0.14);
+      border: 1px solid rgba(109,139,255,0.25);
       color: #fff;
     }
     .log-item.jenny {
       align-self: flex-start;
-      background: rgba(0,0,0,0.5);
-      border-left: 3px solid var(--gold);
+      background: rgba(8,10,20,0.5);
+      border-left: 3px solid var(--holo-3);
+      box-shadow: 0 1px 0 rgba(109,139,255,0.12);
       color: var(--txt2);
     }
     .typing-dots { letter-spacing: 2px; animation: blink-dots 1.2s infinite; }
@@ -307,7 +363,7 @@
     /* PENDING AUTHORIZATION OVERLAYS */
     .auth-overlay {
       position: fixed; inset: 0; z-index: 9999;
-      background: radial-gradient(circle at 50% 30%, rgba(229,193,88,0.15), transparent 60%), #000;
+      background: radial-gradient(circle at 50% 30%, rgba(139,104,255,0.15), transparent 60%), #000;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       padding: 30px; text-align: center; gap: 24px;
       transition: all 0.5s ease;
@@ -317,7 +373,7 @@
     }
     .auth-icon {
       font-size: 60px; color: var(--gold);
-      filter: drop-shadow(0 0 15px rgba(229,193,88,0.4));
+      filter: drop-shadow(0 0 15px rgba(139,104,255,0.4));
       animation: auth-float 3s ease-in-out infinite;
     }
     @keyframes auth-float {
@@ -332,7 +388,7 @@
       font-size: 13px; color: var(--txt2); line-height: 1.6; max-width: 280px;
     }
     .auth-spinner {
-      width: 40px; height: 40px; border: 3px solid rgba(229,193,88,0.1);
+      width: 40px; height: 40px; border: 3px solid rgba(139,104,255,0.1);
       border-top-color: var(--gold); border-radius: 50%;
       animation: spin 1s linear infinite;
     }
@@ -353,19 +409,19 @@
       display: flex; gap: 12px; justify-content: center; margin: 10px 0 20px;
     }
     .media-btn {
-      background: rgba(255,255,255,0.03); border: 1px solid rgba(0,212,230,0.15);
-      border-radius: 12px; width: 60px; height: 50px; display: flex; align-items: center;
-      justify-content: center; color: var(--cyan); font-size: 16px; cursor: pointer;
-      transition: all 0.2s ease; outline: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      background: rgba(109,139,255,0.06); border: 1px solid rgba(34,211,238,0.3);
+      border-radius: 14px; width: 60px; height: 50px; display: flex; align-items: center;
+      justify-content: center; color: #6d8bff; font-size: 16px; cursor: pointer;
+      transition: all 0.2s ease; outline: none; box-shadow: 0 4px 14px rgba(0,0,0,0.35);
     }
     .media-btn:active {
-      transform: scale(0.95); background: rgba(0,212,230,0.1); border-color: var(--cyan);
+      transform: scale(0.95); background: rgba(109,139,255,0.25); border-color: #6d8bff; color: #fff;
     }
 
     /* LIVE PC SCREEN VIEWER */
     .screen-stage {
-      background: var(--glass-card);
-      border: 1px solid var(--glass-border);
+      background: rgba(109,139,255,0.05);
+      border: 1px solid rgba(109,139,255,0.25);
       border-radius: 16px;
       padding: 10px;
       display: flex;
@@ -379,7 +435,7 @@
       object-fit: contain;
       background: #000;
       border-radius: 10px;
-      border: 1px solid rgba(229,193,88,0.15);
+      border: 1px solid rgba(139,104,255,0.15);
       display: none;
     }
     .screen-img.active { display: block; }
@@ -392,24 +448,25 @@
     }
     .screen-toggle {
       width: 100%;
-      background: var(--gold-dim);
-      border: 1px solid var(--glass-border);
+      background: rgba(109,139,255,0.16);
+      border: 1px solid rgba(109,139,255,0.35);
       border-radius: 12px;
       padding: 10px;
-      color: var(--gold);
+      color: #c4b5fd;
       font-family: var(--mono);
       font-size: 11px;
       letter-spacing: 1px;
       cursor: pointer;
+      transition: all 0.2s ease;
     }
-    .screen-toggle:active { background: var(--gold); color: #000; }
+    .screen-toggle:active { background: rgba(109,139,255,0.4); color: #fff; }
     .screen-toggle.live { background: rgba(255,59,48,0.2); border-color: #ff3b30; color: #ff3b30; }
 
     /* CLIPBOARD + NOTIFICATION BUTTONS */
     .clip-get {
       width: 100%;
-      background: var(--glass-card);
-      border: 1px solid var(--glass-border);
+      background: rgba(109,139,255,0.05);
+      border: 1px solid rgba(109,139,255,0.25);
       border-radius: 12px;
       padding: 10px;
       color: var(--txt2);
@@ -418,8 +475,9 @@
       letter-spacing: 1px;
       cursor: pointer;
       margin-top: 6px;
+      transition: all 0.2s ease;
     }
-    .clip-get:active { background: var(--gold); color: #000; }
+    .clip-get:active { background: rgba(109,139,255,0.3); color: #fff; }
 
     /* =============================================
        FUTURISTIC JENNY CALL SCREEN (phone <-> PC)
@@ -427,7 +485,7 @@
     .call-overlay {
       position: fixed; inset: 0; z-index: 10000;
       background: radial-gradient(circle at 50% 35%, rgba(0,212,230,0.12), transparent 60%),
-                  radial-gradient(circle at 50% 85%, rgba(229,193,88,0.08), transparent 55%),
+                  radial-gradient(circle at 50% 85%, rgba(139,104,255,0.08), transparent 55%),
                   #000;
       display: flex; flex-direction: column; align-items: center;
       padding: env(safe-area-inset-top, 16px) 18px env(safe-area-inset-bottom, 18px);
@@ -439,7 +497,7 @@
     .call-ring-rays {
       position: absolute; top: 18%; left: 50%; width: 220px; height: 220px;
       transform: translateX(-50%); border-radius: 50%; pointer-events: none;
-      background: conic-gradient(from 0deg, rgba(0,212,230,0.35), rgba(229,193,88,0.25), rgba(0,212,230,0.35));
+      background: conic-gradient(from 0deg, rgba(0,212,230,0.35), rgba(139,104,255,0.25), rgba(0,212,230,0.35));
       -webkit-mask: radial-gradient(circle, transparent 60%, black 61%, black 100%);
       mask: radial-gradient(circle, transparent 60%, black 61%, black 100%);
       animation: ray-spin 4s linear infinite;
@@ -479,7 +537,7 @@
       font-size: 13px; line-height: 1.45; word-break: break-word;
     }
     .call-bubble.you { align-self: flex-end; background: rgba(0,212,230,0.15); border: 1px solid rgba(0,212,230,0.3); color: #eafcff; border-bottom-right-radius: 4px; }
-    .call-bubble.jenny { align-self: flex-start; background: rgba(255,255,255,0.06); border: 1px solid rgba(229,193,88,0.3); color: var(--txt2); border-bottom-left-radius: 4px; }
+    .call-bubble.jenny { align-self: flex-start; background: rgba(255,255,255,0.06); border: 1px solid rgba(139,104,255,0.3); color: var(--txt2); border-bottom-left-radius: 4px; }
     .call-bubble .cb-who { font-size: 8px; letter-spacing: 1px; opacity: 0.6; margin-bottom: 3px; text-transform: uppercase; }
     .call-bubble.jenny::after { content: ''; }
 
@@ -549,7 +607,7 @@
 
     .incoming-call {
       position: fixed; inset: 0; z-index: 10001;
-      background: radial-gradient(circle at 50% 30%, rgba(229,193,88,0.2), transparent 60%), #000;
+      background: radial-gradient(circle at 50% 30%, rgba(139,104,255,0.2), transparent 60%), #000;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
       padding: 30px; text-align: center;
       transition: opacity 0.4s ease, transform 0.4s ease;
@@ -561,9 +619,9 @@
       width: 110px; height: 110px; border-radius: 50%;
       border: 2px solid var(--gold); display: flex; align-items: center; justify-content: center;
       font-size: 42px; color: var(--gold);
-      background: radial-gradient(circle, rgba(229,193,88,0.2), rgba(0,0,0,0.85));
+      background: radial-gradient(circle, rgba(139,104,255,0.2), rgba(0,0,0,0.85));
       animation: pulse-red 1.2s infinite;
-      box-shadow: 0 0 40px rgba(229,193,88,0.3);
+      box-shadow: 0 0 40px rgba(139,104,255,0.3);
     }
     .in-actions { display: flex; gap: 40px; margin-top: 10px; }
     .in-btn { width: 70px; height: 70px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; }
@@ -662,7 +720,7 @@
         <button id="voice-chip" class="mic-lang-chip" onclick="toggleVoiceReplies()"><i class="fa-solid fa-volume-up"></i> <span id="voice-chip-txt">VOICE</span></button>
         <span class="mic-lang-note">Hi/EN toggle for PC-mic voice</span>
       </div>
-      <button id="start-call-btn" style="margin-top:10px;width:100%;background:radial-gradient(circle at 50% 50%, rgba(0,212,230,0.2), rgba(0,0,0,0.6));border:1px solid rgba(0,212,230,0.5);border-radius:14px;padding:12px;color:#00d4e6;font-family:var(--mono);font-size:12px;letter-spacing:2px;font-weight:700;">
+      <button id="start-call-btn" style="margin-top:10px;width:100%;background:radial-gradient(circle at 50% 50%, rgba(109,139,255,0.22), rgba(8,10,20,0.6));border:1px solid rgba(109,139,255,0.55);border-radius:14px;padding:12px;color:#c4b5fd;font-family:var(--mono);font-size:12px;letter-spacing:2px;font-weight:700;box-shadow:0 0 18px rgba(109,139,255,0.25);">
         <i class="fa-solid fa-phone-volume"></i> CALL J.E.N.N.Y.
       </button>
     </div>
@@ -816,8 +874,8 @@
       if (el) el.textContent = window.__voiceReplies ? 'VOICE ON' : 'VOICE OFF';
       const chip = document.getElementById('voice-chip');
       if (chip) {
-        chip.style.color = window.__voiceReplies ? '#ffd700' : '#666';
-        chip.style.borderColor = window.__voiceReplies ? 'rgba(255,215,0,0.5)' : 'rgba(255,255,255,0.2)';
+        chip.style.color = window.__voiceReplies ? '#6d8bff' : '#666';
+        chip.style.borderColor = window.__voiceReplies ? 'rgba(109,139,255,0.5)' : 'rgba(255,255,255,0.2)';
       }
     }
     function toggleVoiceReplies() {
@@ -930,8 +988,8 @@
       if (txtEl) txtEl.textContent = window.__sttLang === 'hi' ? 'HI' : 'EN';
       let micLangBtn = document.getElementById('mic-lang-btn');
       if (micLangBtn) {
-        micLangBtn.style.color = window.__sttLang === 'hi' ? '#ff6b6b' : '#ffd700';
-        micLangBtn.style.borderColor = window.__sttLang === 'hi' ? 'rgba(255,107,107,0.5)' : 'rgba(255,215,0,0.5)';
+        micLangBtn.style.color = window.__sttLang === 'hi' ? '#ff6b6b' : '#6d8bff';
+        micLangBtn.style.borderColor = window.__sttLang === 'hi' ? 'rgba(255,107,107,0.5)' : 'rgba(109,139,255,0.5)';
       }
     }
     async function setMicLang(lang) {
@@ -947,8 +1005,8 @@
       if (txtEl) txtEl.textContent = window.__sttLang === 'hi' ? 'HI' : 'EN';
       let micLangBtn = document.getElementById('mic-lang-btn');
       if (micLangBtn) {
-        micLangBtn.style.color = window.__sttLang === 'hi' ? '#ff6b6b' : '#ffd700';
-        micLangBtn.style.borderColor = window.__sttLang === 'hi' ? 'rgba(255,107,107,0.5)' : 'rgba(255,215,0,0.5)';
+        micLangBtn.style.color = window.__sttLang === 'hi' ? '#ff6b6b' : '#6d8bff';
+        micLangBtn.style.borderColor = window.__sttLang === 'hi' ? 'rgba(255,107,107,0.5)' : 'rgba(109,139,255,0.5)';
       }
       showMobileToast(window.__sttLang === 'hi' ? 'Voice language: Hindi' : 'Voice language: English');
     }
@@ -1071,7 +1129,7 @@
     function promptOpenUrl(url) {
       if (_openUrlBanner) _openUrlBanner.remove();
       const b = document.createElement('div');
-      b.style.cssText = 'position:fixed;left:16px;right:16px;bottom:140px;z-index:999998;background:rgba(208,132,0,0.97);border:1px solid #ffd700;border-radius:16px;padding:14px 16px;box-shadow:0 0 30px rgba(208,132,0,0.5);font-family:monospace;color:#fff;';
+      b.style.cssText = 'position:fixed;left:16px;right:16px;bottom:140px;z-index:999998;background:rgba(208,132,0,0.97);border:1px solid #6d8bff;border-radius:16px;padding:14px 16px;box-shadow:0 0 30px rgba(208,132,0,0.5);font-family:monospace;color:#fff;';
       const safe = String(url).slice(0, 90);
       b.innerHTML = '<div style="font-size:10px;letter-spacing:2px;color:#ffe9b8;margin-bottom:6px;">REMOTE LINK</div>' +
         '<div style="font-size:12px;word-break:break-all;margin-bottom:10px;">' + safe.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div>' +

@@ -250,8 +250,8 @@ function initTwinklingStars(canvasId, starColor = 'rgba(255, 255, 255,') {
 }
 
 function initBootStars() {
-  initTwinklingStars('boot-stars', 'rgba(229, 193, 88,');
-  initTwinklingStars('main-stars', 'rgba(229, 193, 88,');
+  initTwinklingStars('boot-stars', 'rgba(139, 104, 255,');
+  initTwinklingStars('main-stars', 'rgba(139, 104, 255,');
 }
 
 // Data streams effect
@@ -690,7 +690,7 @@ function startOrb() {
       }
       ctx.closePath();
       const alpha = isIdle ? 0.04 + ring * 0.02 : 0.08 + ring * 0.04;
-      ctx.strokeStyle = `rgba(255,215,0,${alpha})`;
+      ctx.strokeStyle = `rgba(109,139,255,${alpha})`;
       ctx.lineWidth = isIdle ? 0.6 : 1.2;
       ctx.stroke();
     }
@@ -700,16 +700,16 @@ function startOrb() {
       const offset = t * (0.6 + a * 0.3) * (a % 2 === 0 ? 1 : -1);
       ctx.beginPath();
       ctx.arc(cx, cy, innerR, offset, offset + arcSpan);
-      ctx.strokeStyle = `rgba(255,215,0,${isIdle ? 0.12 : 0.3})`;
+      ctx.strokeStyle = `rgba(109,139,255,${isIdle ? 0.12 : 0.3})`;
       ctx.lineWidth = 1;
       ctx.stroke();
     }
     const coreR = isIdle ? 32 : (isListening ? 38 : (isSpeaking ? 42 : 35));
     const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
-    if (isListening) { grad.addColorStop(0, 'rgba(255,255,255,0.85)'); grad.addColorStop(0.5, 'rgba(255,215,0,0.3)'); grad.addColorStop(1, 'rgba(255,215,0,0)'); }
-    else if (isThinking) { grad.addColorStop(0, 'rgba(255,215,0,0.5)'); grad.addColorStop(0.5, 'rgba(255,215,0,0.15)'); grad.addColorStop(1, 'rgba(255,215,0,0)'); }
-    else if (isSpeaking) { grad.addColorStop(0, 'rgba(255,215,0,0.85)'); grad.addColorStop(0.4, 'rgba(255,215,0,0.3)'); grad.addColorStop(1, 'rgba(255,215,0,0)'); ctx.beginPath(); ctx.arc(cx, cy, coreR + Math.sin(t * 3.5) * 5 + 10, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,215,0,0.04)'; ctx.fill(); }
-    else { grad.addColorStop(0, 'rgba(255,215,0,0.35)'); grad.addColorStop(0.5, 'rgba(255,215,0,0.12)'); grad.addColorStop(1, 'rgba(255,215,0,0)'); }
+    if (isListening) { grad.addColorStop(0, 'rgba(255,255,255,0.85)'); grad.addColorStop(0.5, 'rgba(109,139,255,0.3)'); grad.addColorStop(1, 'rgba(109,139,255,0)'); }
+    else if (isThinking) { grad.addColorStop(0, 'rgba(109,139,255,0.5)'); grad.addColorStop(0.5, 'rgba(109,139,255,0.15)'); grad.addColorStop(1, 'rgba(109,139,255,0)'); }
+    else if (isSpeaking) { grad.addColorStop(0, 'rgba(109,139,255,0.85)'); grad.addColorStop(0.4, 'rgba(109,139,255,0.3)'); grad.addColorStop(1, 'rgba(109,139,255,0)'); ctx.beginPath(); ctx.arc(cx, cy, coreR + Math.sin(t * 3.5) * 5 + 10, 0, Math.PI * 2); ctx.fillStyle = 'rgba(109,139,255,0.04)'; ctx.fill(); }
+    else { grad.addColorStop(0, 'rgba(109,139,255,0.35)'); grad.addColorStop(0.5, 'rgba(109,139,255,0.12)'); grad.addColorStop(1, 'rgba(109,139,255,0)'); }
     ctx.beginPath();
     ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
     ctx.fillStyle = grad;
@@ -721,7 +721,7 @@ function startOrb() {
         const dist = 80 + Math.sin(t * 1.5 + i) * 20;
         ctx.beginPath();
         ctx.arc(cx + Math.cos(angle) * dist, cy + Math.sin(angle) * dist, 1 + Math.sin(t * 2 + i) * 0.5, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,215,0,${isSpeaking ? 0.65 : 0.3})`;
+        ctx.fillStyle = `rgba(109,139,255,${isSpeaking ? 0.65 : 0.3})`;
         ctx.fill();
       }
     }
@@ -1382,7 +1382,7 @@ function renderAgencyPanel(el, state) {
   const byStage = stats.byStage || {};
 
   const stat = (label, val, icon, color) => `
-    <div style="flex:1;min-width:84px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(229,193,88,0.18);text-align:center;">
+    <div style="flex:1;min-width:84px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(139,104,255,0.18);text-align:center;">
       <div style="font-family:var(--orbitron);font-size:16px;color:${color};text-shadow:0 0 14px ${color};">${val}</div>
       <div style="font-family:var(--mono);font-size:7px;color:var(--txt3);letter-spacing:1px;margin-top:2px;"><i class="fa-solid ${icon}"></i> ${label}</div>
     </div>`;
@@ -1394,7 +1394,7 @@ function renderAgencyPanel(el, state) {
     const pct = Math.round((v/tot)*100);
     return `<div style="margin-bottom:5px;">
       <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:8px;color:var(--txt2);"><span>${stageNames[k]||k.toUpperCase()}</span><span style="color:var(--gold);">${v}</span></div>
-      <div style="height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;margin-top:2px;"><div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--gold),#ffe9a3);border-radius:3px;box-shadow:0 0 8px rgba(229,193,88,0.6);"></div></div>
+      <div style="height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;margin-top:2px;"><div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--gold),#ffe9a3);border-radius:3px;box-shadow:0 0 8px rgba(139,104,255,0.6);"></div></div>
     </div>`;
   }).join('');
 
@@ -1475,7 +1475,7 @@ function renderAgencyPanel(el, state) {
     <div style="margin-bottom:12px;">${logRows}</div>
 
     <div style="display:flex;gap:8px;">
-      <button onclick="agencyRefresh()" style="flex:1;padding:7px;background:rgba(229,193,88,0.14);border:1px solid rgba(229,193,88,0.3);border-radius:6px;color:var(--gold);font-family:var(--mono);font-size:8px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-rotate"></i> REFRESH</button>
+      <button onclick="agencyRefresh()" style="flex:1;padding:7px;background:rgba(139,104,255,0.14);border:1px solid rgba(139,104,255,0.3);border-radius:6px;color:var(--gold);font-family:var(--mono);font-size:8px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-rotate"></i> REFRESH</button>
       <button onclick="document.getElementById('agency-mission-form').style.display = document.getElementById('agency-mission-form').style.display==='none'?'block':'none'" style="flex:1;padding:7px;background:rgba(56,189,248,0.14);border:1px solid rgba(56,189,248,0.3);border-radius:6px;color:#38bdf8;font-family:var(--mono);font-size:8px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-bullseye"></i> NEW MISSION</button>
     </div>
     <div id="agency-mission-form" style="display:none;margin-top:10px;padding:10px;border:1px solid rgba(56,189,248,0.3);border-radius:8px;background:rgba(56,189,248,0.06);">
@@ -1553,7 +1553,7 @@ async function loadTrainingPanel(el) {
     `).join('') || '<div style="font-size:9px; color:var(--txt3); padding:4px 0;">No voice macros trained yet.</div>';
 
     el.innerHTML = `
-      <div style="margin-bottom:12px; padding:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(229,193,88,0.2); border-radius:10px;">
+      <div style="margin-bottom:12px; padding:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(139,104,255,0.2); border-radius:10px;">
         <div class="setting-row">
           <label>USER NAME</label>
           <input type="text" id="train-name-input" value="${t.name || ''}" placeholder="e.g. BOSS" style="width:140px; padding:4px 8px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.12); color:#fff; font-family:var(--mono); font-size:10px; border-radius:6px;">
@@ -1567,7 +1567,7 @@ async function loadTrainingPanel(el) {
             <option value="boss" ${t.tone === 'boss' ? 'selected' : ''}>Executive Jarvis</option>
           </select>
         </div>
-        <button onclick="saveProfileTraining()" style="margin-top:8px; width:100%; padding:6px; background:rgba(229,193,88,0.15); border:1px solid rgba(229,193,88,0.3); border-radius:6px; color:var(--gold); font-family:var(--mono); font-size:9px; font-weight:700; cursor:pointer;">
+        <button onclick="saveProfileTraining()" style="margin-top:8px; width:100%; padding:6px; background:rgba(139,104,255,0.15); border:1px solid rgba(139,104,255,0.3); border-radius:6px; color:var(--gold); font-family:var(--mono); font-size:9px; font-weight:700; cursor:pointer;">
           <i class="fa-solid fa-floppy-disk"></i> SAVE PROFILE TRAINING
         </button>
       </div>
@@ -1790,7 +1790,7 @@ function loadSettingsPanel(el) {
       <div class="setting-row"><label>AUTO-APPROVE PHONES</label><input type="checkbox" id="auto-approve-toggle"></div>
       <div class="setting-row"><label>START WITH WINDOWS</label><input type="checkbox" id="autostart-toggle"></div>
       <div class="setting-row"><label>MIC AIM</label><button id="wake-restart-btn" style="padding:4px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:var(--txt3);font-family:var(--mono);font-size:9px;cursor:pointer;">Restart Wake Listener</button></div>
-      <div class="setting-row"><label></label><button id="save-services-btn" style="padding:5px 12px;background:rgba(229,193,88,0.1);border:1px solid rgba(229,193,88,0.35);border-radius:6px;color:var(--gold);font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;">SAVE SERVICES</button></div>
+      <div class="setting-row"><label></label><button id="save-services-btn" style="padding:5px 12px;background:rgba(139,104,255,0.1);border:1px solid rgba(139,104,255,0.35);border-radius:6px;color:var(--gold);font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;">SAVE SERVICES</button></div>
     </div>
   `;
 
@@ -3956,7 +3956,7 @@ function showModeWelcome(mode) {
   overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.95);backdrop-filter:blur(20px);opacity:0;transition:opacity 0.4s ease;';
   
   const colors = { jarvis: '#00d4ff', friday: '#a855f7', ultron: '#ff3e3e' };
-  const c = colors[mode] || '#ffd700';
+  const c = colors[mode] || '#6d8bff';
   
   overlay.innerHTML = `
     <div style="text-align:center;transform:scale(0.8);transition:transform 0.5s cubic-bezier(0.16,1,0.3,1);">
@@ -4370,7 +4370,7 @@ function initBootParticles() {
       if (p.y < 0 || p.y > h) p.vy *= -1;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(255,215,0,${p.alpha})`;
+      ctx.fillStyle = `rgba(109,139,255,${p.alpha})`;
       ctx.fill();
     });
     
@@ -4384,7 +4384,7 @@ function initBootParticles() {
           ctx.beginPath();
           ctx.moveTo(particles[i].x, particles[i].y);
           ctx.lineTo(particles[j].x, particles[j].y);
-          ctx.strokeStyle = `rgba(255,215,0,${0.05 * (1 - dist / 120)})`;
+          ctx.strokeStyle = `rgba(109,139,255,${0.05 * (1 - dist / 120)})`;
           ctx.stroke();
         }
       }

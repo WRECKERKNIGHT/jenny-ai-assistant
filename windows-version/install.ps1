@@ -126,7 +126,7 @@ try {
     $StartMenuDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
     $ShName = "J.E.N.N.Y v2.0.lnk"
     $Icon = Join-Path $PSScriptRoot "public\logo.png"
-    $Launcher = Join-Path $PSScriptRoot "Jenny.bat"
+    $Launcher = Join-Path $PSScriptRoot "jenny_launcher.bat"
     $wsh = New-Object -ComObject WScript.Shell
 
     # Start Menu entry (primary - appears in Windows Search / Start)
