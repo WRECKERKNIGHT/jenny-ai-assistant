@@ -257,6 +257,15 @@ body.mode-friday .friday-dashboard { display:flex; }
 body.mode-jarvis .friday-dashboard { display:none; }
 body.mode-ultron .friday-dashboard { display:none; }
 
+/* Smoothly reveal the active dashboard / orb when switching modes. */
+#jarvis-dashboard, .friday-dashboard, .sys-monitor, .orb-section {
+  animation: panel-fade-in 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes panel-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* FRIDAY: keep the mic orb + dock icons on screen. Cap the wingmate dashboard
    and sys-monitor so the flexible orb-section never collapses to zero height. */
 body.mode-friday .friday-dashboard { max-height: 26%; }
