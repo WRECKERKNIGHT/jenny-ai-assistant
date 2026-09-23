@@ -1325,6 +1325,54 @@ def _apply_learned_intent(intent: dict, boss: str):
     return None
 
 
+# =====================================================================
+# MULTI-STEP AUTONOMOUS TASK ENGINE
+# "open chrome, then open whatsapp web and install the pdf sent by papa"
+# is decomposed into ordered, fully-automatic sub-commands.
+# =====================================================================
+_SEQ_GUARD = threading.local()
+
+_SEQ_VERBS = ("open ", "launch ", "start ", "close ", "quit ", "kill ", "stop ",
+              "play ", "pause ", "resume ", "send ", "type ", "search ", "google ",
+              "look up ", "take a ", "press ", "set ", "turn ", "switch ", "lock ",
+              "shutdown ", "shut down ", "restart ", "purge ", "empty ", "mute ",
+              "unmute ", "volume ", "brightness ", "read ", "check ", "show ",
+              "install ", "download ", "find ", "activate ", "scan ", "answer ",
+              "reply ", "turn on ", "turn off ", "wake ")
+
+
+def _has_seq_verb(text: str) -> bool:
+    t = " " + text.lower().strip() + " "
+    return any(v in t for v in _SEQ_VERBS)
+
+
+def _seq_split_segment(seg: str):
+    """Within one strong-connector chunk, also split on ' and ' when every
+    sub-segment is command-shaped (every piece starts with an action verb)."""
+    sub = [s.strip() for s in re.split(r"\s+and\s+", seg) if s.strip()]
+    if len(sub) > 1 and all(_has_seq_verb(s) for s in sub):
+        return sub
+    return [seg]
+
+
+def _split_command_steps(lo: str):
+    """Decompose a multi-action utterance into an ordered list of steps,
+    or return None when it is a single intent."""
+    parts = re.split(r"\s*;\s*|\s+(?:and\s+)?then\s+|\s+after\s+that\s+|\s+afterwards\s+|\s+after\s+which\s+|\s+,\s+then\s+|\s+,\s*(?:and\s+)?then\s+", lo)
+    out = []
+    for p in parts:
+        p = p.strip().strip("., ")
+        if not p:
+            continue
+        out.extend(_seq_split_segment(p))
+    out = [x for x in out if x.strip()]
+    if len(out) < 2:
+        return None
+    if sum(1 for x in out if _has_seq_verb(x)) < 2:
+        return None
+    return out
+
+
 def local_command_router(msg):
     """Fast, case-insensitive local intent routing that runs BEFORE the LLM so
     todo / system actions / mode switches always work instantly and deterministically.
@@ -1334,6 +1382,34 @@ def local_command_router(msg):
     mp = MODE_PROFILES[mode]
     boss = mp["boss"]
     lo = _expand_synonyms(lo)
+
+    # Mutli-step decomposition — runs first so "then / after that / and" chains
+    # are executed server-side as an ordered, fully-automatic sequence.
+    if not getattr(_SEQ_GUARD, "active", False):
+        steps = _split_command_steps(lo)
+        if steps is not None and len(steps) >= 2:
+            sub_cmds = []
+            labels = []
+            for s in steps:
+                _SEQ_GUARD.active = True
+                try:
+                    r = local_command_router(s)
+                finally:
+                    _SEQ_GUARD.active = False
+                if r and r.get("command", {}).get("action"):
+                    sub_cmds.append(r["command"])
+                    labels.append(re.sub(r"<[^>]+>", "", r.get("text", s))[:90])
+                else:
+                    sub_cmds.append({"action": "pdf-recent", "value": ""})
+                    labels.append("fetch latest document")
+            real_actions = [c.get("action", "") for c in sub_cmds if c.get("action")]
+            if len(real_actions) >= 2:
+                plan = "  →  ".join(labels[:6])
+                return {
+                    "text": f"Executing **{len(real_actions)} steps** in order, {boss}:\n{plan}",
+                    "speech": f"Executing {len(real_actions)} steps in order.",
+                    "command": {"action": "run-sequence", "value": {"steps": sub_cmds}},
+                }
 
     # Learned aliases: previously-taught custom phrasings map straight to intents.
     learned = _match_learned_alias(lo)
@@ -1354,6 +1430,17 @@ def local_command_router(msg):
     res = handle_todo_intent(lo, boss)
     if res:
         return res
+
+    # RECENT DOCUMENT: "install the pdf sent by papa", "open the latest pdf",
+    # "read the file papa sent", "get the pdf from whatsapp".
+    if any(w in lo for w in ["the pdf", "a pdf", "latest pdf", "recent pdf", "pdf sent", "pdf from",
+                             "document sent", "file sent", "install the pdf", "install the file",
+                             "the document from", "the file from", "whatsapp pdf", "pdf whatsapp"]):
+        return {"text": f"On it, {boss}. I'll grab the latest received PDF and open it.", "speech": "Opening the latest received PDF.", "command": {"action": "open-recent-pdf", "value": ""}}
+
+    # WEB WHATSAPP: "open web whatsapp" / "web whatsapp" phrasings.
+    if any(w in lo for w in ["open web whatsapp", "web whatsapp", "open whatsapp web", "launch whatsapp web"]):
+        return {"text": f"Opening WhatsApp, {boss}!", "speech": "Opening WhatsApp.", "command": {"action": "whatsapp-open", "value": ""}}
 
     # MEMORY VAULT: "remember X", "save a memory", "store that X", "don't forget X",
     # "note this down", "save X to vault". Fully local so memory works offline.
@@ -2575,6 +2662,43 @@ def api_control():
                 pass
             return resp
     lo = action.lower()
+    if lo == "run-sequence":
+        # Multi-step autonomous task: execute each sub-command in order,
+        # with a short settle delay, then report the combined result.
+        steps = (value or {}).get("steps", []) if isinstance(value, dict) else []
+        results = []
+        for i, st in enumerate(steps):
+            act = st.get("action") if isinstance(st, dict) else ""
+            val = st.get("value") if isinstance(st, dict) else ""
+            if not act:
+                continue
+            try:
+                with app.test_client() as c:
+                    resp = c.post("/api/control", json={"action": act, "value": val})
+                    body = resp.get_json(silent=True) or {}
+                results.append({"step": i + 1, "action": act, "ok": bool(body.get("success"))})
+            except Exception as e:
+                results.append({"step": i + 1, "action": act, "ok": False, "error": str(e)[:120]})
+            if i < len(steps) - 1:
+                time.sleep(0.8)
+        ok = sum(1 for r in results if r.get("ok"))
+        return jsonify({"success": len(results) > 0, "total": len(results), "done": ok, "steps": results})
+    if lo == "open-recent-pdf":
+        # Open the most recently received PDF (Downloads / WhatsApp media / Desktop).
+        try:
+            import glob as _glob
+            candidates = []
+            base = Path.home()
+            for folder in ["Downloads", "Downloads/WhatsApp", "Desktop", "Documents"]:
+                for pat in ["*.pdf"]:
+                    candidates += _glob.glob(str(base / folder / pat))
+            if not candidates:
+                return jsonify({"success": False, "message": "No recent PDF found on this PC."})
+            latest = max(candidates, key=lambda p: os.path.getmtime(p))
+            os.startfile(latest)
+            return jsonify({"success": True, "message": f"Opened {os.path.basename(latest)}"})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)[:120]})
     if lo == "volume":
         try:
             from ctypes import cast, POINTER; from comtypes import CLSCTX_ALL
