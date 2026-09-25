@@ -236,63 +236,6 @@
         </div>
       </div>
 
-      <div class="orb-section">
-        <div class="holo-orb-stage" id="orb-stage">
-          <canvas id="orb-canvas" width="500" height="500"></canvas>
-          <div class="orb-click-zone" id="orb-click" title="Click to talk">
-            <i class="fa-solid fa-microphone mic-icon"></i>
-          </div>
-          <div class="holo-projection">
-            <div class="proj-line"></div>
-            <div class="proj-line"></div>
-            <div class="proj-line"></div>
-            <div class="proj-line"></div>
-            <div class="proj-line"></div>
-          </div>
-          <div class="orb-rgb-glow" id="orb-rgb-glow">
-            <div class="rgb-r"></div>
-            <div class="rgb-g"></div>
-            <div class="rgb-b"></div>
-          </div>
-        </div>
-
-        <div class="holo-status" id="holo-status">STANDBY</div>
-        <div class="holo-label" id="holo-label">Tap the orb or type a command</div>
-
-        <div class="speech-waves" id="speech-waves">
-          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
-          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
-          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
-          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
-          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
-          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
-          <div class="wave-bar"></div><div class="wave-bar"></div>
-        </div>
-
-        <div class="timer-pill hidden" id="timer-pill">
-          <i class="fa-solid fa-stopwatch"></i>
-          <span id="timer-display">0:00</span>
-        </div>
-
-        <nav class="holo-dock" id="holo-dock">
-          <button class="dock-btn" data-panel="activity" title="PC Activity"><i class="fa-solid fa-chart-line"></i></button>
-          <button class="dock-btn" data-panel="system" title="System"><i class="fa-solid fa-microchip"></i></button>
-          <button class="dock-btn" data-panel="weather" title="Weather"><i class="fa-solid fa-cloud-sun"></i></button>
-          <button class="dock-btn" data-panel="emails" title="Emails"><i class="fa-solid fa-envelope"></i></button>
-          <button class="dock-btn" data-panel="processes" title="Processes"><i class="fa-solid fa-list-ol"></i></button>
-          <button class="dock-btn" data-panel="vault" title="Vault"><i class="fa-solid fa-database"></i></button>
-          <button class="dock-btn" data-panel="clipboard" title="Clipboard"><i class="fa-solid fa-clipboard"></i></button>
-          <button class="dock-btn" data-panel="files" title="Files"><i class="fa-solid fa-folder-tree"></i></button>
-          <button class="dock-btn" data-panel="notes" title="Notes"><i class="fa-solid fa-note-sticky"></i></button>
-          <button class="dock-btn" data-panel="training" title="AI Training Hub"><i class="fa-solid fa-brain"></i></button>
-          <button class="dock-btn" data-panel="settings" title="Settings"><i class="fa-solid fa-gear"></i></button>
-          <button class="dock-btn" data-panel="commands" title="Commands"><i class="fa-solid fa-terminal"></i></button>
-          <button class="dock-btn jarvis-only" data-panel="agency" title="Agency OS"><i class="fa-solid fa-building"></i></button>
-          <button class="dock-btn" id="wake-word-btn" onclick="toggleWakeWord()" title="Wake Word — Say 'Hey Jenny' to activate"><i class="fa-solid fa-head-side-voice"></i></button>
-          <button class="dock-btn" onclick="window.location.href='/modes.html'" title="Switch Mode — JARVIS / FRIDAY / ULTRON"><i class="fa-solid fa-shield-halved"></i></button>
-          <button class="dock-btn" onclick="toggleOverlay()" title="Mini Overlay Mode"><i class="fa-solid fa-window-restore"></i></button>
-        </nav>
-      </div>
     </aside>
 
     <!-- RIGHT PANEL — Chat & Output -->
@@ -630,6 +573,83 @@
           </div>
         </div>
       </div>
+    </aside>
+
+    <!-- FAR-LEFT PANEL — FRIDAY Voice/Orb Console (FRIDAY mode only).
+         The orb, mic and dock get their OWN full-height column so they're never
+         squeezed by dashboards. JARVIS keeps the full left panel for its
+         executive command center and this column simply hides. -->
+    <aside class="friday-orb-panel" id="friday-orb-panel">
+      <div class="holo-bg">
+        <div class="holo-grid"></div>
+        <div class="holo-glow"></div>
+        <div class="holo-scanline"></div>
+      </div>
+
+      <div class="fop-header">
+        <div class="fop-name"><i class="fa-solid fa-brain"></i> F.R.I.D.A.Y.</div>
+        <div class="fop-sub">VOICE CONSOLE</div>
+      </div>
+
+      <div class="orb-section">
+        <div class="holo-orb-stage" id="orb-stage">
+          <canvas id="orb-canvas" width="500" height="500"></canvas>
+          <div class="orb-click-zone" id="orb-click" title="Click to talk">
+            <i class="fa-solid fa-microphone mic-icon"></i>
+          </div>
+          <div class="holo-projection">
+            <div class="proj-line"></div>
+            <div class="proj-line"></div>
+            <div class="proj-line"></div>
+            <div class="proj-line"></div>
+            <div class="proj-line"></div>
+          </div>
+          <div class="orb-rgb-glow" id="orb-rgb-glow">
+            <div class="rgb-r"></div>
+            <div class="rgb-g"></div>
+            <div class="rgb-b"></div>
+          </div>
+        </div>
+
+        <div class="holo-status" id="holo-status">STANDBY</div>
+        <div class="holo-label" id="holo-label">Tap the orb or type a command</div>
+
+        <div class="speech-waves" id="speech-waves">
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div>
+        </div>
+
+        <div class="timer-pill hidden" id="timer-pill">
+          <i class="fa-solid fa-stopwatch"></i>
+          <span id="timer-display">0:00</span>
+        </div>
+
+        <span class="fop-mode-note" id="fop-mode-note"><i class="fa-solid fa-head-side-voice"></i> Say <b>"hey jenny"</b> or the orb</span>
+      </div>
+
+      <nav class="holo-dock" id="holo-dock">
+        <button class="dock-btn" data-panel="activity" title="PC Activity"><i class="fa-solid fa-chart-line"></i></button>
+        <button class="dock-btn" data-panel="system" title="System"><i class="fa-solid fa-microchip"></i></button>
+        <button class="dock-btn" data-panel="weather" title="Weather"><i class="fa-solid fa-cloud-sun"></i></button>
+        <button class="dock-btn" data-panel="emails" title="Emails"><i class="fa-solid fa-envelope"></i></button>
+        <button class="dock-btn" data-panel="processes" title="Processes"><i class="fa-solid fa-list-ol"></i></button>
+        <button class="dock-btn" data-panel="vault" title="Vault"><i class="fa-solid fa-database"></i></button>
+        <button class="dock-btn" data-panel="clipboard" title="Clipboard"><i class="fa-solid fa-clipboard"></i></button>
+        <button class="dock-btn" data-panel="files" title="Files"><i class="fa-solid fa-folder-tree"></i></button>
+        <button class="dock-btn" data-panel="notes" title="Notes"><i class="fa-solid fa-note-sticky"></i></button>
+        <button class="dock-btn" data-panel="training" title="AI Training Hub"><i class="fa-solid fa-brain"></i></button>
+        <button class="dock-btn" data-panel="settings" title="Settings"><i class="fa-solid fa-gear"></i></button>
+        <button class="dock-btn" data-panel="commands" title="Commands"><i class="fa-solid fa-terminal"></i></button>
+        <button class="dock-btn jarvis-only" data-panel="agency" title="Agency OS"><i class="fa-solid fa-building"></i></button>
+        <button class="dock-btn" id="wake-word-btn" onclick="toggleWakeWord()" title="Wake Word — Say 'Hey Jenny' to activate"><i class="fa-solid fa-head-side-voice"></i></button>
+        <button class="dock-btn" onclick="window.location.href='/modes.html'" title="Switch Mode — JARVIS / FRIDAY / ULTRON"><i class="fa-solid fa-shield-halved"></i></button>
+        <button class="dock-btn" onclick="toggleOverlay()" title="Mini Overlay Mode"><i class="fa-solid fa-window-restore"></i></button>
+      </nav>
     </aside>
 
     <!-- PANELS (floating glassmorphic, draggable) -->
