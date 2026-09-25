@@ -410,7 +410,7 @@ def prewarm_speak_phrases():
             for phrase in phrases:
                 try:
                     clean = re.sub(r"[#*_`\[\]]", "", phrase); clean = re.sub(r"https?://\S+", "", clean).strip()
-                    h = hashlib.md5(clean.encode()).hexdigest()
+                    h = hashlib.md5((mode + ":wav:" + clean).encode()).hexdigest()
                     wav_path = cache_dir / f"{h}.wav"
                     if not wav_path.exists():
                         tts_synthesize(clean, wav_path, mode)
@@ -519,6 +519,30 @@ def _conversation_memory():
         pass
     return {"topics": "", "count": 0}
 
+# Agentic executor catalog: tells the LLM which PC actions exist and how to
+# emit them, so free-form phrasing like "make it louder" / "open a new tab in
+# terminal" / "skip this song" turns into an executable `command` dict instead
+# of being mis-stored as a task or answered with text alone.
+EXECUTOR_CATALOG = """EXECUTABLE PC ACTIONS — when the user asks you to DO something on their computer, return a "command" object (alongside text/speech) using ONLY these EXACT action names and value shapes:
+- open-app     value: chrome | edge | firefox | spotify | discord | telegram | whatsapp | notepad | calculator | paint | vscode | terminal | cmd | files | settings | control panel | youtube | task manager | mail | explorer
+- open-chrome  value: a URL or plain website/query (e.g. "https://github.com")
+- close-app    value: app name (e.g. "chrome")
+- browser-search (value query) | browser-new-tab | browser-close-tab | browser-back | browser-forward | browser-refresh | browser-fullscreen
+- chrome-open (value url/query) | chrome-search (value) | chrome-youtube (value) | chrome-list | chrome-new-tab | chrome-close-tab | chrome-back | chrome-forward | chrome-reload | chrome-fullscreen | chrome-activate (value tab title)
+- media        value: play | pause | next | previous
+- volume       value: "0"-"100" | "mute" | "unmute"   (reacts to "turn it down/up", "louder", "silence")
+- brightness   value: "up" | "down" | "0"-"100"
+- spotify-action value: play|pause|next|previous  |  spotify-search value: song title
+- system: screenshot | lock | sleep | restart | shutdown | empty-trash | minimize-all | terminal | purge-ram | wifi | system-info | processes | task-manager | wake-display | clipboard-read | network-speed | disk-usage
+- timer        value: {"seconds": <number>}
+- type-text    value: the exact text to type
+- files: open-recent-pdf | list-directory (value path)
+- messaging: telegram-send value "contact|message" | whatsapp-open | discord-open | phone-ring
+- todo: todo-add (value short task) | todo-list | todo-clear | todo-complete (value id) | todo-remove (value id)
+- memory: vault-save value {"text": "..."}
+Examples you may return inside the JSON: {"action":"media","value":"next"}, {"action":"open-app","value":"chrome"}, {"action":"volume","value":"mute"}, {"action":"browser-search","value":"nvidia rtx 6090"}.
+Include "command" ONLY when the user clearly wants a system/app action; otherwise omit it. Never invent actions outside this list."""
+
 def gemini_chat(message, history=None):
     key = get_gemini_key()
     if not key: return None
@@ -528,7 +552,7 @@ def gemini_chat(message, history=None):
         mode = get_mode(); mp = MODE_PROFILES[mode]
         vault_data = load_json(DATA_DIR / "vault.json", {"entries": []})
         vault_text = "\n".join(e.get("text","") for e in vault_data.get("entries", [])[-5:])
-        prompt = f"You are {mp['name']}, AI assistant for {OWNER} (referred to as '{mp['boss']}'). Mode: {mode}. Personality: {mp['personality']}. Clock: {now}. Vault: {vault_text}. Reply naturally. Return JSON: {{\"text\": \"response\", \"speech\": \"tts version\"}}"
+        prompt = f"You are {mp['name']}, AI assistant for {OWNER} (referred to as '{mp['boss']}'). Mode: {mode}. Personality: {mp['personality']}. Clock: {now}. Vault: {vault_text}. Reply naturally. Return JSON: {{\"text\": \"response\", \"speech\": \"tts version\", \"command\": {{\"action\": \"...\", \"value\": \"...\"}}}} where command is OPTIONAL (only add it for a PC/system/app action). {EXECUTOR_CATALOG}"
         mem = _conversation_memory()
         if mem.get("topics"):
             prompt += f" Recently we've been talking about: {mem['topics']}. Acknowledge continuity and keep the conversation going naturally."
@@ -544,8 +568,13 @@ def gemini_chat(message, history=None):
         if r.status_code == 200:
             t = r.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "").strip()
             if t.startswith("```"): t = t.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-            try: return json.loads(t)
-            except: return {"text": t, "speech": re.sub(r"[#*_`]", "", t)}
+            try:
+                parsed = json.loads(t)
+                if isinstance(parsed, dict):
+                    return parsed
+            except Exception:
+                pass
+            return {"text": t, "speech": re.sub(r"[#*_`]", "", t)}
     except: pass
     return None
 
@@ -583,6 +612,8 @@ def grok_chat(message, history=None):
             f"{agency_ctx}"
             f"Reply naturally and helpfully. "
             f"You MUST return valid JSON with keys \"text\" (the response) and \"speech\" (a TTS-friendly version without markdown). "
+            f"You may ALSO include an optional \"command\" key ONLY when the user wants a PC/system/app action taken. "
+            f"To emit a command, use this catalog (exact action names only): {EXECUTOR_CATALOG} "
             f"Do not wrap the JSON in markdown code fences — return raw JSON only."
         )
         mem = _conversation_memory()
@@ -621,7 +652,7 @@ def grok_chat(message, history=None):
             t = t.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
         try:
             parsed = json.loads(t)
-            if "text" in parsed:
+            if isinstance(parsed, dict) and "text" in parsed:
                 if "speech" not in parsed:
                     parsed["speech"] = re.sub(r"[#*_`]", "", parsed["text"])
                 return parsed
@@ -1426,10 +1457,10 @@ def local_command_router(msg):
                 f"Here I am, {target.upper()} mode.")
         return {"text": line, "speech": line, "command": {"action": "mode", "value": target}}
 
-    # TODO: add/remove/edit/complete/list always local
-    res = handle_todo_intent(lo, boss)
-    if res:
-        return res
+    # NOTE: todo intents are deliberately evaluated LAST (see the end of this
+    # router). Messages like "make it louder" / "add a new tab" / "make pc sleep"
+    # are real PC actions and must be caught by the action branches above first,
+    # otherwise the greedy "add|create|new|make X..." pattern swallows them as tasks.
 
     # RECENT DOCUMENT: "install the pdf sent by papa", "open the latest pdf",
     # "read the file papa sent", "get the pdf from whatsapp".
@@ -1725,6 +1756,14 @@ def local_command_router(msg):
     ]:
         if any(w in (" " + lo + " ") for w in pattern):
             return resp
+
+    # TODO: add/remove/edit/complete/list. Evaluated after every real action
+    # branch so explicit task phrasing ("add X to my list", "remind me to X",
+    # "complete task 2", "clear my todo") still works, but action commands like
+    # "make it louder" or "make pc sleep" are executed instead of stored.
+    res = handle_todo_intent(lo, boss)
+    if res:
+        return res
 
     return None
 
@@ -2563,6 +2602,17 @@ def parse_agency_mission_intent(text):
         return {"city": city_match.group(1).strip().title(), "category": "School", "limit": limit}
     return {"city": "Patna", "category": "School", "limit": limit}
 
+def _sanitize_command(reply: dict) -> None:
+    """Validate a reply's optional `command` dict: drop malformed/empty actions,
+    default the value to a safe empty string so the executor never crashes."""
+    cmd = reply.get("command")
+    if cmd is None:
+        return
+    if not isinstance(cmd, dict) or not isinstance(cmd.get("action"), str) or not cmd["action"].strip():
+        reply.pop("command", None)
+        return
+    reply["command"] = {"action": cmd["action"].strip(), "value": cmd.get("value", "")}
+
 def _assistant_reply(msg: str) -> dict:
     """Shared chat pipeline used by both /api/chat and the server wake-word
     flow. Returns the reply dict (local router or LLM chain), updates history,
@@ -2590,6 +2640,7 @@ def _assistant_reply(msg: str) -> dict:
         reply = gemini_chat(msg, chatHistory)
     if not reply:
         reply = offline_reply(msg) or {"text": "I'm offline, Boss.", "speech": "I'm offline, Boss."}
+    _sanitize_command(reply)
     if reply.get("command", {}).get("action") == "vault-save":
         _save_vault_entry((reply.get("command", {}).get("value", {}) or {}).get("text", ""))
     chatHistory.append({"role": "user", "content": msg})
@@ -3018,6 +3069,54 @@ def api_control():
             return jsonify({"success": True, "message": "Typed."})
         except Exception:
             return jsonify({"success": False, "error": "Typing failed"})
+
+    # Agentic-executor parity: actions the local router / LLM can emit that used
+    # to fall through to "Unknown action" (silent no-ops on the wake path).
+    if lo == "mode":
+        target = str(value).lower()
+        if target in ("jarvis", "friday", "ultron"):
+            set_mode(target)
+            return jsonify({"success": True, "message": f"Mode set to {target}."})
+        return jsonify({"success": False, "error": f"Invalid mode: {target}"})
+    if lo == "vault-save":
+        payload = value.get("text", "") if isinstance(value, dict) else value
+        entry = _save_vault_entry(str(payload))
+        return jsonify({"success": bool(entry), "message": "Saved to vault." if entry else "Nothing to save."})
+    if lo == "note-prompt":
+        return jsonify({"success": True, "message": "Note prompt ready."})
+    if lo == "email-read":
+        try:
+            subprocess.Popen("outlook.exe", shell=True)
+        except Exception:
+            pass
+        return jsonify({"success": True, "message": "Opening your email."})
+    if lo in ("todo-add", "todo-list", "todo-clear", "todo-complete", "todo-remove", "todo-edit"):
+        if lo == "todo-add":
+            task = todo_add(str(value or "").strip())
+            return jsonify({"success": True, "message": f"Added task #{task['id']}." if task else "Nothing to add."})
+        if lo == "todo-list":
+            pending = [t for t in todo_list() if not t["done"]]
+            return jsonify({"success": True, "tasks": pending, "message": f"{len(pending)} pending."})
+        if lo == "todo-clear":
+            todo_clear(); return jsonify({"success": True, "message": "Todo list cleared."})
+        if lo == "todo-complete":
+            t = todo_complete(int(value or 0))
+            return jsonify({"success": bool(t), "message": f"Completed task #{value}." if t else "Task not found."})
+        if lo == "todo-remove":
+            todo_remove(int(value or 0)); return jsonify({"success": True, "message": f"Removed task #{value}."})
+        return jsonify({"success": False, "error": "todo-edit needs value"})
+    if lo == "open-chrome":
+        target = str(value)
+        if not target.startswith("http"):
+            if not re.match(r"^[\w\-]+\.[\w\-]+", target):
+                target = f"https://www.google.com/search?q={urllib.parse.quote(target)}"
+            else:
+                target = "https://" + target
+        try:
+            r = chrome_bridge.open_url(target)
+            return jsonify({"success": r.get("success", False), "message": target})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)})
     return jsonify({"success": False, "error": f"Unknown action: {action}"})
 
 
@@ -3029,10 +3128,12 @@ def api_speak():
     clean = _clean_tts_text(re.sub(r"[#*_`\[\]]", "", text))
     cache_dir = DATA_DIR / "speak_cache"; cache_dir.mkdir(exist_ok=True)
     ext = "mp3" if fmt == "mp3" else "wav"
-    h = hashlib.md5((ext + ":" + clean).encode()).hexdigest(); wav_path = cache_dir / f"{h}.{ext}"
+    mode = get_mode()
+    # Cache key is scoped by BOTH format and mode so each voice stays its own —
+    # FRIDAY's female MP3 must never satisfy a JARVIS request (and vice-versa).
+    h = hashlib.md5((mode + ":" + ext + ":" + clean).encode()).hexdigest(); wav_path = cache_dir / f"{h}.{ext}"
     if wav_path.exists() and wav_path.stat().st_size > 0:
         return send_from_directory(str(cache_dir), f"{h}.{ext}", mimetype=("audio/mpeg" if ext == "mp3" else "audio/wav"))
-    mode = get_mode()
     # MP3 -> stream edge-tts live so the browser gets the first audio bytes in
     # ~0.5s instead of waiting for the whole sentence to synthesize (voice lag fix).
     # The full result is cached on completion so repeat phrases stay instant.
@@ -4056,7 +4157,12 @@ def _wake_mode_for_phrase(phrase: str) -> str:
         return "ultron"
     if "jarvis" in p:
         return "jarvis"
-    return "friday"
+    if "friday" in p:
+        return "friday"
+    # Neutral assistant name ("jenny", "hey jenny", "ok JENNY") keeps the
+    # CURRENT mode instead of force-switching to FRIDAY — so JARVIS stays male
+    # when you say "jenny, open chrome" mid-session.
+    return get_mode() or "friday"
 
 _AGENCY_SNAPSHOT = {"replies": 0, "pending": 0, "interested": 0, "online": False}
 _AGENCY_WATCH_LOCK = threading.Lock()
