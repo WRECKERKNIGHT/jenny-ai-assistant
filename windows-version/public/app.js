@@ -2278,6 +2278,11 @@ async function sendMessage(text) {
         openPanel('emails');
         loadEmailPanel();
       }
+      else if (data.reply.command?.action === 'mode') {
+        const mt = (data.reply.command.value || '').toLowerCase();
+        if (mt === 'ultron') window.location.href = '/ultron.html';
+        else if (mt) applyMode(mt);
+      }
       else if (data.reply.command) { await fetch('/api/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data.reply.command) }); }
       speak(data.reply.speech || data.reply.text);
     } else { addAIMessage('Something went wrong, BOSS. Please try again.'); setOrbState('idle'); }
@@ -4286,6 +4291,11 @@ async function executeCommandAction(cmd) {
     }
     else if (cmd.action === 'open-chrome') {
       if (cmd.value) await fetch(`/api/open-chrome?url=${encodeURIComponent(cmd.value)}`);
+    }
+    else if (cmd.action === 'mode') {
+      const mt = (cmd.value || '').toLowerCase();
+      if (mt === 'ultron') window.location.href = '/ultron.html';
+      else if (mt) applyMode(mt);
     }
     else if (cmd.action === 'open-chrome-bookmarks') {
       const bmr = await fetch('/api/chrome-bookmarks'); const bmd = await bmr.json();
