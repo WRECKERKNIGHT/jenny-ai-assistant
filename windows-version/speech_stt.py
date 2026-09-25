@@ -340,8 +340,13 @@ def record_and_transcribe(seconds: int = 5, device: int | None = None, language:
 # ---------------------------------------------------------------------------
 
 DEFAULT_WAKE_PHRASES = [
+    # Full form for each assistant name.
     "hey jenny", "hello jenny", "ok jenny", "hi jenny",
-    "hey friday", "hey jarvis", "hey ultron",
+    "hey jarvis", "hello jarvis", "ok jarvis", "hi jarvis",
+    "hey friday", "hello friday", "ok friday", "hi friday",
+    "hey ultron", "hello ultron", "ok ultron", "hi ultron",
+    # Bare names so "jenny" / "jarvis, open chrome" also respond.
+    "jenny", "jarvis", "friday", "ultron",
 ]
 _WAKE_LOCK = threading.Lock()
 _wake_state = {
