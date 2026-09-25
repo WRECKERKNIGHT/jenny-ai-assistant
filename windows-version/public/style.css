@@ -370,6 +370,45 @@ body.mode-friday .orb-section { min-height: 240px; }
 .dock-btn.active { border-color:rgba(109,139,255,0.3); color:var(--cyan); background:rgba(109,139,255,0.08); box-shadow:0 0 16px rgba(109,139,255,0.1); }
 body:not(.mode-jarvis) .jarvis-only { display: none; }
 
+/* ============================================================
+   FRIDAY VOICE CONSOLE — dedicated far-left panel for the orb,
+   mic and dock (FRIDAY mode only). The orb gets its OWN full
+   column so it is a complete, full-sized pane instead of being
+   squeezed at the bottom of the shared holo-panel. JARVIS keeps
+   the entire left panel for its executive dashboard (order:-1
+   pins this column to the far left whenever it is visible).
+   ============================================================ */
+.friday-orb-panel { display:none; }
+body.mode-friday .friday-orb-panel {
+  display:flex; flex-direction:column; order:-1;
+  width:272px; min-width:272px; max-width:272px; height:100vh;
+  position:relative; flex-shrink:0; overflow:hidden;
+  background:rgba(26,8,42,0.55);
+  backdrop-filter:blur(40px) saturate(1.8);
+  -webkit-backdrop-filter:blur(40px) saturate(1.8);
+  border-right:1px solid rgba(168,85,247,0.22);
+  z-index:2;
+}
+.fop-header { position:relative; z-index:2; display:flex; flex-direction:column; align-items:center; gap:2px; padding:14px 8px 10px; border-bottom:1px solid rgba(168,85,247,0.18); }
+.fop-name { display:flex; align-items:center; gap:7px; font-family:var(--orbitron); font-size:13px; font-weight:900; letter-spacing:2px; color:#f3e8ff; text-shadow:0 0 16px rgba(168,85,247,0.5); }
+.fop-name i { color:#a855f7; text-shadow:0 0 10px rgba(168,85,247,0.6); font-size:12px; }
+.fop-sub { font-family:var(--mono); font-size:8px; letter-spacing:3px; color:rgba(168,85,247,0.6); }
+body.mode-friday .friday-orb-panel .orb-section { flex:1; min-height:0; padding:4px 0 2px; }
+body.mode-friday .friday-orb-panel .holo-orb-stage { flex:1; min-height:0; }
+body.mode-friday .friday-orb-panel #orb-canvas { width:254px; height:254px; }
+body.mode-friday .friday-orb-panel .orb-click-zone { width:116px; height:116px; }
+body.mode-friday .friday-orb-panel .orb-click-zone .mic-icon { font-size:30px; }
+body.mode-friday .friday-orb-panel .orb-rgb-glow { width:200px; height:200px; }
+body.mode-friday .friday-orb-panel .holo-status { margin-top:2px; }
+body.mode-friday .friday-orb-panel .holo-dock { flex-wrap:wrap; gap:3px; padding:8px 6px; }
+body.mode-friday .friday-orb-panel .dock-btn { width:32px; height:32px; font-size:12px; }
+.fop-mode-note { position:relative; z-index:2; font-family:var(--mono); font-size:9px; color:rgba(168,85,247,0.6); padding:2px 8px 6px; text-align:center; }
+.fop-mode-note b { color:#c084fc; }
+body.light-mode .friday-orb-panel { background: rgba(255,255,255,0.85); border-right-color: rgba(0,0,0,0.1); }
+
+/* FRIDAY console: hide JARVIS-only dock plugs and the agency tile. */
+body.mode-friday .friday-orb-panel .dock-btn.jarvis-only { display:none; }
+
 /* RIGHT PANEL */
 .chat-panel { flex:1; display:flex; flex-direction:column; height:100vh; min-width:0; position:relative; z-index:2; }
 
@@ -800,6 +839,15 @@ body.light-mode .welcome-footer-hint i { color: rgba(8,145,178,0.5); }
   #orb-canvas { width: 200px; height: 200px; }
   .orb-click-zone { width: 100px; height: 100px; }
   .orb-click-zone .mic-icon { font-size: 28px; }
+  body.mode-friday .friday-orb-panel { display:flex; flex-direction:column; order:-1; width:100%; max-width:none; min-width:0; height:26vh; border-right:none; border-bottom:1px solid rgba(168,85,247,0.22); }
+  body.mode-friday .friday-orb-panel .holo-orb-stage { min-height:0; }
+  body.mode-friday .friday-orb-panel #orb-canvas { width:150px; height:150px; }
+  body.mode-friday .friday-orb-panel .orb-click-zone { width:78px; height:78px; }
+  body.mode-friday .friday-orb-panel .orb-click-zone .mic-icon { font-size:22px; }
+  body.mode-friday .friday-orb-panel .holo-dock { flex-wrap:nowrap; overflow-x:auto; justify-content:flex-start; }
+  body.mode-friday .fop-mode-note { display:none; }
+  body.mode-friday .holo-panel { height:30vh; }
+  body.mode-friday .chat-panel { height:44vh; }
   .welcome-actions { grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .welcome-card { padding: 14px 10px 12px; }
   .welcome-card i { font-size: 18px; }
@@ -847,6 +895,12 @@ body.light-mode .welcome-footer-hint i { color: rgba(8,145,178,0.5); }
   .dock-btn { width:30px; height:30px; font-size:11px; }
   .holo-header { padding:6px 10px; }
   .mode-badge { font-size:7px; padding:2px 6px; }
+  body.mode-friday .friday-orb-panel { height:22vh; }
+  body.mode-friday .friday-orb-panel #orb-canvas { width:132px; height:132px; }
+  body.mode-friday .friday-orb-panel .orb-click-zone { width:70px; height:70px; }
+  body.mode-friday .friday-orb-panel .orb-click-zone .mic-icon { font-size:19px; }
+  body.mode-friday .holo-panel { height:32vh; }
+  body.mode-friday .chat-panel { height:46vh; }
 
   /* Chat panel phone */
   .hdr { padding:8px 14px; }
@@ -909,6 +963,15 @@ body.light-mode .phone-link-panel {
 /* Phone access is a J.A.R.V.I.S exclusive command-center feature. Hidden in
    FRIDAY / ULTRON; voice commands still control the phone in any mode. */
 body:not(.mode-jarvis) .phone-link-panel { display: none !important; }
+
+/* Keep the J.A.R.V.I.S phone-access pane in one coherent voice: JARVIS runs on
+   cyan, so push the leftover violet accents to match instead of clashing. */
+body.mode-jarvis .phone-link-panel { border-left-color: rgba(0,212,255,0.25); }
+body.mode-jarvis .phone-panel-header { border-bottom-color: rgba(0,212,255,0.15); }
+body.mode-jarvis .phone-badge { background: rgba(0,212,255,0.1); border-color: rgba(0,212,255,0.3); }
+body.mode-jarvis .phone-count-pill { border-color: rgba(0,212,255,0.2); }
+body.mode-jarvis .qr-container-box { box-shadow: 0 0 30px rgba(0,212,255,0.2); border-color: rgba(0,212,255,0.3); }
+body.mode-jarvis .qr-holo-chip { border-color: rgba(0,212,255,0.4); box-shadow: 0 0 14px rgba(0,212,255,0.25); }
 
 .phone-panel-header {
   position: relative; z-index: 2;
