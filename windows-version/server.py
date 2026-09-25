@@ -450,6 +450,148 @@ def _save_vault_entry(text):
     save_json(DATA_DIR / "vault.json", vault)
     return entry
 
+# ---- preference-learning memory ----
+# Repeated preferences and habits are learned passively into preferences.json
+# (phrase -> count). The top items are injected into the LLM prompts and the
+# offline fallback, so the assistant adapts its behavior / suggestions over time.
+PREFERENCES_FILE = DATA_DIR / "preferences.json"
+_PREF_SKIP = {"it", "that", "this", "those", "these", "stuff", "things", "me", "you", "them"}
+
+_PREFERENCE_PATTERNS = [
+    (r"(?:i\s+|we\s+)?(?:really\s+|kind\s+of\s+|very\s+)?(?:like|love|prefer|enjoy)\s+(?:to\s+|using\s+|using\s+the\s+|the\s+)?([a-z][a-z0-9' .\-_]{3,80})", "explicit"),
+    (r"(my\s+favorite\s+.+?)\s+is\s+(.{2,60})", "favorite"),
+    (r"(?:play|play\s+me)\s+(.+?)\s+(?:when|after|while|during|at)\s+(.{2,40})", "ritual"),
+    (r"(?:use|open|start|launch)\s+([a-z0-9 .\-]{2,40})\s+(?:instead\s+of|over)\s+(.{2,40})", "substitute"),
+    (r"(volume|brightness)\s+(?:to\s+|at\s+)?(\d{1,3})%?", "setting"),
+    (r"(?:i|we)\s+(?:usually|normally|always|typically|generally)\s+(?:like\s+|prefer\s+|enjoy\s+)?(.{4,80})", "habit"),
+]
+
+
+def _canon_pref(kind, groups):
+    g = [x.strip() for x in groups if x and x.strip()]
+    if not g:
+        return ""
+    try:
+        if kind == "explicit":
+            if g[0] in _PREF_SKIP:
+                return ""
+            return "likes " + g[0]
+        if kind == "favorite":
+            return f"favorite {g[0]} is {g[1]}"
+        if kind == "ritual":
+            return f"plays {g[0]} when {g[1]}"
+        if kind == "substitute":
+            return f"prefers {g[0]} over {g[1]}"
+        if kind == "setting":
+            return f"runs {g[0]} at {g[1]}%"
+        if kind == "habit":
+            if g[0] in _PREF_SKIP:
+                return ""
+            return "usually " + g[0]
+    except Exception:
+        pass
+    return ""
+
+
+def _learn_preference(text):
+    """Passively learn explicit preferences + habits from free-form chat."""
+    try:
+        lo = re.sub(r"\s+", " ", re.sub(r"[^\w\s'%\-]", " ", _normalize_utterance(text).lower())).strip()
+        if len(lo) < 4:
+            return
+        prefs = load_json(PREFERENCES_FILE, {})
+        prefs.setdefault("preferences", {})
+        store = prefs["preferences"]
+        now = datetime.datetime.now().isoformat()
+        phrases = []
+        for pat, kind in _PREFERENCE_PATTERNS:
+            for m in re.finditer(pat, lo):
+                p = _canon_pref(kind, m.groups())
+                if p:
+                    phrases.append(p)
+                    break
+        for phrase in phrases:
+            e = store.get(phrase, {"phrase": phrase, "count": 0, "kind": "explicit",
+                                   "first": now, "last": now})
+            e["count"] = int(e.get("count", 0)) + 1
+            e["last"] = now
+            e["kind"] = "explicit" if kind != "habit" or "usually" in phrase else e.get("kind", "explicit")
+            store[phrase] = e
+        if len(store) > 120:
+            store = dict(sorted(store.items(), key=lambda kv: -(kv[1].get("count", 0) or 0))[:120])
+            prefs["preferences"] = store
+        save_json(PREFERENCES_FILE, prefs)
+    except Exception:
+        pass
+
+
+def _bump_habit(action, value):
+    """Increment a habit count each time a real PC action is executed."""
+    try:
+        lo = str(action).lower().strip()
+        v = str(value).strip() if value is not None else ""
+        if not lo or lo in ("run-sequence", "exec-shell", "execute-shell",
+                            "list-directory", "open-recent-pdf", "system-info",
+                            "processes", "network-speed", "disk-usage"):
+            return
+        phrase = ""
+        if lo == "open-app" and v and len(v) < 40 and v.lower() != "browser":
+            phrase = f"opens {v}"
+        elif lo in ("chrome-open", "open-chrome") and v and len(v) < 60:
+            phrase = f"opens {v} in a browser"
+        elif lo in ("browser-search", "chrome-search") and v and len(v) < 60:
+            phrase = f"searches for {v}"
+        elif lo == "close-app" and v and len(v) < 40:
+            phrase = f"closes {v}"
+        elif lo == "volume" and v:
+            phrase = f"keeps volume at {v}"
+        elif lo == "brightness" and v:
+            phrase = f"keeps brightness at {v}"
+        elif lo == "media" and v and v in ("play", "pause", "next", "previous"):
+            phrase = f"uses media {v}"
+        elif lo == "timer":
+            phrase = "sets timers"
+        elif lo == "spotify-action":
+            phrase = "controls Spotify"
+        if not phrase:
+            return
+        prefs = load_json(PREFERENCES_FILE, {})
+        prefs.setdefault("preferences", {})
+        store = prefs["preferences"]
+        now = datetime.datetime.now().isoformat()
+        e = store.get(phrase, {"phrase": phrase, "count": 0, "kind": "habit",
+                               "first": now, "last": now})
+        e["count"] = int(e.get("count", 0)) + 1
+        e["last"] = now
+        store[phrase] = e
+        if len(store) > 120:
+            store = dict(sorted(store.items(), key=lambda kv: -(kv[1].get("count", 0) or 0))[:120])
+            prefs["preferences"] = store
+        save_json(PREFERENCES_FILE, prefs)
+    except Exception:
+        pass
+
+
+def _preferences_snapshot(limit=5, min_count=2):
+    """Sorted list of learned preferences (highest count first)."""
+    try:
+        prefs = load_json(PREFERENCES_FILE, {}).get("preferences", {})
+        return [e for e in sorted(prefs.values(), key=lambda x: -(x.get("count", 0) or 0))
+                if (e.get("count") or 0) >= min_count][:limit]
+    except Exception:
+        return []
+
+
+def _preferences_context():
+    """Prompt fragment summarizing established preferences/habits."""
+    try:
+        items = _preferences_snapshot(limit=6, min_count=2)
+        if items:
+            return "Known preferences: " + "; ".join(e.get("phrase", "") for e in items) + "."
+    except Exception:
+        pass
+    return ""
+
 MODE_PROFILES = {
     "jarvis": {
         "name": "J.A.R.V.I.S.",
@@ -553,6 +695,9 @@ def gemini_chat(message, history=None):
         vault_data = load_json(DATA_DIR / "vault.json", {"entries": []})
         vault_text = "\n".join(e.get("text","") for e in vault_data.get("entries", [])[-5:])
         prompt = f"You are {mp['name']}, AI assistant for {OWNER} (referred to as '{mp['boss']}'). Mode: {mode}. Personality: {mp['personality']}. Clock: {now}. Vault: {vault_text}. Reply naturally. Return JSON: {{\"text\": \"response\", \"speech\": \"tts version\", \"command\": {{\"action\": \"...\", \"value\": \"...\"}}}} where command is OPTIONAL (only add it for a PC/system/app action). {EXECUTOR_CATALOG}"
+        pref = _preferences_context()
+        if pref:
+            prompt += f" {pref} Acknowledge and honor these where natural — auto-suggest them when relevant, without reciting the list."
         mem = _conversation_memory()
         if mem.get("topics"):
             prompt += f" Recently we've been talking about: {mem['topics']}. Acknowledge continuity and keep the conversation going naturally."
@@ -621,6 +766,9 @@ def grok_chat(message, history=None):
             system_msg += f" Recently we've been discussing: {mem['topics']}. If relevant, acknowledge that continuity and keep the conversation going naturally."
         if int(mem.get("count", 0)) > 2:
             system_msg += " Write a warm, slightly fuller reply (2-3 sentences) and invite one natural follow-up. No bullet lists."
+        pref = _preferences_context()
+        if pref:
+            system_msg += f" {pref} Acknowledge and honor these where natural — auto-suggest them when relevant, without reciting the list."
         messages = [{"role": "system", "content": system_msg}]
         if history:
             for h in history[-10:]:
@@ -928,7 +1076,12 @@ def get_smart_suggestions():
         ]
     period = get_time_period()
     suggestions = SMART_SUGGESTIONS_BY_HOUR.get(period, SMART_SUGGESTIONS_BY_HOUR["morning"])
-    return random.sample(suggestions, min(5, len(suggestions)))
+    picked = random.sample(suggestions, min(5, len(suggestions)))
+    habit = _preferences_snapshot(limit=1, min_count=3)
+    if habit:
+        picked.insert(0, {"command": habit[0].get("phrase", ""), "icon": "fa-star",
+                          "title": "Top Habit", "desc": f"You've done this {habit[0].get('count')} times — want it now?"})
+    return picked[:5]
 
 CONVERSION_TABLE = {
     "miles to km": lambda x: round(x * 1.60934, 2),
@@ -2393,7 +2546,11 @@ def offline_reply(text):
     recall = ""
     if mem_topics and mem_count > 2:
         recall = f"\n\nJust to keep us on track — earlier we were talking about *{mem_topics}*. Want to pick any of those back up, {boss}?"
-    return {"text": f"{detail}\n\nYou can still ask me to:\n• **Control the PC** — open apps, lock, screenshot, timers, clipboard\n• **Read your system** — CPU, RAM, battery, disk, processes, uptime\n• **Do math** — calculators, conversions, percentages, primes, factorials\n• **Enjoy content** — jokes, quotes, facts, riddles, weather, time\n• **Talk about tech** — AI, Python, CPU, RAM, encryption and more offline{recall}\n\nTry one of those, or ask me about your **Agency OS** / business, {boss}!", "speech": "I can't reach the online AI right now, but I can still control your PC, read your system, do math, tell jokes, and remember what we've been talking about, {boss}."}
+    habit_suggestion = ""
+    top_habits = _preferences_snapshot(limit=1, min_count=3)
+    if top_habits and mem_count > 1:
+        habit_suggestion = f"\n\nI've also noticed you often *{top_habits[0].get('phrase', '')}* — say the word and I'll handle it, {boss}."
+    return {"text": f"{detail}\n\nYou can still ask me to:\n• **Control the PC** — open apps, lock, screenshot, timers, clipboard\n• **Read your system** — CPU, RAM, battery, disk, processes, uptime\n• **Do math** — calculators, conversions, percentages, primes, factorials\n• **Enjoy content** — jokes, quotes, facts, riddles, weather, time\n• **Talk about tech** — AI, Python, CPU, RAM, encryption and more offline{recall}{habit_suggestion}\n\nTry one of those, or ask me about your **Agency OS** / business, {boss}!", "speech": "I can't reach the online AI right now, but I can still control your PC, read your system, do math, tell jokes, and remember what we've been talking about, {boss}."}
 
 
 _FUZZY_EVALS = {
@@ -2912,6 +3069,7 @@ def _assistant_reply(msg: str) -> dict:
     """Shared chat pipeline used by both /api/chat and the server wake-word
     flow. Returns the reply dict (local router or LLM chain), updates history,
     memory vault and activity telemetry — identical behaviour from either path."""
+    _learn_preference(msg)
     if get_mode() == "jarvis":
         intent = parse_agency_mission_intent(msg)
         if intent:
@@ -2986,6 +3144,23 @@ def api_user_habits():
     top = sorted(stats.get("commands", {}).items(), key=lambda x: x[1], reverse=True)[:10]
     return jsonify({"success": True, "topCommands": [{"command": k, "count": v} for k, v in top], "frequentTopics": stats.get("topics", [])})
 
+
+@app.route("/api/preferences", methods=["GET", "DELETE"])
+def api_preferences():
+    """Read learned preferences/habits, or clear one/all (pass ?phrase=...)."""
+    prefs = load_json(PREFERENCES_FILE, {})
+    store = prefs.get("preferences", {})
+    if request.method == "DELETE":
+        phrase = request.args.get("phrase", "").strip()
+        if phrase:
+            store.pop(phrase, None)
+            save_json(PREFERENCES_FILE, {"preferences": store})
+            return jsonify({"success": True, "message": "Preference forgotten."})
+        save_json(PREFERENCES_FILE, {"preferences": {}})
+        return jsonify({"success": True, "message": "All preferences cleared."})
+    items = sorted(store.values(), key=lambda x: -(x.get("count", 0) or 0))
+    return jsonify({"success": True, "preferences": items})
+
 @app.route("/api/control", methods=["POST"])
 def api_control():
     d = request.get_json(force=True, silent=True) or {}
@@ -3008,6 +3183,9 @@ def api_control():
                 pass
             return resp
     lo = action.lower()
+    # Learn a habit every time a real PC action actually executes (open-app,
+    # volume, media, timers, etc.) so repeated behavior accumulates over time.
+    _bump_habit(lo, value)
     if lo == "run-sequence":
         # Multi-step autonomous task: execute each sub-command in order,
         # with a short settle delay, then report the combined result.
@@ -4073,6 +4251,7 @@ def api_call_talk():
     if not text.strip():
         return jsonify({"success": False, "error": "No speech recognized", "text": ""}), 200
     _call_append("phone", text.strip())
+    _learn_preference(text.strip())
     reply = local_command_router(text.strip())
     if not reply:
         reply = grok_chat(text.strip(), chatHistory) or offline_reply(text.strip()) or {"text": "I'm offline, Boss.", "speech": "I'm offline, Boss."}

@@ -135,12 +135,16 @@
       '<video id="jenny-cine-vid" playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none"></video>' +
       '<div id="jenny-cine-vig" style="position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 35%,rgba(0,0,0,0.72) 100%);pointer-events:none"></div>' +
       '<div id="jenny-cine-logo" style="position:relative;z-index:5;display:flex;flex-direction:column;align-items:center;text-align:center;opacity:0;transform:translateY(24px) scale(0.96);transition:opacity 1.1s cubic-bezier(0.16,1,0.3,1),transform 1.1s cubic-bezier(0.16,1,0.3,1)">' +
-        '<img src="/logo.png" alt="JENNY" style="width:min(38vh,300px);height:auto;filter:drop-shadow(0 0 42px rgba(109,139,255,0.55)) drop-shadow(0 0 90px rgba(168,85,247,0.35))" onerror="this.style.display=\'none\'">' +
-        '<div class="cine-word" style="font-family:Orbitron,sans-serif;font-weight:900;font-size:clamp(28px,6vw,64px);letter-spacing:0.32em;background:linear-gradient(135deg,#9db4ff,#c4b5fd,#22d3ee);-webkit-background-clip:text;background-clip:text;color:transparent;margin-top:28px;text-shadow:none">J.E.N.N.Y</div>' +
+        '<div style="position:relative">' +
+          '<img src="/logo.png" alt="JENNY" style="width:min(40vh,320px);height:auto;display:block;filter:drop-shadow(0 0 34px rgba(34,211,238,0.45)) drop-shadow(0 0 70px rgba(168,85,247,0.4));animation:cine-float 4.2s ease-in-out infinite" onerror="this.style.display=\'none\'">' +
+          '<div class="cine-scan" style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 0%,rgba(157,180,255,0.16) 44%,rgba(34,211,238,0.35) 50%,rgba(157,180,255,0.16) 56%,transparent 100%);background-size:100% 140%;background-position:0 -140%;animation:cine-scan 2.6s ease-in-out infinite;mix-blend-mode:screen;border-radius:14px"></div>' +
+        '</div>' +
+        '<div class="cine-word" style="font-family:Orbitron,sans-serif;font-weight:900;font-size:clamp(28px,6vw,64px);letter-spacing:0.32em;background:linear-gradient(135deg,#22d3ee,#a78bfa,#f0abfc);-webkit-background-clip:text;background-clip:text;color:transparent;margin-top:28px;text-shadow:none">J.E.N.N.Y</div>' +
         '<div class="cine-sub" style="font-family:Share Tech Mono,monospace;font-size:clamp(9px,1.4vw,13px);letter-spacing:0.55em;color:rgba(167,199,255,0.7);margin-top:14px;text-transform:uppercase">Just A Neural Network Yielding Intelligence</div>' +
         '<div id="jenny-cine-phase" style="font-family:Share Tech Mono,monospace;font-size:10px;letter-spacing:0.4em;color:rgba(168,85,247,0.85);margin-top:34px;min-height:16px;text-transform:uppercase"></div>' +
         '<button id="jenny-cine-skip" style="margin-top:40px;background:rgba(255,255,255,0.04);border:1px solid rgba(109,139,255,0.4);color:rgba(255,255,255,0.7);font-family:Orbitron,sans-serif;font-size:10px;letter-spacing:0.3em;padding:11px 30px;border-radius:10px;cursor:pointer;transition:all 0.2s cubic-bezier(0.16,1,0.3,1)">SKIP INTRO</button>' +
-      '</div>';
+      '</div>' +
+      '<style>@keyframes cine-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}@keyframes cine-scan{0%{background-position:0 -140%}55%{background-position:0 10%}100%{background-position:0 120%}}@media (prefers-reduced-motion: reduce){.cine-float,.cine-scan{animation:none!important}}</style>';
     document.body.appendChild(ov);
     return ov;
   }
