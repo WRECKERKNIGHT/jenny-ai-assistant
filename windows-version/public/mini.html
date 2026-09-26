@@ -45,15 +45,16 @@
     .hud-outer-frame {
       position: absolute;
       inset: 6px;
-      background: var(--bg);
-      border: 1.5px solid var(--glass-border);
+      background: linear-gradient(165deg, rgba(18, 22, 34, 0.62), rgba(4, 6, 12, 0.78));
+      border: 1.5px solid rgba(255,255,255,0.14);
       border-radius: 24px;
-      box-shadow: 
+      box-shadow:
         0 20px 50px rgba(0,0,0,0.6),
         0 0 30px rgba(109, 139, 255, 0.15),
+        inset 0 1px 0 rgba(255,255,255,0.16),
         inset 0 0 20px rgba(109, 139, 255, 0.08);
-      backdrop-filter: blur(25px);
-      -webkit-backdrop-filter: blur(25px);
+      backdrop-filter: blur(30px) saturate(1.8);
+      -webkit-backdrop-filter: blur(30px) saturate(1.8);
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -264,8 +265,8 @@
     /* FLOATING RESPONSE STREAM */
     .hud-stream-panel {
       width: 90%;
-      background: rgba(0, 0, 0, 0.45);
-      border: 1px solid rgba(109, 139, 255, 0.15);
+      background: linear-gradient(165deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+      border: 1px solid rgba(255,255,255,0.11);
       border-radius: 14px;
       padding: 12px 16px;
       font-size: 11px;
@@ -274,7 +275,9 @@
       overflow-y: auto;
       text-align: center;
       margin-bottom: 10px;
-      box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+      backdrop-filter: blur(16px) saturate(1.6);
+      -webkit-backdrop-filter: blur(16px) saturate(1.6);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.1);
     }
     .hud-stream-panel::-webkit-scrollbar { width: 4px; }
     .hud-stream-panel::-webkit-scrollbar-thumb { background: rgba(109, 139, 255, 0.2); border-radius: 2px; }
@@ -284,10 +287,13 @@
       width: 90%;
       display: flex;
       gap: 8px;
-      background: rgba(0, 0, 0, 0.5);
-      border: 1px solid var(--glass-border);
+      background: linear-gradient(165deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.13);
       border-radius: 14px;
       padding: 6px 8px;
+      backdrop-filter: blur(16px) saturate(1.6);
+      -webkit-backdrop-filter: blur(16px) saturate(1.6);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.12);
       transition: all 0.3s ease;
       margin-bottom: 15px;
     }
@@ -376,8 +382,8 @@
       border-top: 1px solid rgba(255,255,255,0.05);
     }
     .tab-btn {
-      background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(109, 139, 255, 0.15);
+      background: linear-gradient(165deg, rgba(255,255,255,0.055), rgba(255,255,255,0.015));
+      border: 1px solid rgba(255,255,255,0.1);
       border-radius: 8px;
       color: var(--txt3);
       padding: 8px 4px;
@@ -388,13 +394,14 @@
       flex-direction: column;
       align-items: center;
       gap: 4px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
       transition: all 0.2s ease;
     }
     .tab-btn.active {
-      background: rgba(109, 139, 255, 0.1);
-      border-color: var(--cyan);
+      background: linear-gradient(165deg, rgba(109, 139, 255, 0.2), rgba(109, 139, 255, 0.06));
+      border-color: rgba(109, 139, 255, 0.55);
       color: var(--cyan);
-      box-shadow: 0 0 8px rgba(109, 139, 255, 0.15);
+      box-shadow: 0 0 10px rgba(109, 139, 255, 0.2), inset 0 1px 0 rgba(255,255,255,0.16);
     }
     .tab-btn:hover {
       border-color: var(--cyan);
@@ -408,8 +415,8 @@
       gap: 8px;
     }
     .ctrl-card {
-      background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(109, 139, 255, 0.15);
+      background: linear-gradient(160deg, rgba(255,255,255,0.075), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.11);
       border-radius: 12px;
       padding: 12px;
       display: flex;
@@ -418,15 +425,31 @@
       cursor: pointer;
       color: var(--txt2);
       font-size: 10px;
-      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+      backdrop-filter: blur(6px) saturate(1.35);
+      -webkit-backdrop-filter: blur(6px) saturate(1.35);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 24px rgba(255,255,255,0.02);
+      transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .ctrl-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.03) 42%, transparent 100%);
+      opacity: 0.5;
+      pointer-events: none;
+      mix-blend-mode: screen;
     }
     .ctrl-card:hover {
-      background: rgba(109,139,255,0.08);
-      border-color: var(--cyan);
+      background: linear-gradient(160deg, rgba(109,139,255,0.16), rgba(109,139,255,0.05));
+      border-color: rgba(255,255,255,0.2);
       color: #fff;
-      box-shadow: 0 0 10px rgba(109,139,255,0.15);
-      transform: translateY(-1px);
+      box-shadow: 0 12px 30px rgba(0,0,0,0.46), inset 0 1px 0 rgba(255,255,255,0.2);
+      transform: translateY(-2px);
     }
+    .ctrl-card:active { transform: translateY(0) scale(0.985); }
     .ctrl-card i {
       color: var(--cyan);
       font-size: 13px;
@@ -542,6 +565,23 @@
       0% { box-shadow: 0 0 0 0 rgba(109, 139, 255, 0.4); }
       70% { box-shadow: 0 0 0 10px rgba(109, 139, 255, 0); }
       100% { box-shadow: 0 0 0 0 rgba(109, 139, 255, 0); }
+    }
+
+    /* GLASS FALLBACKS: opaque tint when backdrop-filter is unavailable or the
+       user asked for reduced transparency - never a broken see-through panel. */
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+      .hud-outer-frame { background: rgba(8, 10, 18, 0.98); }
+      .hud-stream-panel, .hud-input-dock, .ctrl-card, .tab-btn { background: rgba(20, 24, 36, 0.97); }
+    }
+    @media (prefers-reduced-transparency: reduce) {
+      .hud-outer-frame, .hud-stream-panel, .hud-input-dock, .ctrl-card, .tab-btn {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        background: rgba(10, 13, 22, 0.97) !important;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .ctrl-card:hover, .ctrl-card:active { transform: none; }
     }
   </style>
 </head>
@@ -727,6 +767,7 @@
         const d = await res.json();
         if (d.success && d.reply) {
           revealText(d.reply.text);
+          queueServerSpeech(d.reply.text);
           if (d.reply.command && d.reply.command.action !== 'vault-save') {
             await fetch('/api/control', {
               method: 'POST',
@@ -742,6 +783,50 @@
 
     sendBtn.addEventListener('click', () => sendCmd(input.value));
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendCmd(input.value); });
+
+    // ---- SERVER NEURAL VOICE OUTPUT -------------------------------
+    // Single-voice rule: the PC's edge-tts engine (/api/speak) is the only
+    // voice. We ping the server bus and drain the next utterance like the
+    // main dashboard, so server-driven speech routes through THIS window.
+    const serverSpeechQ = { items: [], playing: false, currentEl: null };
+    function queueServerSpeech(text) {
+      const clean = String(text || '').replace(/[*_#`~]/g, '').replace(/https?:\/\/\S+/g, '').replace(/\s+/g, ' ').trim();
+      if (!clean) return;
+      serverSpeechQ.items.push(clean);
+      pumpServerQueue();
+    }
+    function pumpServerQueue() {
+      if (serverSpeechQ.playing) return;
+      const next = serverSpeechQ.items.shift();
+      if (!next) {
+        serverSpeechQ.playing = false;
+        return;
+      }
+      serverSpeechQ.playing = true;
+      const el = new Audio('/api/speak?text=' + encodeURIComponent(next.slice(0, 6000)) + '&fmt=mp3&t=' + Date.now());
+      serverSpeechQ.currentEl = el;
+      const step = () => { serverSpeechQ.playing = false; serverSpeechQ.currentEl = null; pumpServerQueue(); };
+      el.onended = step;
+      el.onerror = step;
+      el.play().catch(() => {
+        fetch('/api/speak/fallback', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({text: next}) }).catch(()=>{});
+        step();
+      });
+    }
+    function stopServerSpeech() {
+      serverSpeechQ.items = [];
+      if (serverSpeechQ.currentEl) { try { serverSpeechQ.currentEl.pause(); } catch(e) {} serverSpeechQ.currentEl = null; }
+      serverSpeechQ.playing = false;
+      fetch('/api/speak/stop', { method: 'POST' }).catch(()=>{});
+    }
+    function drainServerVoiceBus() {
+      fetch('/api/speak/next', { cache: 'no-store' })
+        .then(r => r.json())
+        .then(d => { if (d && d.item && d.item.text) queueServerSpeech(d.item.text + (d.item.text.endsWith('.') ? '' : '.')); })
+        .catch(() => {});
+    }
+    setInterval(() => { fetch('/api/speak/ping', { cache: 'no-store' }).catch(()=>{}); drainServerVoiceBus(); }, 3000);
+    drainServerVoiceBus();
 
     // Drawer Close
     drawerClose.addEventListener('click', () => {
@@ -945,7 +1030,7 @@
       if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.openFullApp) {
         window.webkit.messageHandlers.openFullApp.postMessage('open');
       } else {
-        window.open('http://localhost:3005', '_blank');
+        window.open('/modes.html', '_blank');
       }
     });
 
@@ -984,6 +1069,7 @@
     let isListening = false;
 
     function drawOrb() {
+      if (document.hidden) { requestAnimationFrame(drawOrb); return; }
       frame++;
       const W = canvas.width, H = canvas.height;
       const cx = W / 2, cy = H / 2;
@@ -1058,6 +1144,7 @@
         });
       }
       function drawStars() {
+        if (document.hidden) { requestAnimationFrame(drawStars); return; }
         sCtx.clearRect(0, 0, starCanvas.width, starCanvas.height);
         stars.forEach(s => {
           s.phase += s.speed;
@@ -1072,32 +1159,105 @@
       drawStars();
     }
 
-    // SPEECH RECOGNITION
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SR) {
-      const r = new SR();
-      r.continuous = false;
-      r.interimResults = false;
-      r.onstart = () => { 
-        isListening = true; 
-        document.querySelector('.center-mic-icon').style.color = '#ffffff';
-        playBeep(660, 'sine', 0.08);
-      };
-      r.onresult = (e) => { sendCmd(e.results[0][0].transcript); };
-      r.onend = () => { 
-        isListening = false; 
-        document.querySelector('.center-mic-icon').style.color = 'var(--cyan)';
-      };
-      r.onerror = () => { 
-        isListening = false; 
-        document.querySelector('.center-mic-icon').style.color = 'var(--cyan)';
-      };
+    // SPEECH INPUT — server-owned live STT session (same reliable pipeline as
+    // the main dashboard). NEVER request getUserMedia here: the server owns the
+    // mic and browser capture would lock it from the PC STT engine.
+    let sttSessionId = null;
+    let sttMicIndex = null;
 
-      orbTrigger.addEventListener('click', () => {
-        if (isListening) r.stop();
-        else r.start();
-      });
+    async function resolveMicIndex() {
+      try {
+        const mi = await fetch('/api/stt/mics', { cache: 'no-store' });
+        const md = await mi.json();
+        const mics = (md && md.mics) || [];
+        if (mics.length === 1) return mics[0].index;
+        if (mics.length > 1) { const def = mics.find(m => m.default) || mics[0]; return def.index; }
+        return null;
+      } catch (e) { return null; }
     }
+
+    async function startListening() {
+      if (isListening) return;
+      stopServerSpeech();
+      playBeep(660, 'sine', 0.08);
+      try {
+        if (sttMicIndex === null) sttMicIndex = await resolveMicIndex();
+        const res = await fetch('/api/stt/live/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ seconds: 12, device: sttMicIndex })
+        });
+        const d = await res.json();
+        if (!(d && d.success && d.sessionId)) throw new Error(d.error || 'could not start');
+        sttSessionId = d.sessionId;
+      } catch (e) {
+        console.warn('[HUD] server STT unavailable, falling back to Web Speech:', e);
+        startWebSpeechFallback();
+        return;
+      }
+      isListening = true;
+      document.querySelector('.center-mic-icon').style.color = '#ffffff';
+
+      let finalText = '';
+      let errored = false;
+      const deadline = Date.now() + 15000;
+      while (isListening && Date.now() < deadline) {
+        try {
+          const r2 = await fetch('/api/stt/live/status/' + sttSessionId, { cache: 'no-store' });
+          const s = await r2.json();
+          if (s && s.success) {
+            if (s.error) { errored = true; break; }
+            if (s.done && s.final) { finalText = s.final.trim(); break; }
+            if (s.done) break;
+          }
+        } catch (e) {}
+        await new Promise(r => setTimeout(r, 900));
+      }
+      const sid = sttSessionId;
+      stopListening();
+      if (sid && !errored && finalText) sendCmd(finalText);
+      sttSessionId = null;
+    }
+
+    function stopListening() {
+      const wasListening = isListening;
+      isListening = false;
+      document.querySelector('.center-mic-icon').style.color = 'var(--cyan)';
+      if (wasListening && sttSessionId) {
+        fetch('/api/stt/live/stop/' + sttSessionId, { method: 'POST' }).catch(() => {});
+      }
+      if (webRecognition) { try { webRecognition.stop(); } catch(e) {} webRecognition = null; }
+    }
+
+    // Last-resort browser Web Speech fallback (kept single-shot; Chromium
+    // instance can only start once, so always build a fresh one).
+    let webRecognition = null;
+    function startWebSpeechFallback() {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { playBeep(220, 'square', 0.2); revealText('Voice input unavailable on this device.'); return; }
+      isListening = true;
+      document.querySelector('.center-mic-icon').style.color = '#ffffff';
+      webRecognition = new SR();
+      webRecognition.continuous = false;
+      webRecognition.interimResults = false;
+      webRecognition.onresult = (e) => {
+        const txt = e.results[0][0].transcript;
+        stopListening();
+        if (txt.trim()) sendCmd(txt.trim());
+      };
+      webRecognition.onend = () => { document.querySelector('.center-mic-icon').style.color = 'var(--cyan)'; isListening = false; };
+      webRecognition.onerror = (e) => {
+        document.querySelector('.center-mic-icon').style.color = 'var(--cyan)';
+        isListening = false;
+        if (e.error === 'not-allowed') revealText('Mic access denied. Allow it and try again.');
+      };
+      try { webRecognition.start(); } catch(err) {}
+    }
+
+    orbTrigger.addEventListener('click', () => {
+      if (isListening) stopListening();
+      else startListening();
+    });
   </script>
 </body>
 </html>

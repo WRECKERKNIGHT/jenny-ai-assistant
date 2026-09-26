@@ -220,6 +220,176 @@ def _run_tray():
 # Mini HUD (Tk, always-on-top, bottom-right)
 # ---------------------------------------------------------------------------
 
+def _json_get(path):
+    import json
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"{SERVER_URL}{path}", timeout=2.5) as r:
+            raw = r.read().decode() or "{}"
+            return json.loads(raw)
+    except Exception:
+        return {}
+
+
+def _json_post(path, payload):
+    import json
+    import urllib.request
+    try:
+        req = urllib.request.Request(
+            f"{SERVER_URL}{path}",
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            raw = r.read().decode() or "{}"
+            return json.loads(raw)
+    except Exception:
+        return {}
+
+
+def _hud_set(hud, state_lbl, text, mic=False):
+    try:
+        hud.setdefault("uiq", []).append(["set", text, "#7dffa1" if mic else "#c9d4e6"])
+        hud.setdefault("state", {})["pause"] = time.time() + 6
+    except Exception:
+        pass
+
+
+def _hud_run_reply(hud, state_lbl, msg):
+    def work():
+        d = _json_post("/api/chat", {"message": msg})
+        rep = d.get("reply") or {}
+        out = rep.get("text") if isinstance(rep, dict) else None
+        if not out:
+            out = d.get("text") or "Done."
+        cmd = rep.get("command") if isinstance(rep, dict) else None
+        hud["uiq"].append(["set", "JENNY: " + str(out).replace("\n", " ")[:150], "#7dffa1"])
+        hud["state"]["pause"] = time.time() + 6
+        if cmd and isinstance(cmd, dict) and cmd.get("action") != "vault-save":
+            _json_post("/api/control", cmd)
+        _json_post("/api/speak/fallback", {"text": str(out)})
+    threading.Thread(target=work, daemon=True).start()
+
+
+def _hud_text(hud, entry, state_lbl):
+    msg = entry.get().strip()
+    if not msg:
+        return
+    entry.delete(0, "end")
+    _hud_set(hud, state_lbl, "query: " + msg[:70])
+    _hud_run_reply(hud, state_lbl, msg)
+
+
+def _hud_finish_mic(hud, mic_btn, st):
+    st["mic"] = False
+    hud["uiq"].append(["btn", "\u00a0 Mic"])
+
+
+def _hud_mic(hud, mic_btn, state_lbl):
+    st = hud.setdefault("state", {})
+    if st.get("mic"):
+        st["mic"] = False
+        sid = st.get("sid")
+        if sid:
+            _json_post(f"/api/stt/live/stop/{sid}", {})
+            st.pop("sid", None)
+        _hud_set(hud, state_lbl, "status: idle")
+        try:
+            mic_btn.config(text="\u00a0 Mic")
+        except Exception:
+            pass
+        return
+
+    st["mic"] = True
+    try:
+        mic_btn.config(text="Listening\u2026")
+    except Exception:
+        pass
+
+    def work():
+        _hud_set(hud, state_lbl, "status: listening\u2026", mic=True)
+        mics = _json_get("/api/stt/mics").get("mics") or []
+        dev = None
+        if len(mics) == 1:
+            dev = mics[0].get("index")
+        elif len(mics) > 1:
+            dev = next((m.get("index") for m in mics if m.get("default")), mics[0].get("index"))
+        start = _json_post("/api/stt/live/start", {"seconds": 15, "device": dev})
+        sid = start.get("sessionId")
+        if not sid:
+            _hud_set(hud, state_lbl, "mic: could not start", mic=True)
+            _hud_finish_mic(hud, mic_btn, st)
+            return
+        st["sid"] = sid
+        final = ""
+        deadline = time.time() + 20
+        while st.get("mic") and time.time() < deadline:
+            time.sleep(0.8)
+            state = _json_get(f"/api/stt/live/status/{sid}")
+            if state.get("error"):
+                break
+            if state.get("done"):
+                final = (state.get("final") or "").strip()
+                break
+        _json_post(f"/api/stt/live/stop/{sid}", {})
+        st.pop("sid", None)
+        _hud_finish_mic(hud, mic_btn, st)
+        if final:
+            _hud_set(hud, state_lbl, "heard: " + final[:80], mic=True)
+            _hud_run_reply(hud, state_lbl, final)
+        else:
+            _hud_set(hud, state_lbl, "status: idle \u2014 no speech detected")
+    threading.Thread(target=work, daemon=True).start()
+
+
+def _hud_stop_speech(hud, state_lbl):
+    def work():
+        _json_post("/api/speak/stop", {})
+        _hud_set(hud, state_lbl, "status: idle")
+    threading.Thread(target=work, daemon=True).start()
+
+
+def _drain_uiq(root, hud, state_lbl, mic_btn):
+    try:
+        uiq = hud.get("uiq") or []
+        hud["uiq"] = []
+        for item in uiq:
+            if not item:
+                continue
+            if item[0] == "set":
+                try:
+                    state_lbl.config(text=item[1], fg=item[2])
+                except Exception:
+                    pass
+            elif item[0] == "btn":
+                try:
+                    mic_btn.config(text=item[1])
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    try:
+        if hud.get("win") is not None and hud["win"].winfo_exists():
+            root.after(120, _drain_uiq, root, hud, state_lbl, mic_btn)
+    except Exception:
+        pass
+
+
+def _hud_wake(wake_btn):
+    set_wake_word(not wake_word_running())
+
+    def apply():
+        try:
+            if wake_btn.winfo_exists():
+                wake_btn.config(text="Wake Word: OFF" if not wake_word_running() else "Wake Word: ON")
+        except Exception:
+            pass
+
+    try:
+        wake_btn.after(0, apply)
+    except Exception:
+        pass
+
+
 def _toggle_hud(root, hud):
     if hud.get("win") is not None and hud["win"].winfo_exists():
         hud["win"].destroy()
@@ -234,89 +404,116 @@ def _toggle_hud(root, hud):
     win.configure(bg="#0b0e14")
     sw = win.winfo_screenwidth()
     sh = win.winfo_screenheight()
-    W, H = 330, 300
-    win.geometry(f"{W}x{H}+{sw - W - 24}+{sh - H - 80}")
+    W, H = 372, 424
+    win.geometry(f"{W}x{H}+{sw - W - 24}+{sh - H - 96}")
     hud["win"] = win
     hud["visible"] = True
 
+    bg = "#0b0e14"
+    panel = "#101624"
     accent = "#f5c242"
     cyan = "#00d4ff"
+    txt = "#e6e9ef"
+    dim = "#8a93a3"
 
-    tk.Label(win, text="J.E.N.N.Y", bg="#0b0e14", fg=accent,
-             font=("Segoe UI", 13, "bold")).pack(pady=(12, 2))
-    tk.Label(win, text="Neural AI Assistant", bg="#0b0e14", fg="#8a93a3",
-             font=("Segoe UI", 8)).pack()
+    header = tk.Frame(win, bg=bg)
+    header.pack(fill="x", padx=16, pady=(14, 2))
+    tk.Label(header, text="J.E.N.N.Y", bg=bg, fg=accent,
+             font=("Segoe UI", 14, "bold")).pack(side="left")
+    mode_lbl = tk.Label(header, text="MODE: --", bg=panel, fg=cyan,
+                        font=("Segoe UI", 8, "bold"), padx=8, pady=2)
+    mode_lbl.pack(side="right")
 
-    mode_lbl = tk.Label(win, text="MODE: --", bg="#0b0e14", fg=cyan,
-                        font=("Consolas", 10))
-    mode_lbl.pack(pady=(10, 2))
-    state_lbl = tk.Label(win, text="status: idle", bg="#0b0e14", fg="#6f7888",
-                         font=("Consolas", 9))
-    state_lbl.pack()
+    tk.Label(win, text="Neural AI Assistant \u2014 taskbar companion",
+             bg=bg, fg=dim, font=("Segoe UI", 8)).pack(anchor="w", padx=16)
 
-    def buttons(row):
-        return tk.Frame(row, bg="#0b0e14")
+    state_lbl = tk.Label(win, text="status: idle", bg=bg, fg=dim, anchor="w",
+                         justify="left", wraplength=340, font=("Consolas", 9))
+    state_lbl.pack(fill="x", padx=16, pady=(8, 2))
 
-    bf = buttons(win)
-    bf.pack(pady=12)
-    btns = [
-        ("Modes", lambda: webbrowser.open(f"{SERVER_URL}/modes.html")),
-        ("HUD", lambda: webbrowser.open(f"{SERVER_URL}/mini.html")),
-        ("Dash", lambda: webbrowser.open(f"{SERVER_URL}/")),
-    ]
-    for text, cb in btns:
-        b = tk.Button(bf, text=text, command=cb, bg="#131a26", fg="#e6e9ef",
+    entry = tk.Entry(win, bg=panel, fg=txt, insertbackground=txt, relief="flat",
+                     font=("Segoe UI", 11))
+    entry.pack(fill="x", padx=16, pady=(12, 8), ipady=7)
+
+    row = tk.Frame(win, bg=bg)
+    row.pack(fill="x", padx=16)
+    send_btn = tk.Button(row, text="Send", command=lambda: _hud_text(hud, entry, state_lbl),
+                         bg=cyan, fg="#04121a", activebackground="#7fe8ff",
+                         relief="flat", bd=0, padx=16, pady=8, font=("Segoe UI", 10, "bold"))
+    send_btn.pack(side="left", padx=(0, 6))
+    mic_btn = tk.Button(row, text="\u00a0 Mic", command=lambda: _hud_mic(hud, mic_btn, state_lbl),
+                        bg=panel, fg=txt, activebackground=bg, relief="flat", bd=0,
+                        padx=16, pady=8, font=("Segoe UI", 10, "bold"))
+    mic_btn.pack(side="left", padx=6)
+    stop_btn = tk.Button(row, text="Stop", command=lambda: _hud_stop_speech(hud, state_lbl),
+                         bg="#3a1015", fg="#ff9d9d", activebackground="#5a1a22",
+                         relief="flat", bd=0, padx=14, pady=8, font=("Segoe UI", 10, "bold"))
+    stop_btn.pack(side="left", padx=6)
+    voice_btn = tk.Button(row, text="Voice", command=lambda: threading.Thread(target=_speak_test, daemon=True).start(),
+                          bg=panel, fg=txt, activebackground=bg, relief="flat", bd=0,
+                          padx=14, pady=8, font=("Segoe UI", 10, "bold"))
+    voice_btn.pack(side="left", padx=6)
+
+    nav = tk.Frame(win, bg=bg)
+    nav.pack(fill="x", padx=16, pady=(10, 0))
+    for text, cb in [("Modes", lambda: webbrowser.open(f"{SERVER_URL}/modes.html")),
+                     ("HUD", lambda: webbrowser.open(f"{SERVER_URL}/mini.html")),
+                     ("Dash", lambda: webbrowser.open(f"{SERVER_URL}/"))]:
+        b = tk.Button(nav, text=text, command=cb, bg=panel, fg=txt,
                       activebackground="#1c2636", activeforeground="#ffffff",
-                      relief="flat", bd=0, padx=14, pady=6, width=6,
-                      font=("Segoe UI", 9))
+                      relief="flat", bd=0, padx=16, pady=6, font=("Segoe UI", 9))
         b.pack(side="left", padx=5)
 
-    wake_btn = tk.Button(win, bg="#131a26", fg="white", relief="flat", bd=0,
+    wake_btn = tk.Button(win, bg=panel, fg="white", relief="flat", bd=0,
                          padx=10, pady=6, font=("Segoe UI", 9),
                          activebackground="#1c2636")
     wake_btn.config(text="Wake Word: OFF" if not wake_word_running() else "Wake Word: ON",
-                    command=lambda: (_refresh_hud(root, hud, wake_btn, mode_lbl, state_lbl)))
-    wake_btn.pack(pady=4)
+                    command=lambda: _hud_wake(wake_btn))
+    wake_btn.pack(pady=(8, 2))
 
     quit_btn = tk.Button(win, text="Quit", command=lambda: queue("quit"),
                          bg="#3a1015", fg="#ff9d9d", relief="flat", bd=0,
                          padx=10, pady=4, font=("Segoe UI", 9))
-    quit_btn.pack(pady=(0, 8))
+    quit_btn.pack(pady=(2, 8))
 
-    ctx = {"mode": "--", "speaking": False, "last": ""}
+    entry.bind("<Return>", lambda e: _hud_text(hud, entry, state_lbl))
+    entry.focus_set()
+
+    hud["state"] = {"mode": "--", "speaking": False, "mic": False}
+    hud["uiq"] = []
+    root.after(120, _drain_uiq, root, hud, state_lbl, mic_btn)
 
     def refresh():
         if hud.get("win") is None or not hud["win"].winfo_exists():
             return
-        try:
-            import json
-            import urllib.request
-            with urllib.request.urlopen(f"{SERVER_URL}/api/voice-info", timeout=2) as r:
-                d = json.loads(r.read().decode())
-                ctx["mode"] = d.get("mode", "--")
+        st = hud.setdefault("state", {})
+        if time.time() < st.get("pause", 0) or st.get("mic"):
+            root.after(1500, refresh)
+            return
+        d = _json_get("/api/voice-info")
+        mode = d.get("mode", "--")
+        if mode != st["mode"]:
+            st["mode"] = mode
             try:
-                with urllib.request.urlopen(f"{SERVER_URL}/api/speak/status", timeout=2) as r:
-                    s = json.loads(r.read().decode())
-                    ctx["speaking"] = bool(s.get("speaking"))
-                    ctx["last"] = (s.get("last") or "")[:60]
+                mode_lbl.config(text=f"MODE: {mode.upper()}")
             except Exception:
-                ctx["speaking"] = False
+                pass
+        s = _json_get("/api/speak/status")
+        st["speaking"] = bool(s.get("speaking"))
+        try:
+            if st["speaking"]:
+                state_lbl.config(text="status: SPEAKING", fg="#7dffa1")
+            else:
+                state_lbl.config(text="status: idle \u2014 say 'Hey Jenny' or type below", fg=dim)
         except Exception:
             pass
-        mode_lbl.config(text=f"MODE: {ctx['mode'].upper()}")
-        if ctx["speaking"]:
-            state_lbl.config(text=f"status: SPEAKING — \"{ctx['last']}\"", fg="#7dffa1")
-        else:
-            state_lbl.config(text="status: idle — say 'Hey Jenny' or use the tray", fg="#6f7888")
-        wake_btn.config(text="Wake Word: OFF" if not wake_word_running() else "Wake Word: ON")
+        try:
+            wake_btn.config(text="Wake Word: OFF" if not wake_word_running() else "Wake Word: ON")
+        except Exception:
+            pass
         root.after(1500, refresh)
 
     refresh()
-
-
-def _refresh_hud(root, hud, wake_btn, mode_lbl, state_lbl):
-    set_wake_word(not wake_word_running())
-    _refresh_tray_menu(_icon)
 
 
 def _poll_queue(root, hud):
