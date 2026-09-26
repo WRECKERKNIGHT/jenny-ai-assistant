@@ -202,6 +202,92 @@ def fetch_emails(count: int = 8) -> dict:
     return {"success": False, "emails": [], "message": msg_imap or msg_out}
 
 
+# =====================================================================
+# MAIL STATUS - unread counts + latest senders, no window switching
+# =====================================================================
+
+def _status_imap() -> dict | None:
+    keys = _load_keys()
+    user = str(keys.get("email_user") or "").strip()
+    pwd = str(keys.get("email_pass") or "").strip()
+    if not user or not pwd:
+        return None
+    host = str(keys.get("email_imap_host") or "imap.gmail.com").strip()
+    try:
+        cn = imaplib.IMAP4_SSL(host, int(keys.get("email_imap_port") or 993))
+        cn.login(user, pwd)
+        cn.select("INBOX")
+        status, unseen = cn.uid("search", None, "UNSEEN")
+        unread = len((unseen[0] or b"").split())
+        status, latest = cn.uid("search", None, "ALL")
+        uids = (latest[0] or b"").split()[-5:]
+        senders: list[str] = []
+        for uid in reversed(uids):
+            status, msg = cn.uid("fetch", uid, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT)])")
+            for part in msg or []:
+                if isinstance(part, tuple) and part[1]:
+                    head = email.message_from_bytes(part[1])
+                    senders.append(_clean_addr(head.get("From", "")))
+                    break
+        cn.logout()
+        return {"success": True, "source": "imap", "unread": unread,
+                "latest": senders[-3:][::-1], "account": user.split("@")[0]}
+    except Exception as e:
+        return {"success": False, "source": "imap", "unread": None,
+                "latest": [], "message": _safe_err(e)}
+
+
+def _status_outlook() -> dict | None:
+    try:
+        import pythoncom
+        import win32com.client
+    except Exception:
+        return None
+    try:
+        pythoncom.CoInitialize()
+        outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
+        inbox = outlook.GetDefaultFolder(6)  # olFolderInbox
+        unread = 0
+        try:
+            unread = int(inbox.UnReadCount)
+        except Exception:
+            pass
+        items = list(inbox.Items)[:5]
+        senders = [str(getattr(it, "SenderName", "") or "").strip() for it in items]
+        account = ""
+        try:
+            account = str(outlook.CurrentUser.Address.split("@")[0])
+        except Exception:
+            pass
+        return {"success": True, "source": "outlook", "unread": unread,
+                "latest": [s for s in senders if s][-3:][::-1], "account": account}
+    except Exception as e:
+        return {"success": False, "source": "outlook", "unread": None,
+                "latest": [], "message": _safe_err(e)}
+    finally:
+        try:
+            import pythoncom
+            pythoncom.CoUninitialize()
+        except Exception:
+            pass
+
+
+def mail_status() -> dict:
+    """Real inbox status: unread count + who wrote last. Never invents numbers."""
+    for probe in (_status_imap, _status_outlook):
+        st = probe()
+        if st and st.get("success"):
+            return st
+    detail = next((s.get("message") for s in (_status_imap(), _status_outlook())
+                   if s and s.get("message")), "")
+    # -2147221005 is COM's "class not registered": Outlook simply isn't installed.
+    if detail and ("-2147221005" in detail or "Invalid class string" in detail):
+        detail = "Outlook isn't installed on this PC"
+    return {"success": False, "unread": None, "latest": [], "account": "",
+            "message": detail or "No mail backend available (add email_user / email_pass to data/keys.json, or open Outlook once)."}
+
+
+
 if __name__ == "__main__":
     import json as _j
     print(_j.dumps(fetch_emails(), indent=2))
