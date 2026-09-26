@@ -146,6 +146,8 @@ function startParticles() {
   }
   let frameCount = 0;
   function anim() {
+    requestAnimationFrame(anim);
+    if (document.hidden) return;
     frameCount++;
     if (frameCount % 2 === 0) {
       const w = window.innerWidth;
@@ -157,7 +159,6 @@ function startParticles() {
         p.el.style.transform = `translate3d(${p.x}px, ${p.y}px, 0)`;
       });
     }
-    requestAnimationFrame(anim);
   }
   anim();
 }
@@ -220,29 +221,52 @@ function initTwinklingStars(canvasId, starColor = 'rgba(255, 255, 255,') {
     });
   }
 
+  const parentEl = canvas.parentElement;
   let rafId = null;
-  function draw() {
-    const display = window.getComputedStyle(canvas.parentElement).display;
-    if (display === 'none' || canvas.parentElement.classList.contains('done')) {
-      rafId = requestAnimationFrame(draw);
+  let hop = false;
+  function steps() {
+    // Backgrounded, or the parent was torn down (boot-screen 'done'): stop the
+    // loop entirely (saves CPU/battery). main-stars' parent is <body>, so it
+    // stays live as dashboard ambience; boot-stars' parent is boot-screen,
+    // which gets 'done' and halts it.
+    if (document.hidden || (parentEl !== document.body && parentEl.classList.contains('done'))) {
+      rafId = null;
       return;
     }
+    // Alternating frames -> ~30 FPS, plenty for twinkle.
+    hop = !hop;
+    if (hop) { rafId = requestAnimationFrame(steps); return; }
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    stars.forEach(s => {
+    const w = canvas.width, h = canvas.height;
+    for (let i = 0; i < stars.length; i++) {
+      const s = stars[i];
       s.phase += s.speed;
       const alpha = 0.25 + Math.sin(s.phase) * 0.65;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
       ctx.fillStyle = `${starColor}${alpha})`;
-      ctx.fill();
-    });
-    rafId = requestAnimationFrame(draw);
+      if (s.size <= 1.2) {
+        // fillRect avoids per-star path allocation (fast on large canvases)
+        if (s.x < w && s.y < h) ctx.fillRect(s.x, s.y, 1, 1);
+      } else {
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    rafId = requestAnimationFrame(steps);
   }
-  draw();
+  function onVis() {
+    if (!document.hidden && !rafId && !parentEl.classList.contains('done')) {
+      rafId = requestAnimationFrame(steps);
+    }
+  }
+  document.addEventListener('visibilitychange', onVis);
+  rafId = requestAnimationFrame(steps);
   const starfield = {
     destroy: () => {
       window.removeEventListener('resize', resize);
+      document.removeEventListener('visibilitychange', onVis);
       if (rafId) cancelAnimationFrame(rafId);
+      rafId = null;
     }
   };
   activeStarfields.push(starfield);
@@ -281,6 +305,10 @@ function initDataStreams() {
     const bs = document.getElementById('boot-screen');
     if (!bs || bs.classList.contains('done')) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+    if (document.hidden) {
+      bootStreamsRafId = requestAnimationFrame(draw);
       return;
     }
     ctx.fillStyle = 'rgba(0,0,0,0.05)';
@@ -414,9 +442,15 @@ async function runBoot() {
 }
 
 async function greetAfterBoot() {
-  const msgs = document.getElementById('msgs');
-  const isFresh = msgs && msgs.children.length === 0;
-  if (!isFresh) return;
+  // Greetings are gated behind an actual mode selection: modes.html sets the
+  // jenny_greet_after_mode flag right before redirecting to the dashboard, so
+  // the intro video + mode pick ALWAYS finish BEFORE any greeting plays — and
+  // plain app launches never speak a greeting out of order. Restored chat
+  // history must NOT suppress it either: the flag alone is the gate, otherwise
+  // the greeting silently never happens after a fresh mode selection.
+  const greetFlag = localStorage.getItem('jenny_greet_after_mode');
+  if (!greetFlag) return;
+  localStorage.removeItem('jenny_greet_after_mode');
   let text = getGreeting();
   let speech = text;
   let serverSpoke = false;
@@ -476,15 +510,18 @@ function startHoloShimmer() {
   const r = glow.querySelector('.rgb-r');
   const g = glow.querySelector('.rgb-g');
   const b = glow.querySelector('.rgb-b');
-  let t = 0;
-  function animate() {
+  let t = 0, last = 0;
+  function animate(now) {
+    requestAnimationFrame(animate);
+    if (document.hidden) return;
+    if (now - last < 33) return; // ~30fps; still GPU-transform-cheap, no paint/layout
+    last = now;
     t += 0.015;
     r.style.transform = `translate(${Math.sin(t*1.1)*6}px, ${Math.cos(t*0.9)*4}px)`;
     g.style.transform = `translate(${Math.sin(t*0.7+2)*5}px, ${-Math.cos(t*0.9)*4}px)`;
     b.style.transform = `translate(${-Math.sin(t*1.1)*6}px, ${Math.cos(t*1.3+1)*5}px)`;
-    requestAnimationFrame(animate);
   }
-  animate();
+  requestAnimationFrame(animate);
 }
 
 // ================================================
@@ -660,12 +697,18 @@ function startOrb() {
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
   const cx = W / 2, cy = H / 2;
+  let rafId = null;
   let lastDrawTime = 0;
   let orbStartTime = performance.now();
+  function onOrbVis() {
+    if (!document.hidden && !rafId) rafId = requestAnimationFrame(draw);
+  }
+  document.addEventListener('visibilitychange', onOrbVis);
   function draw() {
-    requestAnimationFrame(draw);
     const now = performance.now();
-    if (now - lastDrawTime < 33) return; // Throttled to ~30 FPS
+    rafId = null;
+    if (document.hidden) return; // pause loop when backgrounded
+    if (now - lastDrawTime < 33) { rafId = requestAnimationFrame(draw); return; } // ~30 FPS cap
     lastDrawTime = now;
 
     ctx.clearRect(0, 0, W, H);
@@ -725,8 +768,9 @@ function startOrb() {
         ctx.fill();
       }
     }
+  rafId = requestAnimationFrame(draw);
   }
-  draw();
+  onOrbVis();
 }
 
 function setOrbState(state) {
@@ -1014,9 +1058,19 @@ function dismissPermissions() {
 (function initGlow() {
   const glow = document.getElementById('mouse-glow');
   if (!glow) return;
-  let mx = 0, my = 0, gx = 0, gy = 0;
-  document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
-  (function anim() { gx += (mx - gx) * 0.06; gy += (my - gy) * 0.06; glow.style.left = gx + 'px'; glow.style.top = gy + 'px'; requestAnimationFrame(anim); })();
+  let mx = 0, my = 0, gx = 0, gy = 0, raf = null, last = 0;
+  document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; }, { passive: true });
+  // Transform-based, throttled to ~30fps: never touch left/top (layout thrash).
+  function anim() {
+    raf = requestAnimationFrame(anim);
+    const now = performance.now();
+    if (now - last < 33) return;
+    last = now;
+    if (document.hidden) return;
+    gx += (mx - gx) * 0.06; gy += (my - gy) * 0.06;
+    glow.style.transform = `translate3d(${gx - glow.offsetWidth / 2}px, ${gy - glow.offsetHeight / 2}px, 0)`;
+  }
+  anim();
 })();
 
 // ================================================
@@ -3074,6 +3128,75 @@ let currentPendingDevice = null;
 let currentLinkedDeviceId = null;
 let phoneLinkPollInterval = null;
 
+function setPhoneQrUrl(targetUrl) {
+  const qrImg = document.getElementById('phone-qr-img');
+  if (!qrImg) return;
+  const data = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=d08400&bgcolor=ffffff&data=${encodeURIComponent(targetUrl)}`;
+  qrImg.src = data;
+  qrImg.onerror = () => {
+    qrImg.style.display = 'none';
+    const wrap = qrImg.closest('.qr-container-box') || qrImg.parentElement;
+    wrap.innerHTML = '<div class="qr-offline-fallback"><i class="fa-solid fa-mobile-screen-button"></i><div class="qr-offline-title">OPEN ON YOUR PHONE</div><div class="qr-offline-url">' + targetUrl + '</div></div>';
+  };
+}
+
+async function remoteLinkStatus() {
+  try {
+    const r = await fetch('/api/remote/tunnel/status');
+    const d = await r.json();
+    const btnTxt = document.getElementById('remote-link-btn-txt');
+    const statusEl = document.getElementById('remote-link-status');
+    const urlEl = document.getElementById('remote-link-url');
+    const togg = document.getElementById('remote-link-toggle');
+    const urlPub = document.getElementById('phone-url-pub');
+    const pubRow = document.getElementById('phone-url-pub-row');
+    if (d && d.running && d.url) {
+      const mobileUrl = `${d.url}/mobile.html`;
+      if (btnTxt) btnTxt.textContent = 'TURN OFF LINK';
+      if (statusEl) { statusEl.textContent = 'ACTIVE'; statusEl.style.color = '#7dffa1'; }
+      if (urlEl) urlEl.textContent = d.url;
+      if (togg) togg.classList.add('active');
+      if (urlPub) urlPub.textContent = mobileUrl;
+      if (pubRow) pubRow.style.opacity = '1';
+      setPhoneQrUrl(`${d.url}/mobile.html`);
+    } else if (d && d.busy) {
+      if (btnTxt) btnTxt.textContent = 'CONNECTING...';
+      if (statusEl) { statusEl.textContent = 'CONNECTING'; statusEl.style.color = '#ffd27a'; }
+      if (togg) togg.classList.add('busy');
+    } else {
+      if (btnTxt) btnTxt.textContent = 'CREATE LINK';
+      if (statusEl) { statusEl.textContent = d && d.last_url ? 'UNLINKED' : 'STANDBY'; statusEl.style.color = ''; }
+      const last = (d && d.last_url) || '&mdash;';
+      if (urlEl) urlEl.innerHTML = last;
+      if (togg) { togg.classList.remove('active'); togg.classList.remove('busy'); }
+      if (urlPub && String(urlPub.textContent).includes('trycloudflare')) {
+        urlPub.textContent = 'LAN only — use Local URL';
+        if (pubRow) pubRow.style.opacity = '0.5';
+      }
+    }
+  } catch (e) {
+    /* desktop browser offline — keep last state */
+  }
+}
+
+async function toggleRemoteLink() {
+  try {
+    const r = await fetch('/api/remote/tunnel/status');
+    const d = await r.json();
+    if (d && d.running) {
+      await fetch('/api/remote/tunnel/stop', { method: 'POST' });
+      toast('Public link turned off. Phone can still connect on Local Wi-Fi.', 'ok');
+    } else {
+      await fetch('/api/remote/tunnel/start', { method: 'POST' });
+      toast('Creating public link — getting your secure URL...', 'info');
+    }
+    remoteLinkStatus();
+    setTimeout(remoteLinkStatus, 3000);
+  } catch (e) {
+    toast('Remote link error — is the assistant server running?', 'err');
+  }
+}
+
 function copyTextFromElement(elementId) {
   const el = document.getElementById(elementId);
   if (!el) return;
@@ -3114,25 +3237,17 @@ async function initPhoneLinkManager() {
     }
 
     const targetUrl = locUrl;
-    if (qrImg) {
-      qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=d08400&bgcolor=ffffff&data=${encodeURIComponent(targetUrl)}`;
-      qrImg.onerror = () => {
-        qrImg.style.display = 'none';
-        const wrap = qrImg.closest('.qr-container-box') || qrImg.parentElement;
-        wrap.innerHTML = '<div class="qr-offline-fallback"><i class="fa-solid fa-mobile-screen-button"></i><div class="qr-offline-title">OPEN ON YOUR PHONE</div><div class="qr-offline-url">' + locUrl + '</div></div>';
-      };
-    }
+    setPhoneQrUrl(targetUrl);
   } catch (e) {
     console.error('[PhoneLink] Failed to load remote URLs', e);
     if (urlPub) urlPub.textContent = 'LAN only — use Local URL';
     if (urlLoc) urlLoc.textContent = locUrl;
-    if (qrImg) {
-      qrImg.style.display = 'none';
-      const wrap = qrImg.closest('.qr-container-box') || qrImg.parentElement;
-      wrap.innerHTML = '<div class="qr-offline-fallback"><i class="fa-solid fa-mobile-screen-button"></i><div class="qr-offline-title">OPEN ON YOUR PHONE</div><div class="qr-offline-url">' + locUrl + '</div></div>';
-    }
+    setPhoneQrUrl(locUrl);
     toast('Local URL ready — open it on your phone.', 'info');
   }
+
+  setInterval(remoteLinkStatus, 6000);
+  remoteLinkStatus();
 
   phoneLinkPollInterval = setInterval(pollDevices, 1500);
   pollDevices();
@@ -3748,6 +3863,48 @@ function initFridayDashboard() {
   }
 }
 
+let fdMuted = false;
+
+function refreshMuteBtn() {
+  const btn = document.getElementById('fd-ctrl-mute');
+  if (!btn) return;
+  const icon = btn.querySelector('i');
+  const label = btn.querySelector('span');
+  if (fdMuted) {
+    if (icon) icon.className = 'fa-solid fa-volume-xmark';
+    if (label) label.textContent = 'UNMUTE';
+    btn.classList.add('fd-ctrl-muted');
+  } else {
+    if (icon) icon.className = 'fa-solid fa-volume-high';
+    if (label) label.textContent = 'MUTE';
+    btn.classList.remove('fd-ctrl-muted');
+  }
+}
+
+async function fridayControl(btn, action, value) {
+  if (action === 'mute-toggle') {
+    fdMuted = !fdMuted;
+    action = fdMuted ? 'mute' : 'unmute';
+    refreshMuteBtn();
+  }
+  if (btn) {
+    btn.style.transform = 'scale(0.92)';
+    setTimeout(() => { if (btn) btn.style.transform = ''; }, 130);
+  }
+  try {
+    const r = await fetch('/api/control', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, value: value ?? '' }),
+    });
+    const d = await r.json();
+    const msg = (d && (d.message || d.error)) ? String(d.message || d.error) : action;
+    if (d && d.success) toast(msg.toUpperCase(), 'ok');
+    else toast(msg.toUpperCase(), 'err');
+  } catch (e) {
+    toast('CONTROL FAILED', 'err');
+  }
+}
+
 async function refreshFridayCards() {
   try {
     const [sysRes, briefRes] = await Promise.all([
@@ -3857,26 +4014,129 @@ async function loadJarvisAgency() {
     const b = d.briefing || {};
     if (b.agency && b.agency.online) {
       const rows = [
-        { v: b.agency.agents_online ?? '--', l: 'Agents Online', s: 'Live' },
-        { v: b.agency.agents_working ?? '--', l: 'Working', s: 'Now' },
-        { v: b.agency.leads_today ?? '--', l: 'Leads Today', s: 'Today' },
-        { v: b.agency.total_leads ?? '--', l: 'Total Leads', s: 'All time' },
-        { v: b.agency.missions_running ?? '--', l: 'Missions', s: 'Active' },
-        { v: b.agency.meetings ?? 0, l: 'Meetings', s: 'Booked' }
+        { v: b.agency.agents_online ?? '--', l: 'Agents Online', s: 'Live', cmd: 'agency status' },
+        { v: b.agency.agents_working ?? '--', l: 'Working', s: 'Now', cmd: 'agency status' },
+        { v: b.agency.leads_today ?? '--', l: 'Leads Today', s: 'Today', cmd: 'agency briefing' },
+        { v: b.agency.total_leads ?? '--', l: 'Total Leads', s: 'All time', cmd: 'agency status' },
+        { v: b.agency.missions_running ?? '--', l: 'Missions', s: 'Active', cmd: 'agency new mission' },
+        { v: b.agency.meetings ?? 0, l: 'Meetings', s: 'Booked', cmd: 'agency briefing' }
       ];
-      opsEl.innerHTML = rows.map(r => `<div class="jd-op"><div class="jo-val">${r.v}</div><div class="jo-lbl">${r.l}</div><div class="jo-sub">${r.s}</div></div>`).join('');
+      opsEl.innerHTML = rows.map(r => `
+        <div class="jd-op" onclick="openAgencyMax()" title="Maximize Agency OS">
+          <button class="jo-expand" onclick="event.stopPropagation();openAgencyMax()" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+          <button class="jo-chat" onclick="event.stopPropagation();agencyChat('${r.cmd}')" title="Ask JENNY"><i class="fa-solid fa-comment-dots"></i></button>
+          <div class="jo-val">${r.v}</div><div class="jo-lbl">${r.l}</div><div class="jo-sub">${r.s}</div>
+        </div>`).join('');
     } else {
       const sys = b.system || '--';
       opsEl.innerHTML = [
-        { v: b.vaultCount ?? 0, l: 'Memories', s: 'Vault' },
-        { v: b.battery || '--', l: 'Battery', s: 'Power' },
-        { v: sys, l: 'Load', s: 'CPU / RAM' }
-      ].map(r => `<div class="jd-op"><div class="jo-val">${r.v}</div><div class="jo-lbl">${r.l}</div><div class="jo-sub">${r.s}</div></div>`).join('');
+        { v: b.vaultCount ?? 0, l: 'Memories', s: 'Vault', cmd: 'vault status' },
+        { v: b.battery || '--', l: 'Battery', s: 'Power', cmd: 'system status' },
+        { v: sys, l: 'Load', s: 'CPU / RAM', cmd: 'system status' }
+      ].map(r => `
+        <div class="jd-op" onclick="openAgencyMax()" title="Open Agency OS">
+          <button class="jo-expand" onclick="event.stopPropagation();openAgencyMax()" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+          <button class="jo-chat" onclick="event.stopPropagation();agencyChat('${r.cmd}')" title="Ask JENNY"><i class="fa-solid fa-comment-dots"></i></button>
+          <div class="jo-val">${r.v}</div><div class="jo-lbl">${r.l}</div><div class="jo-sub">${r.s}</div>
+        </div>`).join('');
     }
   } catch(e) {
-    opsEl.innerHTML = '<div class="jd-empty"><i class="fa-solid fa-triangle-exclamation"></i>Briefing unavailable</div>';
+    opsEl.innerHTML = '<div class="jd-empty" onclick="openAgencyMax()"><i class="fa-solid fa-triangle-exclamation"></i>Briefing unavailable — tap to open Agency OS</div>';
   }
 }
+
+let agencyMaxTimer = null;
+
+function agencyChat(cmd) {
+  closeAgencyMax();
+  if (typeof sendMessage === 'function') {
+    sendMessage(cmd);
+    toast(`Command sent to JENNY: ${cmd.toUpperCase()}`, 'info');
+  }
+}
+
+function openAgencyMax() {
+  const ov = document.getElementById('agency-max-overlay');
+  if (!ov) return;
+  ov.classList.remove('hidden');
+  ov.style.display = 'flex';
+  pollAgencyMax();
+  if (agencyMaxTimer) clearInterval(agencyMaxTimer);
+  agencyMaxTimer = setInterval(pollAgencyMax, 4000);
+}
+
+function closeAgencyMax() {
+  const ov = document.getElementById('agency-max-overlay');
+  if (ov) { ov.classList.add('hidden'); ov.style.display = 'none'; }
+  if (agencyMaxTimer) { clearInterval(agencyMaxTimer); agencyMaxTimer = null; }
+}
+
+async function pollAgencyMax() {
+  const body = document.getElementById('agency-max-body');
+  if (!body) return;
+  if (document.getElementById('agency-max-overlay').classList.contains('hidden')) return;
+  try {
+    const res = await fetch('/api/agency', { cache: 'no-store' });
+    const d = await res.json();
+    if (!d.online || !d.summary) {
+      body.innerHTML = `<div class="agency-max-offline">
+        <i class="fa-solid fa-building-circle-xmark"></i>
+        <div>AGENCY OS OFFLINE</div>
+        <div class="am-off-sub">No server on port 3200. Start the Agency OS app, or set <b>agency_url</b> in Settings.</div>
+        <button class="agency-chip" onclick="agencyChat('agency status')"><i class="fa-solid fa-comment-dots"></i>ASK JENNY IN CHAT</button>
+      </div>`;
+      return;
+    }
+    const s = d.summary;
+    const byStage = s.by_stage || {};
+    const stageTotal = Object.values(byStage).reduce((a, b) => a + (Number(b) || 0), 0) || 1;
+    const stageRows = Object.entries(byStage).map(([k, v]) => {
+      const pct = Math.round((Number(v) / stageTotal) * 100);
+      return `<div class="am-stage-row"><div class="am-stage-lbl">${k.replace(/_/g, ' ').toUpperCase()}</div>
+        <div class="am-stage-track"><div class="am-stage-fill" style="width:${pct}%"></div></div>
+        <div class="am-stage-val">${v} · ${pct}%</div></div>`;
+    }).join('');
+
+    const stat = (icon, val, lbl) => `<div class="am-stat"><div class="am-stat-icon"><i class="fa-solid ${icon}"></i></div><div class="am-stat-val">${val}</div><div class="am-stat-lbl">${lbl}</div></div>`;
+
+    body.innerHTML = `
+      <div class="am-grid">
+        ${stat('fa-robot', s.agents_online ?? '--', 'Agents Online')}
+        ${stat('fa-helmet-safety', s.agents_working ?? '--', 'Working Now')}
+        ${stat('fa-triangle-exclamation', s.agents_error ?? 0, 'Agents Error')}
+        ${stat('fa-bullseye', s.total_leads ?? 0, 'Total Leads')}
+        ${stat('fa-bolt', s.leads_today ?? 0, 'Leads Today')}
+        ${stat('fa-thumbs-up', s.interested ?? 0, 'Interested')}
+        ${stat('fa-question', s.curious ?? 0, 'Curious')}
+        ${stat('fa-xmark', s.not_interested ?? 0, 'Not Interested')}
+        ${stat('fa-calendar-check', s.meetings ?? 0, 'Meetings')}
+        ${stat('fa-reply', s.replies ?? 0, 'Replies')}
+        ${stat('fa-clock', s.pending_approval ?? 0, 'Pending Approval')}
+        ${stat('fa-paper-plane', s.sent_outreach ?? 0, 'Sent Outreach')}
+        ${stat('fa-rocket', s.missions_running ?? 0, 'Missions Running')}
+        ${stat('fa-school', s.institution_count ?? 0, 'Institutions')}
+      </div>
+      <div class="am-section-title"><i class="fa-solid fa-chart-simple"></i> PIPELINE STAGE BREAKDOWN</div>
+      <div class="am-stages">${stageRows || '<div class="am-no-pipe">No pipeline data yet.</div>'}</div>
+      ${(s.error_agents && s.error_agents.length)
+        ? `<div class="am-section-title"><i class="fa-solid fa-circle-exclamation"></i> AGENTS NEEDING ATTENTION</div><div class="am-errors">${s.error_agents.map(a => `<span class="am-err-chip">${a}</span>`).join('')}</div>`
+        : ''}
+    `;
+    const live = document.getElementById('agency-max-live');
+    if (live) {
+      live.innerHTML = '<span class="am-live-dot"></span>BRIEFING LIVE';
+      live.style.color = '';
+    }
+  } catch (e) {
+    body.innerHTML = `<div class="agency-max-offline"><i class="fa-solid fa-unlink"></i><div>CANNOT REACH AGENCY OS</div></div>`;
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !document.getElementById('agency-max-overlay').classList.contains('hidden')) {
+    closeAgencyMax();
+  }
+});
 
 async function refreshJarvisTelemetry() {
   try {
@@ -4372,7 +4632,15 @@ function initBootParticles() {
     });
   }
   
-  function draw() {
+  let lastDraw = 0;
+  let rafId = null;
+  function draw(now) {
+    rafId = null;
+    const bs = document.getElementById('boot-screen');
+    if (!bs || bs.classList.contains('done')) return; // loop stops forever
+    if (document.hidden) return; // pause while backgrounded; onPVis resumes
+    if (now - lastDraw < 50) { rafId = requestAnimationFrame(draw); return; } // ~20fps is plenty for this ambience
+    lastDraw = now;
     ctx.clearRect(0, 0, w, h);
     particles.forEach(p => {
       p.x += p.vx; p.y += p.vy;
@@ -4399,8 +4667,14 @@ function initBootParticles() {
         }
       }
     }
-    requestAnimationFrame(draw);
+    rafId = requestAnimationFrame(draw);
   }
+  function onPVis() {
+    if (document.hidden) return;
+    const bs = document.getElementById('boot-screen');
+    if (bs && !bs.classList.contains('done') && !rafId) rafId = requestAnimationFrame(draw);
+  }
+  document.addEventListener('visibilitychange', onPVis);
   draw();
   
   window.addEventListener('resize', () => {
