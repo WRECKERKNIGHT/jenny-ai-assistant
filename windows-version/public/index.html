@@ -183,6 +183,20 @@
           </div>
         </div>
 
+        <div class="fd-section-label"><i class="fa-solid fa-sliders"></i> ONE-TOUCH CONTROLS</div>
+        <div class="fd-ctrl-grid" id="fd-ctrl-grid">
+          <button class="fd-ctrl-btn" onclick="fridayControl(this,'lock')" title="Lock the PC"><i class="fa-solid fa-lock"></i><span>LOCK</span></button>
+          <button class="fd-ctrl-btn" onclick="fridayControl(this,'screenshot')" title="Take a screenshot"><i class="fa-solid fa-camera"></i><span>SHOT</span></button>
+          <button class="fd-ctrl-btn" id="fd-ctrl-mute" onclick="fridayControl(this,'mute-toggle')" title="Mute / unmute"><i class="fa-solid fa-volume-high"></i><span>MUTE</span></button>
+          <button class="fd-ctrl-btn" onclick="fridayControl(this,'volume-down')" title="Volume down"><i class="fa-solid fa-volume-down"></i><span>VOL-</span></button>
+          <button class="fd-ctrl-btn" onclick="fridayControl(this,'volume-up')" title="Volume up"><i class="fa-solid fa-volume-high"></i><span>VOL+</span></button>
+          <button class="fd-ctrl-btn" onclick="fridayControl(this,'brightness','down')" title="Brightness down"><i class="fa-solid fa-circle-half-stroke"></i><span>BRI-</span></button>
+          <button class="fd-ctrl-btn" onclick="fridayControl(this,'brightness','up')" title="Brightness up"><i class="fa-solid fa-sun"></i><span>BRI+</span></button>
+          <button class="fd-ctrl-btn" onclick="fridayControl(this,'purge-ram')" title="Flush RAM"><i class="fa-solid fa-memory"></i><span>RAM</span></button>
+          <button class="fd-ctrl-btn" onclick="fridayControl(this,'minimize-all')" title="Show desktop"><i class="fa-solid fa-window-minimize"></i><span>DESK</span></button>
+          <button class="fd-ctrl-btn" onclick="fridayControl(this,'sleep')" title="Enter sleep"><i class="fa-solid fa-moon"></i><span>SLEEP</span></button>
+        </div>
+
         <div class="fd-section-label"><i class="fa-solid fa-list-check"></i> QUICK RUNS</div>
         <div class="fd-cmds" id="fd-cmds"></div>
       </div>
@@ -471,6 +485,26 @@
             <i class="fa-solid fa-arrow-up-right-from-square"></i> OPEN MOBILE SITE
           </button>
           <div class="phone-hint">Connect to the <b>same Wi-Fi</b> as this PC, open the local URL above on your phone, then approve this device on the next screen.</div>
+
+          <div class="remote-link-box" id="remote-link-box">
+            <div class="remote-link-head">
+              <span class="url-label">Persistent Secure Link:</span>
+              <span class="url-text" id="remote-link-status">Standby</span>
+            </div>
+            <div class="remote-link-row">
+              <button class="remote-link-btn" id="remote-link-toggle" onclick="toggleRemoteLink()">
+                <i class="fa-solid fa-earth-americas"></i>
+                <span id="remote-link-btn-txt">CREATE LINK</span>
+              </button>
+              <button class="copy-url-btn" onclick="copyTextFromElement('remote-link-url')" title="Copy public URL"><i class="fa-regular fa-copy"></i></button>
+            </div>
+            <div class="url-copy-row" id="remote-link-url-row">
+              <span class="url-text" id="remote-link-url" style="font-size:9px;word-break:break-all;">&mdash;</span>
+            </div>
+            <div class="phone-hint" style="margin-top:2px;">Creates a public https address readable from <b>any network</b> and unlocks the phone's own microphone &mdash; mobile browsers only allow mic use over secure https.</div>
+          </div>
+
+          <button class="phone-open-site-btn" onclick="openMobileSite()" title="Open the mobile site on this PC to test it">
           <div class="phone-status-pulse">
             <div class="pulse-ring"></div>
             <span id="phone-qr-status-txt">WAITING FOR INCOMING LINK...</span>
@@ -575,7 +609,7 @@
       </div>
     </aside>
 
-    <!-- FAR-LEFT PANEL — FRIDAY Voice/Orb Console (FRIDAY mode only).
+    <!-- FRIDAY VOICE/ORB CONSOLE — dedicated right-corner column (FRIDAY mode only).
          The orb, mic and dock get their OWN full-height column so they're never
          squeezed by dashboards. JARVIS keeps the full left panel for its
          executive command center and this column simply hides. -->
@@ -657,6 +691,39 @@
   </div>
 
   <div class="toasts" id="toasts"></div>
+
+  <!-- AGENCY OS — MAXIMIZED OPERATIONS VIEW (JARVIS) -->
+  <div class="agency-max-overlay hidden" id="agency-max-overlay" onclick="if(event.target===this)closeAgencyMax()">
+    <div class="agency-max-modal">
+      <div class="agency-max-head">
+        <div class="agency-max-title">
+          <div class="agency-max-mark"><i class="fa-solid fa-building-shield"></i></div>
+          <div>
+            <div class="agency-max-word">AGENCY OS</div>
+            <div class="agency-max-sub">OPERATIONS MAXIMIZED</div>
+          </div>
+        </div>
+        <div class="agency-max-right">
+          <span class="agency-max-live" id="agency-max-live"><span class="am-live-dot"></span>BRIEFING LIVE</span>
+          <button class="agency-max-close" onclick="closeAgencyMax()" title="Close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      </div>
+
+      <div class="agency-max-body" id="agency-max-body">
+        <div class="agency-max-loading"><div class="am-spinner"></div>CONNECTING TO AGENCY OS...</div>
+      </div>
+
+      <div class="agency-max-chat">
+        <div class="agency-max-chat-label"><i class="fa-solid fa-comment-dots"></i> OPERATE VIA CHAT — JENNY EXECUTES</div>
+        <div class="agency-max-chips">
+          <button class="agency-chip" onclick="agencyChat('agency status')"><i class="fa-solid fa-building"></i>STATUS</button>
+          <button class="agency-chip" onclick="agencyChat('agency new mission')"><i class="fa-solid fa-bullseye"></i>NEW MISSION</button>
+          <button class="agency-chip" onclick="agencyChat('agency outreach')"><i class="fa-solid fa-envelope-open-text"></i>OUTREACH</button>
+          <button class="agency-chip" onclick="agencyChat('agency briefing')"><i class="fa-solid fa-gauge-high"></i>BRIEFING</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>
