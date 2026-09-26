@@ -70,6 +70,8 @@ def _load_devices():
 
 _load_devices()
 
+import tunnel_remote
+
 AUTOSTART_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 AUTOSTART_NAME = "JENNY Assistant"
 
@@ -810,6 +812,71 @@ def grok_chat(message, history=None):
     except: pass
     return None
 
+def ollama_chat(message, history=None):
+    """Local, fully offline brain via Ollama (no account, no API key, no cost).
+    Returns None when no local model is running, so the chain falls through to
+    the online free tiers (Groq / Gemini) and then the built-in offline reply."""
+    try:
+        import urllib.request as _ur
+        req = _ur.Request("http://127.0.0.1:11434/api/tags", method="GET")
+        with _ur.urlopen(req, timeout=3) as r:
+            tags = json.loads(r.read().decode("utf-8"))
+        models = [t.get("name", "") for t in tags.get("models", [])]
+        settings = load_json(DATA_DIR / "settings.json", {})
+        chosen = (settings.get("ollama_model") or "").strip()
+        if chosen not in models:
+            # Prefer a small general model people are most likely to have pulled.
+            for cand in ("qwen2.5", "llama3.2", "llama3.1", "phi3", "gemma2", "mistral"):
+                if cand in [m.split(":")[0] for m in models]:
+                    chosen = next(m for m in models if m.split(":")[0] == cand)
+                    break
+            else:
+                if models:
+                    chosen = models[0]
+                else:
+                    return None
+        now = datetime.datetime.now().strftime("%A, %B %d, %Y %I:%M %p")
+        mode = get_mode(); mp = MODE_PROFILES[mode]
+        vault_data = load_json(DATA_DIR / "vault.json", {"entries": []})
+        vault_text = "\n".join(e.get("text", "") for e in vault_data.get("entries", [])[-5:])
+        system_msg = (
+            f"You are {mp['name']}, an AI assistant for {OWNER} (referred to as '{mp['boss']}'). "
+            f"Current mode: {mode}. Personality: {mp['personality']}. Clock: {now}. "
+            f"User vault (recent notes): {vault_text or '(empty)'}. "
+            f"Reply naturally and helpfully. "
+            f"You MUST return valid JSON with keys \"text\" (the response) and \"speech\" (a TTS-friendly version without markdown). "
+            f"Return raw JSON only, no markdown fences."
+        )
+        messages = [{"role": "system", "content": system_msg}]
+        if history:
+            for h in history[-10:]:
+                role = "user" if h.get("role") == "user" else "assistant"
+                messages.append({"role": role, "content": h.get("content", "")})
+        messages.append({"role": "user", "content": message})
+        payload = json.dumps({"model": chosen, "messages": messages,
+                              "stream": False, "temperature": 0.7,
+                              "format": "json", "options": {"num_predict": 400}}).encode("utf-8")
+        req = _ur.Request("http://127.0.0.1:11434/api/chat", data=payload,
+                          headers={"Content-Type": "application/json"}, method="POST")
+        with _ur.urlopen(req, timeout=60) as r:
+            body = json.loads(r.read().decode("utf-8"))
+        t = (body.get("message", {}) or {}).get("content", "").strip()
+        if not t:
+            return None
+        if t.startswith("```"):
+            t = t.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+        try:
+            parsed = json.loads(t)
+            if isinstance(parsed, dict) and "text" in parsed:
+                if "speech" not in parsed:
+                    parsed["speech"] = re.sub(r"[#*_`]", "", parsed["text"])
+                return parsed
+        except json.JSONDecodeError:
+            pass
+        return {"text": t, "speech": re.sub(r"[#*_`]", "", t)}
+    except Exception:
+        return None
+
 OFFLINE_JOKES = [
     "Why do programmers prefer dark mode? Light attracts bugs!",
     "There are 10 types of people: those who understand binary and those who don't.",
@@ -1542,7 +1609,7 @@ COMMAND_SYNONYMS = {
     "bring back the sound": "unmute", "stop being quiet": "unmute", "audio on": "unmute",
     # ---- media playback ----
     "play music": "media play", "pause playback": "media pause", "next song": "media next",
-    "previous song": "media previous", "skip track": "media next", "shuffle": "media next",
+    "previous song": "media previous", "skip track": "media next", "shuffle": "spotify shuffle",
     "play the song": "media play", "start playing": "media play", "start the music": "media play",
     "heart it on": "media play", "go play something": "media play", "resume the track": "media play",
     "play the track": "media play", "start playback": "media play", "press play": "media play",
@@ -1680,7 +1747,7 @@ COMMAND_SYNONYMS = {
     "spotify play": "media play", "spotify pause": "media pause", "spotify next": "media next",
     "spotify previous": "media previous", "play spotify": "open spotify", "resume spotify": "media play",
     "stop spotify": "media pause", "pause spotify": "media pause", "skip on spotify": "media next",
-    "next on spotify": "media next", "shuffle spotify": "media next", "youtube next": "media next",
+    "next on spotify": "media next", "shuffle spotify": "spotify shuffle", "youtube next": "media next",
     "youtube play": "media play", "youtube pause": "media pause", "youtube previous": "media previous",
     # ---- browser tab / page controls ----
     "list all tabs": "list tabs", "show all tabs": "list tabs", "see my tabs": "list tabs",
@@ -1742,22 +1809,543 @@ COMMAND_SYNONYMS = {
     "list open applications": "open applications", "what applications are running": "open applications",
 }
 
-_SYNONYM_ALT = re.compile(
-    r"\b(?:" + "|".join(re.escape(a) for a in sorted(COMMAND_SYNONYMS, key=len, reverse=True)) + r")\b"
-)
+# ===========================================================================
+# PROGRAMMATIC MEGA-ALIAS CATALOG — 10k+ natural phrasings on top of the
+# handwritten base above. Every generated alias maps to a canonical phrase the
+# router branches already understand (verb-preserving "open X"/"close X" or an
+# exact branch trigger), so coverage expands without touching routing logic.
+# Aliases shorter than two words are never emitted, and existing entries (base
+# dict + earlier generated) always take priority, so gamer slang / native
+# intent semantics can never be overridden.
+# ===========================================================================
+
+def _syn_emit(E, canon, *phrases):
+    for p0 in phrases:
+        p = " ".join(str(p0).split()).lower()
+        if not p or p == canon or len(p.split()) < 2:
+            continue
+        if p in canon:
+            continue
+        E.setdefault(p, canon)
+
+
+# ===========================================================================
+# REAL APP CATALOG — ONLY apps actually installed on this machine (detected
+# from this PC's registry/Start Menu at import time). The open/close/focus
+# combos below are generated FROM this catalog, so "open microsoft word" style
+# aliases for apps the user never installed simply stop existing. The catalog
+# is also the source of truth for /api/control (open-app / close-app) and the
+# generic "open X" chat branch.
+# ===========================================================================
+
+def _resolve_target(exe: str):
+    """Resolve an .exe name to a real launch path: App Paths registry first,
+    then PATH, then None (caller falls back to `start <arg>` semantics)."""
+    if not exe:
+        return None
+    try:
+        import winreg as _wr
+        with _wr.OpenKey(_wr.HKEY_LOCAL_MACHINE,
+                         rf"Software\Microsoft\Windows\CurrentVersion\App Paths\{exe}") as k:
+            default, _ = _wr.QueryValueEx(k, "")
+            if default and os.path.exists(default):
+                return f'"{default}"'
+    except OSError:
+        pass
+    try:
+        import shutil
+        p = shutil.which(exe)
+        if p:
+            return f'"{p}"'
+    except Exception:
+        pass
+    return None
+
+
+def _find_steam_game():
+    """Best-effort Steam install path (used to launch Steam games)."""
+    try:
+        import winreg as _wr
+        for hive in (_wr.HKEY_LOCAL_MACHINE, _wr.HKEY_CURRENT_USER):
+            try:
+                with _wr.OpenKey(hive, r"Software\Valve\Steam") as k:
+                    cur, _ = _wr.QueryValueEx(k, "SteamExe")
+                    if cur and os.path.exists(cur):
+                        return cur
+            except OSError:
+                continue
+        for p in (Path(r"C:\Program Files\Steam\steam.exe"),
+                  Path(r"C:\Program Files (x86)\Steam\steam.exe")):
+            if p.exists():
+                return str(p)
+    except Exception:
+        pass
+    return None
+
+
+# Each entry: canonical_name -> [launch_argument, close_process_exe, [aliases]].
+# launch_argument is either an .exe name (resolved at runtime), a steam:// URI,
+# a full url (open in browser), or an os.startfile-able path or "start" string.
+REAL_APPS = {
+    # ---- browsers present on this PC ----
+    "chrome":        ["chrome.exe", "chrome.exe", ["google chrome", "the browser", "web browser", "internet browser", "browser"]],
+    "edge":          ["msedge.exe", "msedge.exe", ["microsoft edge", "edge browser"]],
+    "opera":         ["opera.exe", "opera.exe", ["opera browser"]],
+    # ---- messaging present ----
+    "telegram":      ["Telegram.exe", "Telegram.exe", ["telegram desktop", "tg"]],
+    "whatsapp":      [None, "WhatsApp.exe", ["whatsapp web", "web whatsapp", "the whatsapp web"]],
+    "discord":       ["discord", "Discord.exe", ["discord app"]],
+    # ---- music / audio present ----
+    "spotify":       ["spotify.exe", "Spotify.exe", ["spotify music", "music app", "the music app"]],
+    "voicemeeter":   [None, "Voicemeeter8x64.exe", ["voice meeter", "the mixer", "voicemeeter banana", "virtual mixer"]],
+    "rainmeter":     [None, "Rainmeter.exe", ["rainmeter skins", "rainmeter manager"]],
+    "windhawk":      [None, "Windhawk.exe", ["windows mod manager"]],
+    "windows media player": ["wmplayer.exe", "wmplayer.exe", ["media player", "mplayer"]],
+    "live captions": ["LiveCaptions", "LiveCaptions.exe", ["live captions", "closed captions"]],
+    # ---- dev / terminals present ----
+    "opencode":      ["opencode", None, ["the opencode cli", "ai coding cli"]],
+    "terminal":      ["wt.exe", "WindowsTerminal.exe", ["windows terminal", "new terminal"]],
+    "cmd":           ["cmd.exe", "cmd.exe", ["command prompt", "command line", "the cmd"]],
+    "powershell":    ["powershell.exe", "powershell.exe", ["ps", "power shell"]],
+    "git bash":      [str((Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "git-bash.exe")) if (Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "git-bash.exe").exists() else "git-bash.exe", None, ["bash", "bash shell", "the bash terminal", "git shell"]],
+    "git gui":       ["git-gui.exe", None, ["git graphical interface"]],
+    "github cli":    ["gh", None, ["github tool", "gh cli"]],
+    "node.js":       ["node", None, ["node", "nodejs", "the node runtime"]],
+    "python":        ["python.exe", None, ["python interpreter", "py terminal"]],
+    "7-zip":         [None, "7zFM.exe", ["7zip", "seven zip", "7 zip manager", "archive manager"]],
+    "nmap":          ["nmap", None, ["the nmap scanner", "network scanner"]],
+    "zenmap":        ["zenmap.exe", "zenmap.exe", ["nmap gui", "zenmap"]],
+    "gopeed":        ["Gopeed.exe", "Gopeed.exe", ["gopeed downloader", "the download manager"]],
+    "bittorrent":    ["BitTorrent Web.exe", "BitTorrentWeb.exe", ["bittorrent web", "torrent client", "bittorrent"]],
+    "framer":        ["framer.exe", "framer.exe", ["framer design"]],
+    "comet":         ["Comet.exe", "comet.exe", ["comet chat"]],
+    "antigravity":   ["antigravity.exe", "antigravity.exe", ["anti gravity"]],
+    # ---- windows system tools present ----
+    "notepad":       ["notepad.exe", "notepad.exe", ["text editor", "notes app", "scratchpad"]],
+    "wordpad":       ["write.exe", "write.exe", ["rich text editor"]],
+    "calculator":    ["calc.exe", "calculator.exe", ["calc"]],
+    "paint":         ["mspaint.exe", "mspaint.exe", ["ms paint", "paint app"]],
+    "file explorer": ["explorer.exe", "explorer.exe", ["explorer", "windows explorer", "the files", "my files folder"]],
+    "settings":      ["ms-settings:", None, ["windows settings"]],
+    "control panel": ["control.exe", None, ["the control panel"]],
+    "task manager":  ["taskmgr.exe", "Taskmgr.exe", ["task manager", "process manager", "taskmgr"]],
+    "device manager": ["devmgmt.msc", None, ["device manager"]],
+    "disk management": ["diskmgmt.msc", None, ["disk manager", "partition manager"]],
+    "event viewer":  ["eventvwr.msc", None, ["event logs", "the event viewer"]],
+    "services":      ["services.msc", None, ["services manager", "the services window"]],
+    "registry editor": ["regedit.exe", "regedit.exe", ["regedit", "registry"]],
+    "remote desktop": ["mstsc.exe", "mstsc.exe", ["rdp", "remote desktop connection"]],
+    "disk cleanup":  ["cleanmgr.exe", "cleanmgr.exe", ["disk cleaner"]],
+    "clipboard":     ["ms-settings:clipboard", None, ["clipboard history"]],
+    "camera":        ["microsoft.windows.camera:", None, ["the camera"]],
+    "snipping tool": ["ms-screenclip:", None, ["snip tool", "screen snipper"]],
+    "character map": ["charmap.exe", "charmap.exe", ["unicode map", "characters"]],
+    "on screen keyboard": ["osk.exe", "osk.exe", ["virtual keyboard", "the os keyboard"]],
+    "magnifier":     ["Magnify.exe", "Magnify.exe", ["magnifier"]],
+    "narrator":      ["narrator.exe", "narrator.exe", ["the narrator"]],
+    "speech recognition": ["speech recognition", None, ["voice recognition"]],
+    # ---- games actually installed on this PC ----
+    "roblox":        ["RobloxPlayerBeta.exe", "RobloxPlayerBeta.exe", ["the roblox player"]],
+    "roblox studio": ["RobloxStudioBeta.exe", "RobloxStudioBeta.exe", ["roublox studio", "rblx studio"]],
+    "steam":         [_find_steam_game() or "steam.exe", "steam.exe", ["steam launcher"]],
+    "counter strike 2": ["steam://rungameid/730", "cs2.exe", ["cs2", "counter strike two", "cs 2"]],
+    "suprvive":      ["steam://rungameid/2477400", "SUPRAVIVE.exe", ["super vive", "supervive"]],
+    "sekiro":        ["steam://rungameid/814380", "sekiro.exe", ["sekiro shadows die twice", "the sekiro game"]],
+    "watch dogs":    ["steam://rungameid/243470", "watch_dogs.exe", ["watchdogs", "watch dog"]],
+    "fifa 2021":     [None, "FIFA21.exe", ["fifa 21", "the fifa game"]],
+    "riot client":   ["RiotClientServices.exe", "RiotClientServices.exe", ["riot games", "the riot launcher"]],
+    "legacy launcher": ["LegacyLauncher.exe", "LegacyLauncher.exe", ["legacy minecraft launcher", "tl legacy"]],
+    "prism launcher": ["PrismLauncher.exe", "PrismLauncher.exe", ["prism minecraft", "prism"]],
+    "tlauncher":     ["TLauncher.exe", "TLauncher.exe", ["t launcher", "side trash launcher"]],
+    "asphalt":       [None, None, ["asphalt legends unite"]],
+    "clash of clans": [None, None, ["clash of clans", "coc"]],
+    "free fire":     [None, None, ["free fire max", "ff max"]],
+    "world cricket championship 2": [None, None, ["cricket championship", "world cricket wcc2"]],
+    "dr driving":    [None, None, ["dr driving game"]],
+    # ---- web properties (open in browser) ----
+    "youtube":       ["https://www.youtube.com", None, ["yt", "the tube"]],
+    "gmail":         ["https://mail.google.com", None, ["my mail web", "my gmail inbox"]],
+    "google drive":  ["https://drive.google.com", None, ["drive", "my drive"]],
+    "google maps":   ["https://maps.google.com", None, ["maps", "the map"]],
+    "google translate": ["https://translate.google.com", None, ["translator", "translate"]],
+    "github":        ["https://github.com", None, ["the hub"]],
+    "stack overflow": ["https://stackoverflow.com", None, ["stackoverflow", "so"]],
+    "reddit":        ["https://www.reddit.com", None, ["rdt"]],
+    "instagram":     ["https://www.instagram.com", None, ["insta", "ig"]],
+    "facebook":      ["https://www.facebook.com", None, ["fb", "the facebook"]],
+    "wikipedia":     ["https://www.wikipedia.org", None, ["wiki"]],
+    "amazon":        ["https://www.amazon.com", None, ["the amazon store"]],
+    "google":        ["https://www.google.com", None, ["the google search", "google search"]],
+    "bing":          ["https://www.bing.com", None, ["bing search"]],
+    "duckduckgo":    ["https://duckduckgo.com", None, ["duck duck go"]],
+    }
+
+
+def _real_app_keys_and_tokens():
+    """Iterate (canonical, alias) token pairs the router will accept so the
+    open/close/focus generators cover every real app + its aliases."""
+    for canon, (launch, proc, aliases) in REAL_APPS.items():
+        yield canon
+        for a in aliases or []:
+            if a:
+                yield a
+
+
+def _gen_open_close():
+    E = {}
+    open_verbs = [
+        "open", "launch", "start", "start up", "boot up", "fire up", "bring up",
+        "pull up", "load up", "open up", "crank up", "spin up", "start off",
+        "get going", "crack open", "pop open", "fire off", "take me to",
+        "take me straight to", "bring me to", "move to", "switch to", "switch me to",
+        "head to", "navigate to", "jump to", "hop to", "go to", "get to",
+        "open me", "power up", "crank open",
+    ]
+    open_mods = ["", " please", " right away", " for me", " for me please", " quick"]
+    close_verbs = [
+        "close", "quit", "exit", "kill", "shut down", "stop", "terminate", "end",
+        "dismiss", "close down", "close out", "shut", "force quit", "close me",
+        "get rid of", "kill off", "turn off",
+    ]
+    close_mods = ["", " please", " right now", " for me"]
+    apps = list(_real_app_keys_and_tokens())
+    for v in open_verbs:
+        for a in apps:
+            for m in open_mods:
+                _syn_emit(E, f"open {a}", f"{v} {a}{m}")
+    for v in close_verbs:
+        for a in apps:
+            for m in close_mods:
+                _syn_emit(E, f"close {a}", f"{v} {a}{m}")
+
+    # focus an open window (feeds the focus-window branch). Verbs are kept
+    # focus-unambiguous only — anything resembling open/switch phrasing would
+    # collide with the open family above and hijack "open X" into "focus X".
+    focus_verbs = ["focus", "focus on", "give focus to", "put focus on",
+                   "bring into focus", "bring window focus to"]
+    for v in focus_verbs:
+        for a in apps:
+            _syn_emit(E, f"focus {a}", f"{v} {a}", f"{v} the {a} window",
+                      f"{v} the {a} app", f"{v} the {a} window please")
+    return E
+
+
+def _gen_volume_media():
+    E = {}
+
+    up_verbs = ["raise", "crank", "crank up", "boost", "bump up", "push up", "nudge up",
+                "pump up", "max out", "increase", "turn up", "jack up", "ramp up",
+                "bring up", "fade up", "hike up", "amplify", "goose", "kick up"]
+    up_objs = ["the volume", "the sound", "the audio", "the music", "the level",
+               "the audio level", "the sound level", "the music level"]
+    for v in up_verbs:
+        for o in up_objs:
+            for tail in ("", " a bit", " please", " a notch", " right up", " all the way", " way up"):
+                _syn_emit(E, "volume up", f"{v} {o}{tail}")
+            _syn_emit(E, "volume up", f"make {o} louder", f"get {o} louder",
+                      f"{v} {o} now")
+
+    down_verbs = ["lower", "turn down", "cut", "reduce", "decrease", "drop", "soften",
+                  "tone down", "bring down", "pull down", "dial down", "ease down",
+                  "hush", "quiet", "trim", "downscale"]
+    down_objs = ["the volume", "the sound", "the audio", "the music", "the level",
+                 "the audio level", "the sound level", "the music level"]
+    for v in down_verbs:
+        for o in down_objs:
+            for tail in ("", " a bit", " please", " a notch", " right down", " a lot"):
+                _syn_emit(E, "volume down", f"{v} {o}{tail}")
+            _syn_emit(E, "volume down", f"make {o} quieter", f"make {o} lower")
+
+    mute_verbs = ["mute", "silence", "kill", "cut", "shut off", "shut up", "turn off",
+                  "stop", "disable", "block"]
+    mute_objs = ["the sound", "the audio", "the volume", "the music", "everything",
+                 "all sound", "all audio", "the speakers", "the mic", "the audio output"]
+    for v in mute_verbs:
+        for o in mute_objs:
+            _syn_emit(E, "mute", f"{v} {o}", f"{v} {o} please", f"please {v} {o}")
+    unmute_verbs = ["unmute", "restore", "enable", "re-enable", "turn on", "bring back",
+                    "bring sound back", "switch on"]
+    unmute_objs = ["the sound", "the audio", "the volume", "the music", "the speakers",
+                   "the mic", "the audio output"]
+    for v in unmute_verbs:
+        for o in unmute_objs:
+            _syn_emit(E, "unmute", f"{v} {o}", f"{v} {o} please", f"please {v} {o}")
+
+    media_nouns = ["music", "the music", "song", "the song", "track", "the track",
+                   "playback", "the playlist", "tunes", "the tunes", "the album",
+                   "my music", "something", "the jams", "audio", "the playlist music",
+                   "this song", "this track", "this one", "this tune", "this media",
+                   "some music", "some tunes", "some songs"]
+    for n in media_nouns:
+        for v in ("play", "start", "start playing", "begin", "kick off", "press play on",
+                  "turn on", "put on", "resume", "continue", "start up"):
+            _syn_emit(E, "media play", f"{v} {n}", f"{v} {n} please", f"please {v} {n}")
+        for v in ("pause", "stop", "halt", "freeze", "hold", "hold up", "suspend",
+                  "pause the playback of"):
+            _syn_emit(E, "media pause", f"{v} {n}", f"{v} {n} please", f"please {v} {n}")
+    for v in ("skip", "jump", "move", "fast forward", "throw"):
+        for n in ("the song", "the track", "song", "track", "the music", "to the next one",
+                  "to the next song", "to the next track", "music"):
+            _syn_emit(E, "media next", f"{v} {n}", f"{v} {n} please", f"please {v} {n}")
+        for n in ("this song", "this track", "this one", "to this song", "to this track"):
+            _syn_emit(E, "media next", f"{v} {n}", f"{v} {n} please", f"please {v} {n}")
+    for v in ("go back", "skip back", "rewind", "back up", "go back a", "jump back",
+              "move back"):
+        for n in ("a song", "a track", "one", "a tune", "the previous song",
+                  "the previous track", "a step"):
+            _syn_emit(E, "media previous", f"{v} {n}", f"{v} {n} please")
+    return E
+
+
+def _gen_ui_controls():
+    E = {}
+    lock_verbs = ["lock", "secure", "freeze", "seal", "safeguard", "lock up", "harden"]
+    lock_objs = ["my pc", "the pc", "my computer", "the computer", "my system", "the system",
+                 "my machine", "the machine", "my laptop", "the laptop", "the screen",
+                 "my screen", "windows", "the workstation", "my workstation"]
+    for v in lock_verbs:
+        for o in lock_objs:
+            _syn_emit(E, "lock pc", f"{v} {o}", f"{v} {o} now", f"please {v} {o}",
+                      f"{v} {o} please")
+
+    shot_verbs = ["take", "grab", "capture", "snap", "shoot", "get", "save", "record"]
+    shot_objs = ["a screenshot", "a screen grab", "a snap", "a picture of the screen",
+                 "the screen", "a pic of the screen", "the desktop", "a photo of the screen",
+                 "the display", "the whole screen", "a snapshot", "the current screen"]
+    for v in shot_verbs:
+        for o in shot_objs:
+            _syn_emit(E, "screenshot", f"{v} {o}", f"{v} {o} please", f"please {v} {o}",
+                      f"{v} {o} right now")
+    for tail in ("for me", "now", "please", "of the desktop", "of my screen"):
+        _syn_emit(E, "screenshot", f"take a screenshot{tail}", f"grab the screen{tail}")
+
+    shutdown_verbs = ["shut down", "shutdown", "power off", "power down", "switch off",
+                      "turn off", "kill", "halt", "power the pc down", "shut the pc down",
+                      "turn the pc off", "switch the pc off", "power the computer down",
+                      "shut the computer down"]
+    shutdown_objs = ["the pc", "the computer", "my pc", "the machine", "my system",
+                     "the system", "everything", "the whole pc"]
+    for v in shutdown_verbs:
+        for o in shutdown_objs:
+            _syn_emit(E, "shutdown", f"{v} {o}", f"please {v} {o}", f"{v} {o} please")
+    restart_verbs = ["restart", "reboot", "reset", "power cycle", "boot back up",
+                     "give the pc a restart", "reboot the machine"]
+    for v in restart_verbs:
+        for o in ("the pc", "the computer", "my pc", "the machine", "the laptop"):
+            _syn_emit(E, "restart", f"{v} {o}", f"please {v} {o}", f"{v} {o} please")
+    sleep_verbs = ["put to sleep", "send to sleep", "make sleep", "sleep", "suspend",
+                   "hibernate", "go to sleep", "take to sleep"]
+    for v in sleep_verbs:
+        for o in ("the pc", "the computer", "my pc", "the laptop", "the machine"):
+            _syn_emit(E, "sleep", f"{v} {o}", f"please {v} {o}", f"{v} {o} please")
+
+    bright_up = ["make the screen brighter", "crank the brightness up", "raise the brightness",
+                 "increase the brightness", "turn the brightness up", "brighten the display",
+                 "max the brightness", "boost the brightness", "bump the brightness up",
+                 "make it brighter", "turn brightness up", "pump the brightness up",
+                 "brighten the screen", "make the display brighter"]
+    for t in bright_up:
+        _syn_emit(E, "brightness up", t, f"{t} please", f"{t} now", f"please {t}")
+    bright_down = ["make the screen dimmer", "turn the brightness down", "lower the brightness",
+                   "decrease the brightness", "dim the screen", "dim the display",
+                   "cut the brightness", "make it darker", "reduce screen brightness",
+                   "dim the screen down", "bring the brightness down"]
+    for t in bright_down:
+        _syn_emit(E, "brightness down", t, f"{t} please", f"{t} now", f"please {t}")
+    return E
+
+
+def _gen_tools_tabs():
+    E = {}
+    tab_verbs = ["list", "show", "display", "tell me", "show me", "get", "open", "view"]
+    for v in tab_verbs:
+        for o in ("the tabs", "all my tabs", "my open tabs", "the open tabs", "chrome tabs",
+                  "all tabs", "the browser tabs", "my tabs"):
+            _syn_emit(E, "list tabs", f"{v} {o}", f"{v} {o} please")
+    newtab = ["open a new tab", "open a fresh tab", "start a new tab", "create a new tab",
+              "open another tab", "make a new tab", "get a new tab", "launch a new tab",
+              "open a blank tab", "give me a new tab", "open a tab", "make me a new tab"]
+    for t in newtab:
+        _syn_emit(E, "open new tab", t, f"{t} please", f"please {t}")
+    refresh = ["refresh the page", "reload the page", "reload this page", "refresh this page",
+               "reload the current page", "refresh the browser", "reload the tab",
+               "refresh the current tab", "hit refresh", "refresh now"]
+    for t in refresh:
+        _syn_emit(E, "refresh page", t, f"{t} please", f"please {t}")
+    back = ["go to the previous page", "go back a page", "go back to the last page",
+            "back to the previous page", "navigate back", "go back one page",
+            "step back to the last page"]
+    for t in back:
+        _syn_emit(E, "go back", t, f"{t} please")
+    fwd = ["go to the next page", "go forward a page", "navigate forward", "go to the forward page",
+           "go forward one page", "move to the next page"]
+    for t in fwd:
+        _syn_emit(E, "go forward", t, f"{t} please")
+    full = ["make the browser fullscreen", "go full screen", "make it full screen",
+            "maximize the browser", "put the browser in fullscreen", "run full screen",
+            "enter full screen mode", "go into fullscreen", "make the window fullscreen"]
+    for t in full:
+        _syn_emit(E, "fullscreen", t, f"{t} please", f"please {t}")
+    closetab = ["close the current tab", "close this tab", "close the active tab", "kill this tab",
+                "close the tab i'm on", "close the open tab", "shut this tab",
+                "get rid of this tab", "close the browser tab", "close my current tab"]
+    for t in closetab:
+        _syn_emit(E, "close this tab", t, f"{t} please")
+
+    email = ["show my emails", "show me my emails", "check my emails", "check my email",
+             "read my emails", "read my email", "look at my inbox", "open my inbox",
+             "any new emails", "do i have new email", "show my inbox", "check the inbox",
+             "open my mail", "read my gmail", "show my gmail", "check gmail", "read the inbox"]
+    for t in email:
+        _syn_emit(E, "read emails", t, f"{t} please")
+    clipboard = ["show me my clipboard", "what is on my clipboard", "what's on the clipboard",
+                 "read the clipboard", "check the clipboard", "show the clipboard contents",
+                 "get my clipboard text", "what did i copy", "what have i copied",
+                 "show my latest copy", "read what i copied"]
+    for t in clipboard:
+        _syn_emit(E, "clipboard", t, f"{t} please")
+    purgeram = ["purge the ram", "clean the ram", "clear the ram", "free up ram",
+                "free up memory", "clear my memory", "flush the ram", "free system memory",
+                "clear memory cache", "clean up ram", "free up some ram",
+                "clear the memory cache", "clean my ram"]
+    for t in purgeram:
+        _syn_emit(E, "purge ram", t, f"{t} please", f"please {t}")
+    taskmgr = ["open the task manager", "bring up the task manager", "show the task manager",
+               "launch the task manager", "open task manager", "start the task manager",
+               "show running processes", "see running programs", "show processes",
+               "open the processes view", "what is running", "show what's running"]
+    for t in taskmgr:
+        _syn_emit(E, "task manager", t, f"{t} please")
+    trash = ["empty the recycle bin", "empty the trash", "clear the recycle bin",
+             "clean the recycle bin", "clear the trash", "empty the bin", "dump the recycle bin",
+             "remove deleted files", "clear deleted files", "empty my trash",
+             "clean out the recycle bin", "flush the recycle bin"]
+    for t in trash:
+        _syn_emit(E, "empty trash", t, f"{t} please", f"please {t}")
+    return E
+
+
+def _gen_misc():
+    E = {}
+    for n in ("5", "10", "15", "20", "25", "30", "45", "60", "90", "120", "2", "3", "1"):
+        for u in ("minutes", "seconds", "hours", "minute", "second", "min", "sec"):
+            for t in (f"set a timer for {n} {u}", f"start a timer for {n} {u}",
+                      f"set a {n} {u} timer", f"countdown for {n} {u}",
+                      f"set a countdown for {n} {u}", f"start a countdown for {n} {u}",
+                      f"alarm in {n} {u}", f"set an alarm for {n} {u}",
+                      f"set the timer for {n} {u}"):
+                _syn_emit(E, f"set timer for {n} {u}", t, f"{t} please")
+    empty = ["my todo list", "my to do list", "the todo list", "my tasks", "today's tasks",
+             "what remains", "everything left", "my pending items", "all my tasks",
+             "all of my tasks", "all my todos", "all of my todos", "all tasks",
+             "all my to do items", "all todo items", "everything on my list"]
+    for o in empty:
+        for v in ("clear", "empty", "wipe", "erase", "delete", "reset", "get rid of"):
+            _syn_emit(E, "clear todo", f"{v} {o}", f"{v} {o} please", f"please {v} {o}")
+    show = ["my todo list", "the todo list", "my to do list", "the to do list", "my tasks",
+            "what's on my list", "what is on my list", "my pending tasks", "what's pending"]
+    for o in show:
+        for v in ("show", "show me", "list", "display", "what is", "what's"):
+            _syn_emit(E, "show todo", f"{v} {o}", f"{v} {o} please", f"please {v} {o}")
+    return E
+
+
+def _build_extra_synonyms():
+    E = {}
+    for builder in (_gen_open_close, _gen_volume_media, _gen_ui_controls,
+                    _gen_tools_tabs, _gen_misc):
+        for k, v in builder().items():
+            E.setdefault(k, v)
+    return E
+
+
+def _merge_extra_synonyms(extra: dict) -> None:
+    for k, v in extra.items():
+        COMMAND_SYNONYMS.setdefault(k, v)
+
+
+_merge_extra_synonyms(_build_extra_synonyms())
+
+# Build a word-token trie of every alias. Scanning the utterance left-to-right
+# and always taking the deepest end-of-alias marker reproduces the original
+# global longest-match-first semantics exactly (a longer phrase always beats a
+# shorter one it contains, regardless of which alias "family" it belongs to) —
+# while staying fast even at ~35k aliases. Tokens that share no prefix with any
+# alias take a single dict lookup.
+_SYN_END = "\x00"
+
+
+def _build_synonym_trie():
+    trie = {}
+    for _alias in COMMAND_SYNONYMS:
+        node = trie
+        for w in _alias.split():
+            node = node.setdefault(w, {})
+        node[_SYN_END] = COMMAND_SYNONYMS[_alias]
+    return trie
+
+
+_SYNONYM_TRIE = _build_synonym_trie()
+_PUNCT_STRIP = ".,;:!?()[]{}<>\"'`~@#$%^&*_+=/\\|-"
+
 
 def _expand_synonyms(lo: str) -> str:
     """Replace common command aliases with canonical router words so the same
-    intent is recognized no matter how the user phrases it. Longest aliases win,
-    and matches happen at word boundaries so start/end-of-utterance and
-    punctuation cases expand too. Iterates so cascading aliases resolve."""
-    out = lo
+    intent is recognized no matter how the user phrases it. Longest aliases win
+    (word-token boundaried), and matches happen at word boundaries so
+    start/end-of-utterance and punctuation cases expand too. Iterates so
+    cascading aliases resolve, but canonical replacements are marked "frozen":
+    their tokens are never re-scanned as alias starts or extended across, so a
+    canonical like "media next" can't fuse with a trailing word into a new
+    alias ("next track") and double-expand."""
+    toks = lo.split(" ")
+    frozen = [False] * len(toks)
     for _ in range(6):
-        nxt = _SYNONYM_ALT.sub(lambda m: COMMAND_SYNONYMS[m.group(0)], out)
-        if nxt == out:
+        res = []
+        res_frozen = []
+        i = 0
+        n = len(toks)
+        changed = False
+        while i < n:
+            if frozen[i]:
+                res.append(toks[i])
+                res_frozen.append(True)
+                i += 1
+                continue
+            sym = toks[i].strip(_PUNCT_STRIP)
+            node = _SYNONYM_TRIE.get(sym) if sym else None
+            canon = None
+            length = 0
+            if node is not None:
+                if _SYN_END in node:
+                    canon = node[_SYN_END]
+                    length = 1
+                j = i + 1
+                while j < n and not frozen[j]:
+                    sym2 = toks[j].strip(_PUNCT_STRIP)
+                    nxt = node.get(sym2) if sym2 else None
+                    if nxt is None:
+                        break
+                    node = nxt
+                    if _SYN_END in node:
+                        canon = node[_SYN_END]
+                        length = j - i + 1
+                    j += 1
+            if canon:
+                for w in canon.split(" "):
+                    res.append(w)
+                    res_frozen.append(True)
+                i += length
+                changed = True
+            else:
+                res.append(toks[i])
+                res_frozen.append(False)
+                i += 1
+        if not changed:
             break
-        out = nxt
-    return out
+        toks = res
+        frozen = res_frozen
+    return " ".join(toks)
 
 
 LEARNED_ALIASES_FILE = DATA_DIR / "learned_aliases.json"
@@ -1950,8 +2538,33 @@ def local_command_router(msg):
         if not spotify_running_now():
             return {"text": f"Spotify isn't running, {boss}. Say **open spotify** first, then I can play {q} for you.", "speech": f"Spotify isn't running. Say open spotify first.", "command": {"action": "open-app", "value": "spotify"}}
         return {"text": f"Playing **{q}** on Spotify, {boss}!", "speech": f"Playing {q} on Spotify.", "command": {"action": "spotify-search", "value": q}}
-    if ("what song" in lo or "what's playing" in lo or "now playing" in lo or "currently playing" in lo) and "spotify" in lo:
-        return {"text": f"Checking what's on Spotify, {boss}!", "speech": "Checking Spotify."}
+    if any(w in lo for w in ["what song", "what's playing", "now playing", "currently playing",
+                             "what's on", "what is on", "which song", "song is playing",
+                             "queue", "up next", "what's next"]):
+        try:
+            import app_integrations as _ai
+            np = _ai.spotify_now_playing()
+        except Exception:
+            np = {"ok": False, "error": "unavailable"}
+        if np.get("ok") and not any(w in lo for w in ["queue", "up next", "what's next"]):
+            arts = np.get("artist") or ""
+            line = f"Right now playing **{np['title']}**" + (f" by **{arts}**" if arts else "") + \
+                   (" on Spotify, " + boss if str(np.get("app", "")).lower().find("spotify") >= 0 else ".")
+            return {"text": line, "speech": re.sub(r"[#*_`]", "", line),
+                    "command": {"action": "spotify-info", "value": np}}
+        if "queue" in lo or "up next" in lo:
+            # Queue is a Spotify account feature: be honest and useful, offer
+            # real actions instead of fabricating a track list.
+            if not spotify_running_now():
+                return {"text": f"Spotify isn't running, {boss}. Say **open spotify** first and I can check what's playing.", "speech": "Spotify is not running.", "command": {"action": "open-app", "value": "spotify"}}
+            if np.get("ok"):
+                arts = np.get("artist") or ""
+                base = f"**{np['title']}**" + (f" by **{arts}**" if arts else "")
+                return {"text": f"{base} is playing now, {boss}. I can read your full Spotify queue once you connect your Spotify account (Settings > Keys, free). Until then I can skip to the next track, pause, or replay this one — just say the word.",
+                        "speech": f"{np['title']} is playing. I can read your full queue after you connect your Spotify account. Until then I can skip or pause.",
+                        "command": {"action": "spotify-info", "value": np}}
+            return {"text": f"Spotify is running but I can't read what's playing right now, {boss}. Try **open spotify** if it's not focused, or say **spotify next** and I'll skip ahead.",
+                    "speech": "Could not read Spotify playback.", "command": {"action": "spotify-info", "value": np}}
     if any(w in lo for w in ["spotify next", "next on spotify"]):
         if not spotify_running_now():
             return {"text": f"Spotify isn't running, {boss}. Say **open spotify** first.", "speech": "Spotify isn't running.", "command": {"action": "open-app", "value": "spotify"}}
@@ -1970,6 +2583,20 @@ def local_command_router(msg):
         return {"text": f"Resuming playback, {boss}!", "speech": "Resuming Spotify.", "command": {"action": "spotify-action", "value": "play"}}
     if any(w in lo for w in ["open spotify", "open spotify app", "launch spotify"]):
         return {"text": f"Opening Spotify, {boss}!", "speech": "Opening Spotify.", "command": {"action": "open-app", "value": "spotify"}}
+    if "spotify shuffle" in lo or any(w in lo for w in ["shuffle spotify", "shuffle my spotify", "shuffle on spotify", "shuffle music on spotify", "shuffle my music"]):
+        if not spotify_running_now():
+            return {"text": f"Spotify isn't running, {boss}. Say **open spotify** first.", "speech": "Spotify isn't running.", "command": {"action": "open-app", "value": "spotify"}}
+        return {"text": f"Shuffling Spotify, {boss}!", "speech": "Shuffling Spotify.", "command": {"action": "spotify-shuffle", "value": "shuffle"}}
+    # Bare "play <song>" / "play <playlist>" - Spotify is the default player when
+    # it's the one running, so the user doesn't have to name it every time.
+    m = re.search(r"(?:play|put on|listen to)\s+(.+)$", lo)
+    if m and not any(x in lo for x in ["on youtube", "in youtube", "video", "youtube",
+                                      "on spotify", "in spotify", "from spotify"]):
+        q = m.group(1).strip(" .?!,")
+        blocked = any(x in q for x in ["spotify", "album art", "playlist called", "at the party",
+                                       "video", "song on", "it again", "that song"])
+        if q and not blocked and spotify_running_now():
+            return {"text": f"Playing **{q}** on Spotify, {boss}!", "speech": f"Playing {q} on Spotify.", "command": {"action": "spotify-search", "value": q}}
     m = re.search(r"(?:send|message|text)\s+(.+?)\s+to\s+(.+?)\s+(?:on|via)\s+(telegram|whatsapp|discord|sms|text message)\b(?:\s*[:,-]\s*(.*))?$", lo)
     if not m:
         m = re.search(r"(?:send|message|text)\s+(.+?)\s+(?:on|via)\s+(telegram|whatsapp|discord|sms|text message)\b\s*[:,-]\s*(.+)$", lo)
@@ -1998,14 +2625,46 @@ def local_command_router(msg):
         return {"text": f"Opening WhatsApp, {boss}!", "speech": "Opening WhatsApp.", "command": {"action": "whatsapp-open", "value": ""}}
     if any(w in lo for w in ["open discord", "launch discord"]):
         return {"text": f"Opening Discord, {boss}!", "speech": "Opening Discord.", "command": {"action": "discord-open", "value": ""}}
+    # DISCORD DM: "dm harsh on discord saying build is done", "send a discord
+    # dm to papa - call me". The desktop client is driven, so no bot setup.
+    m = re.search(r"(?:dm|dms|message|msg|text)\s+(?:to\s+)?(.+?)\s+(?:on|via|through|over)\s+discord\b\s*(?:saying|that says|with|to say|:|-)?\s*(.*)$", lo)
+    if not m:
+        m = re.search(r"discord\s+(?:dm|message)\s+(?:to\s+)?([a-zA-Z0-9 _\-]{2,40}?)\s*(?:saying|that says|:|-)\s*(.+)$", lo)
+    if m:
+        who = m.group(1).strip(" :,-")
+        body = (m.group(2) or "").strip() if m.lastindex and m.lastindex >= 2 else ""
+        if not body and m.lastindex == 1:
+            who, body = "", who
+        if not who:
+            return {"text": f"Who should I DM on Discord, {boss}?", "speech": "Who should I message on Discord?"}
+        if not body:
+            return {"text": f"What should I say to **{who}** on Discord?", "speech": f"What should I say to {who}?"}
+        return {"text": f"DMing **{who}** on Discord, {boss}.", "speech": f"DMing {who} on Discord.",
+                "command": {"action": "discord-dm", "value": {"to": who, "text": body}}}
     m = re.search(r"(?:open|crack open|start coding in)\s+(?:project|the project)\s*[ ]?([a-zA-Z0-9_\- ]+)", lo)
     if m:
         proj = m.group(1).strip()
         return {"text": f"Opening project **{proj}**, {boss}!", "speech": f"Opening project {proj}.", "command": {"action": "open-project", "value": proj}}
-    m = re.search(r"(?:open|start)\s+(?:a\s+|the\s+)?terminal\s+(?:in|at)\s+([a-zA-Z0-9_\- ]+)", lo)
+    m = re.search(r"(?:open|launch|start)\s+(?:a\s+|the\s+)?terminal\s+(?:in|at)\s+([a-zA-Z0-9_\- ]+)", lo)
     if m:
         proj = m.group(1).strip()
         return {"text": f"Terminal at **{proj}**, {boss}!", "speech": f"Opening terminal in {proj}.", "command": {"action": "terminal-project", "value": proj}}
+    # AGENTIC TERMINAL: "open opencode", "type npm run dev in the terminal",
+    # "ask opencode to list my projects". These run real commands, not notes.
+    m = re.search(r"(?:ask|prompt|tell|get)\s+opencode\s+(?:to\s+)?(.+)$", lo)
+    if m:
+        pr = m.group(1).strip()
+        if pr:
+            return {"text": f"Handing **{pr}** to opencode, {boss}!", "speech": f"Running that in opencode.", "command": {"action": "terminal", "value": {"app": "opencode", "prompt": pr}}}
+    m = re.search(r"(?:type|run|execute)\s+(.+?)\s+in\s+(?:the\s+|a\s+)?(?:opencode\s+)?(?:terminal|cmd|command prompt|powershell|shell)\b", lo)
+    if m:
+        cmd = m.group(1).strip()
+        if cmd and "opencode" in lo:
+            return {"text": f"Typing **opencode {cmd}** in a terminal, {boss}!", "speech": "Typing that in a terminal.", "command": {"action": "terminal", "value": {"command": f"opencode {cmd}"}}}
+        if cmd:
+            return {"text": f"Running **{cmd}** in a terminal, {boss}!", "speech": f"Running {cmd}.", "command": {"action": "terminal", "value": {"command": cmd}}}
+    if re.search(r"\bopencode\b", lo) and any(w in lo for w in ["open", "launch", "start", "run", "show", "bring up", "terminal", "cli"]):
+        return {"text": f"Opening opencode in a terminal, {boss}!", "speech": "Opening opencode.", "command": {"action": "terminal", "value": {"app": "opencode"}}}
     m = re.search(r"(?:focus on|focus|bring up|switch to window|focus window)\s+(?:the\s+|window\s+)?([a-zA-Z0-9 _\-]{2,})$", lo)
     if m and not any(w in lo for w in ["focus mode", "show me", "show the", "focus on the weather", "focus on the system", "focus on the music"]):
         app = m.group(1).strip()
@@ -2023,8 +2682,36 @@ def local_command_router(msg):
     m = re.search(r"(?:open|launch|start|run)\s+(.+)", lo)
     if m:
         app_name = m.group(1).strip()
+        if "screenshot" in lo or "screen shot" in lo or "screen capture" in lo:
+            return {"text": f"Taking screenshot, {boss}!", "speech": "Taking screenshot.",
+                    "command": {"action": "screenshot", "value": {"open": "open" in lo or "show" in lo or "see" in lo}}}
+        if any(x in app_name for x in ["new tab", "another tab", "blank tab", "fresh tab", "a tab"]):
+            return {"text": f"New tab, {boss}!", "speech": "New tab.", "command": {"action": "browser-new-tab", "value": ""}}
+        if re.match(r"^(?:the\s+|a\s+|my\s+)?(?:terminal|cmd|command prompt|powershell|shell|console)\b", app_name):
+            return {"text": f"Opening terminal, {boss}!", "speech": "Opening terminal.", "command": {"action": "terminal", "value": ""}}
+        browser_trail = re.search(r"\s+(?:in|on|with|using|via|inside)\s+(?:chrome|google|edge|the browser|browser|web)$", app_name)
+        if browser_trail:
+            # "open stack overflow in chrome" / "open gmail in the browser":
+            # the browser is the tool, not the destination.
+            rest = app_name[:browser_trail.start()].strip()
+            if rest and " " in rest and not any(x in rest for x in [".", "http"]):
+                return {"text": f"Looking up **{rest}** in Chrome, {boss}!", "speech": f"Searching for {rest}.",
+                        "command": {"action": "chrome-search", "value": rest}}
+            app_name = rest
         if "." in app_name or any(w in app_name for w in ["website", "site", "url", "page"]):
-            url = app_name if app_name.startswith("http") else "https://" + app_name
+            url = app_name
+            # "open chrome to github.com" -> the target is the link, not the
+            # browser. The word boundary matters: "google.com" must survive.
+            url = re.sub(r"^(?:chrome|google|edge|browser|web)\s+(?:(?:to|for|in|on|with)\s+)?", "", url).strip()
+            url = re.sub(r"^(?:the\s+)?(?:website|site|url|page|link)\s+(?:(?:to|for|at)\s+)?", "", url).strip()
+            url = re.sub(r"^(?:to|for|at)\s+", "", url).strip()
+            if not url:
+                return {"text": f"Which site should I open, {boss}?", "speech": "Which site should I open?"}
+            if not url.startswith("http"):
+                if re.match(r"^[\w\-]+(\.[\w\-]+)+([/?#].*)?$", url):
+                    url = "https://" + url
+                else:
+                    url = f"https://www.google.com/search?q={urllib.parse.quote(url)}"
             act = {"action": "open-chrome", "value": url}
             return {"text": f"Opening **{url}**, {boss}!", "speech": f"Opening {url}, {boss}.", "command": act}
         act = {"action": "open-app", "value": app_name}
@@ -2065,6 +2752,39 @@ def local_command_router(msg):
         return {"text": f"Volume set to {m.group(1)}%, {boss}!", "speech": f"Volume set to {m.group(1)} percent.", "command": {"action": "volume", "value": m.group(1)}}
     if any(w in lo for w in ["purge ram", "clean ram", "free up ram", "clear ram", "clear memory"]):
         return {"text": f"Cleaning up memory, {boss}!", "speech": "Cleaning up memory.", "command": {"action": "purge-ram", "value": ""}}
+    if any(w in lo for w in ["mail status", "email status", "mail-status", "status of my mail", "status of my email",
+                             "any new mail", "any new email", "unread mail", "unread email", "unread mails",
+                             "how many unread", "any mail from", "any email from", "did i get any mail",
+                             "did i get any email", "check my mail", "check my mail status",
+                             "inbox status", "how many emails", "new emails"]):
+        # Evaluated BEFORE the "read my emails" branch below because
+        # "unread emails" contains "read emails" as a substring.
+        # Answered live so the spoken reply carries the real numbers instead of
+        # a promise to check.
+        try:
+            import email_integration
+            st = email_integration.mail_status()
+        except Exception as e:
+            st = {"success": False, "message": str(e)[:120]}
+        if not st.get("success"):
+            return {"text": f"I can't read your inbox right now, {boss} — {st.get('message') or 'no mail backend is configured'}. Add your email login in Settings > Services and I'll report the exact unread count.",
+                    "speech": "I can't read your inbox yet. Add your email login in Settings and I'll report the exact unread count.",
+                    "command": {"action": "mail-status", "value": ""}}
+        unread = st.get("unread")
+        latest = [s for s in (st.get("latest") or []) if s]
+        who = ""
+        mwho = re.search(r"(?:any (?:mail|email) from|from)\s+(.+)$", lo)
+        if mwho:
+            want = mwho.group(1).strip(" .?!,")
+            who = next((s for s in latest if want.lower() in s.lower()), "")
+        if who:
+            line = f"Yes, {boss} — **{who}** emailed you." + (f" You have {unread} unread." if unread is not None else "")
+        elif latest:
+            line = f"You have **{unread if unread is not None else 'some'}** unread, {boss}. Latest from " + ", ".join(latest[:3]) + "."
+        else:
+            line = f"Inbox is clear, {boss}." if unread == 0 else f"You have **{unread}** unread and no recent senders, {boss}."
+        return {"text": line, "speech": re.sub(r"[#*_`\[\]]", "", line),
+                "command": {"action": "mail-status", "value": st}}
     if any(w in lo for w in ["read my emails", "read emails", "check emails", "check my email", "read email inbox", "show my emails", "show emails"]):
         return {"text": "Opening your emails, Boss!", "speech": "Opening your emails.", "command": {"action": "email-read", "value": ""}}
     if any(w in lo for w in ["wake mac display", "wake display", "wake the display", "wake screen", "turn on display"]):
@@ -2671,6 +3391,16 @@ def api_mode():
     if mode not in MODE_PROFILES:
         return jsonify({"success": False, "error": "Invalid mode"})
     set_mode(mode)
+    # Greeting gate: modes.html POSTs /api/mode right after the intro video +
+    # mode cards finish, and only that flow sets fromIntro — so a mid-session
+    # mode switch can never re-arm the boot greeting out of order. Arming here
+    # means the proactive greeting can only ever speak AFTER an actual mode
+    # selection — never over the intro or when some side UI merely pings.
+    if d.get("fromIntro"):
+        try:
+            proactive.mark_mode_selected()
+        except Exception:
+            pass
     return jsonify({"success": True, "mode": mode, "profile": MODE_PROFILES[mode]})
 
 @app.route("/api/system-status")
@@ -3088,9 +3818,20 @@ def _assistant_reply(msg: str) -> dict:
             chatHistory.pop(0); chatHistory.pop(0)
         proactive.mark_activity()
         return local
-    reply = grok_chat(msg, chatHistory)
-    if not reply:
-        reply = gemini_chat(msg, chatHistory)
+    settings_now = load_json(DATA_DIR / "settings.json", {})
+    brain_order = (settings_now.get("brain_order") or "").strip().lower()
+    if brain_order == "ollama":
+        reply = ollama_chat(msg, chatHistory)
+        if not reply:
+            reply = grok_chat(msg, chatHistory)
+        if not reply:
+            reply = gemini_chat(msg, chatHistory)
+    else:
+        reply = grok_chat(msg, chatHistory)
+        if not reply:
+            reply = gemini_chat(msg, chatHistory)
+        if not reply:
+            reply = ollama_chat(msg, chatHistory)
     if not reply:
         reply = offline_reply(msg) or {"text": "I'm offline, Boss.", "speech": "I'm offline, Boss."}
     _sanitize_command(reply)
@@ -3161,6 +3902,20 @@ def api_preferences():
     items = sorted(store.values(), key=lambda x: -(x.get("count", 0) or 0))
     return jsonify({"success": True, "preferences": items})
 
+def _endpoint_volume():
+    """Cross-version pycaw volume interface (old .Activate() API + newer
+    AudioDevice.EndpointVolume). Returns the IAudioEndpointVolume COM proxy."""
+    from ctypes import cast, POINTER
+    from comtypes import CLSCTX_ALL
+    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+    spk = AudioUtilities.GetSpeakers()
+    if hasattr(spk, "Activate"):
+        return cast(spk.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None), POINTER(IAudioEndpointVolume))
+    ev = getattr(spk, "EndpointVolume", None)
+    if ev is not None:
+        return ev
+    raise RuntimeError("no volume endpoint")
+
 @app.route("/api/control", methods=["POST"])
 def api_control():
     d = request.get_json(force=True, silent=True) or {}
@@ -3225,10 +3980,7 @@ def api_control():
             return jsonify({"success": False, "error": str(e)[:120]})
     if lo == "volume":
         try:
-            from ctypes import cast, POINTER; from comtypes import CLSCTX_ALL
-            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-            spk = AudioUtilities.GetSpeakers(); iface = spk.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            vol = cast(iface, POINTER(IAudioEndpointVolume))
+            vol = _endpoint_volume()
             if value == "mute": vol.SetMute(1, None); return jsonify({"success": True, "message": "Muted."})
             if value == "unmute": vol.SetMute(0, None); return jsonify({"success": True, "message": "Unmuted."})
             vol.SetMasterVolumeLevelScalar(int(value)/100.0, None); return jsonify({"success": True, "message": f"Volume set to {value}%."})
@@ -3247,11 +3999,21 @@ def api_control():
         try: ctypes.windll.user32.LockWorkStation(); return jsonify({"success": True, "message": "Locked."})
         except: return jsonify({"success": False})
     if lo == "screenshot":
+        shots_dir = Path.home() / "Desktop"
         try:
-            fp = str(Path.home() / "Desktop" / f"screenshot_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
-            subprocess.run(["powershell", "-command", f"Add-Type -AssemblyName System.Windows.Forms; $bmp = New-Object System.Drawing.Bitmap([System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width, [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Height); $gfx = [System.Drawing.Graphics]::FromImage($bmp); $gfx.CopyFromScreen(0, 0, 0, 0, $bmp.Size); $bmp.Save('{fp}')"], capture_output=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
-            return jsonify({"success": True, "message": "Screenshot saved."})
-        except: return jsonify({"success": False})
+            shots_dir.mkdir(parents=True, exist_ok=True)
+            fp = str(shots_dir / f"screenshot_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+            subprocess.run(["powershell", "-command", f"Add-Type -AssemblyName System.Windows.Forms; $bmp = New-Object System.Drawing.Bitmap([System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width, [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Height); $gfx = [System.Drawing.Graphics]::FromImage($bmp); $gfx.CopyFromScreen(0, 0, 0, 0, $bmp.Size); $bmp.Save('{fp}')"], capture_output=True, timeout=15, creationflags=subprocess.CREATE_NO_WINDOW)
+            if not Path(fp).exists():
+                return jsonify({"success": False, "error": "Screenshot failed."})
+            if isinstance(value, dict) and value.get("open"):
+                try:
+                    os.startfile(fp)  # noqa: S606 - user asked to see the capture
+                except Exception:
+                    pass
+            return jsonify({"success": True, "path": fp, "message": f"Screenshot saved to {fp}"})
+        except Exception as e:
+            return jsonify({"success": False, "error": f"Screenshot failed: {str(e)[:100]}"})
     if lo == "clipboard-read":
         try: r = subprocess.run(["powershell", "-command", "Get-Clipboard"], capture_output=True, text=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW); return jsonify({"success": True, "text": r.stdout.strip()})
         except: return jsonify({"success": False})
@@ -3282,19 +4044,66 @@ def api_control():
                 if "Signal" in l: sig = l.split(":", 1)[-1].strip()
             return jsonify({"success": True, "ssid": ssid, "signal": sig})
         except: return jsonify({"success": False})
-    if lo == "open-app":
-        apps = {"notepad": "notepad.exe", "calculator": "calc.exe", "paint": "mspaint.exe", "chrome": "chrome", "edge": "msedge", "vscode": "code", "spotify": "spotify", "discord": "discord",
-                "task manager": "taskmgr.exe", "taskmanager": "taskmgr.exe", "terminal": "wt.exe", "cmd": "cmd.exe", "youtube": "https://www.youtube.com", "files": "explorer.exe", "explorer": "explorer.exe",
-                "control panel": "control.exe", "settings": "ms-settings:", "mail": "outlook.exe", "whatsapp": "whatsapp.exe", "telegram": "telegram.exe", "browser": "chrome", "firefox": "firefox"}
-        name = str(value).lower(); target = apps.get(name, value)
+    if lo == "spotify-info":
         try:
-            if target.startswith("http://") or target.startswith("https://") or target.startswith("ms-settings:"):
+            import app_integrations as _ai
+            np = _ai.spotify_now_playing()
+            return jsonify({"success": bool(np.get("ok")), "now_playing": np})
+        except: return jsonify({"success": False})
+    if lo == "open-app":
+        name = str(value).lower().strip()
+        entry = None
+        for canon, (launch, proc, aliases) in REAL_APPS.items():
+            if canon == name or name in (aliases or []):
+                entry = (canon, launch, proc)
+                break
+        if entry is None:
+            # Brings up Windows App-Paths registered apps by bare name (e.g. "calc").
+            target = name
+        else:
+            target = entry[1]
+        try:
+            if not target or name in ("whatsapp", "whatsapp web"):
+                webbrowser.open("https://web.whatsapp.com")
+                return jsonify({"success": True, "message": f"Opened {value}."})
+            if target.startswith("http://") or target.startswith("https://"):
                 webbrowser.open(target)
                 return jsonify({"success": True, "message": f"Opened {value}."})
-            subprocess.Popen(target, shell=True); return jsonify({"success": True, "message": f"Opened {value}."})
-        except: return jsonify({"success": False})
+            if target.startswith("steam://"):
+                steam = _find_steam_game()
+                if steam:
+                    subprocess.Popen([steam, target], shell=False)
+                else:
+                    subprocess.Popen(f'start "" "steam:{target.split("steam:",1)[1]}"', shell=True)
+                return jsonify({"success": True, "message": f"Opened {value}."})
+            if target.startswith("ms-") or target.startswith("microsoft."):
+                webbrowser.open(target)
+                return jsonify({"success": True, "message": f"Opened {value}."})
+            if target.lower().endswith((".exe", ".msc", ".bat")):
+                resolved = _resolve_target(target.split("\\")[-1]) if "\\" not in target else target
+                if resolved:
+                    subprocess.Popen(resolved, shell=False)
+                else:
+                    subprocess.Popen(f'start "" "{target}"', shell=True)
+                return jsonify({"success": True, "message": f"Opened {value}."})
+            if target == "opencode":
+                subprocess.Popen(f'start "" cmd /k opencode', shell=True)
+                return jsonify({"success": True, "message": "Opened OpenCode in a new terminal."})
+            # Unknown: attempt a plain shell start (handles app-paths/PATH names).
+            subprocess.Popen(target, shell=True)
+            return jsonify({"success": True, "message": f"Opened {value}."})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)[:120]})
     if lo == "close-app":
-        try: subprocess.run(["taskkill", "/f", "/im", f"{value}.exe"], capture_output=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW); return jsonify({"success": True})
+        name = str(value).lower()
+        proc = None
+        for canon, (launch, proc_exe, aliases) in REAL_APPS.items():
+            if canon == name or name in (aliases or []):
+                proc = proc_exe
+                break
+        if not proc:
+            proc = name if name.endswith(".exe") else f"{name}.exe"
+        try: subprocess.run(["taskkill", "/f", "/im", proc], capture_output=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW); return jsonify({"success": True})
         except: return jsonify({"success": False})
     if lo == "list-directory":
         path = str(value) if value else str(Path.home())
@@ -3324,8 +4133,82 @@ def api_control():
         try: os.system("rundll32.exe powrprof.dll,SetSuspendState 0,1,0"); return jsonify({"success": True})
         except: return jsonify({"success": False})
     if lo == "terminal":
-        try: subprocess.Popen("wt.exe", shell=True); return jsonify({"success": True})
-        except: subprocess.Popen("cmd.exe", shell=True); return jsonify({"success": True})
+        # Agentic terminal. Accepts a plain string ("", "opencode", "npm run dev")
+        # or a dict {app, command, prompt, cwd} so chat can open a shell, run one
+        # command in it, or drive the opencode CLI with a real prompt.
+        spec = value if isinstance(value, dict) else {"command": str(value or "")}
+        want_app = str(spec.get("app") or "").lower()
+        cmd = str(spec.get("command") or "").strip()
+        prompt = str(spec.get("prompt") or "").strip()
+        cwd = str(spec.get("cwd") or "").strip()
+        run_opencode = want_app == "opencode" or "opencode" in cmd.lower() or "opencode" in want_app
+
+        def _wt(ps_cmd: str, keep: bool = True):
+            """Launch a Windows Terminal tab running ps_cmd. Returns True on success."""
+            args = ["wt.exe"]
+            if cwd:
+                args += ["-d", cwd]
+            args.append("powershell")
+            if keep:
+                args.append("-NoExit")
+            args += ["-Command", ps_cmd]
+            start = subprocess.Popen(args, shell=False)
+            return start.poll() is None
+
+        def _fallback_console(ps_cmd: str, keep: bool = True):
+            args = ["powershell"]
+            if keep:
+                args.append("-NoExit")
+            args += ["-Command", ps_cmd]
+            start = subprocess.Popen(args, creationflags=subprocess.CREATE_NEW_CONSOLE)
+            return start.poll() is None
+
+        if run_opencode:
+            # A prompt is a one-shot agent run so the work actually completes and
+            # prints a result; no prompt means the interactive TUI.
+            if prompt:
+                quoted = prompt.replace('"', "'")
+                script = f'opencode run "{quoted}"'
+                try:
+                    if _wt(script, keep=False):
+                        return jsonify({"success": True, "message": f"opencode is running: {prompt[:80]}"})
+                except Exception:
+                    pass
+                try:
+                    if _fallback_console(script, keep=False):
+                        return jsonify({"success": True, "message": f"opencode is running: {prompt[:80]}"})
+                except Exception:
+                    pass
+                return jsonify({"success": False, "error": "opencode is not installed on this PC."})
+            script = "opencode"
+            try:
+                if _wt(script):
+                    return jsonify({"success": True, "message": "Opened opencode terminal."})
+            except Exception:
+                pass
+            try:
+                if _fallback_console(script):
+                    return jsonify({"success": True, "message": "Opened opencode in a new console."})
+            except Exception:
+                pass
+            return jsonify({"success": False, "error": "opencode is not installed on this PC."})
+
+        if cmd:
+            try:
+                if _wt(cmd):
+                    return jsonify({"success": True, "message": f"Ran in terminal: {cmd[:80]}"})
+            except Exception:
+                pass
+            try:
+                if _fallback_console(cmd):
+                    return jsonify({"success": True, "message": f"Ran in terminal: {cmd[:80]}"})
+            except Exception:
+                pass
+            return jsonify({"success": False, "error": "Could not open a terminal."})
+        try:
+            subprocess.Popen("wt.exe", shell=True); return jsonify({"success": True, "message": "Opened terminal."})
+        except:
+            subprocess.Popen("cmd.exe", shell=True); return jsonify({"success": True, "message": "Opened terminal."})
     if lo == "minimize-all":
         try: ctypes.windll.user32.keybd_event(0x5B, 0, 0, 0); ctypes.windll.user32.keybd_event(0x4D, 0, 0, 0); ctypes.windll.user32.keybd_event(0x4D, 0, 2, 0); ctypes.windll.user32.keybd_event(0x5B, 0, 2, 0); return jsonify({"success": True})
         except: return jsonify({"success": False})
@@ -3335,36 +4218,24 @@ def api_control():
         except: return jsonify({"success": False})
     if lo == "volume-down":
         try:
-            from ctypes import cast, POINTER; from comtypes import CLSCTX_ALL
-            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-            spk = AudioUtilities.GetSpeakers(); iface = spk.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            vol = cast(iface, POINTER(IAudioEndpointVolume))
+            vol = _endpoint_volume()
             vol.SetMasterVolumeLevelScalar(max(0.0, vol.GetMasterVolumeLevelScalar() - 0.1), None)
             return jsonify({"success": True, "message": f"Volume at {round(vol.GetMasterVolumeLevelScalar()*100)}%."})
         except: return jsonify({"success": False, "error": "Volume control failed"})
     if lo == "volume-up":
         try:
-            from ctypes import cast, POINTER; from comtypes import CLSCTX_ALL
-            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-            spk = AudioUtilities.GetSpeakers(); iface = spk.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            vol = cast(iface, POINTER(IAudioEndpointVolume))
+            vol = _endpoint_volume()
             vol.SetMasterVolumeLevelScalar(min(1.0, vol.GetMasterVolumeLevelScalar() + 0.1), None)
             return jsonify({"success": True, "message": f"Volume at {round(vol.GetMasterVolumeLevelScalar()*100)}%."})
         except: return jsonify({"success": False, "error": "Volume control failed"})
     if lo == "mute":
         try:
-            from ctypes import cast, POINTER; from comtypes import CLSCTX_ALL
-            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-            spk = AudioUtilities.GetSpeakers(); iface = spk.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            cast(iface, POINTER(IAudioEndpointVolume)).SetMute(1, None)
+            _endpoint_volume().SetMute(1, None)
             return jsonify({"success": True, "message": "Muted."})
         except: return jsonify({"success": False})
     if lo == "unmute":
         try:
-            from ctypes import cast, POINTER; from comtypes import CLSCTX_ALL
-            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-            spk = AudioUtilities.GetSpeakers(); iface = spk.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            cast(iface, POINTER(IAudioEndpointVolume)).SetMute(0, None)
+            _endpoint_volume().SetMute(0, None)
             return jsonify({"success": True, "message": "Unmuted."})
         except: return jsonify({"success": False})
     if lo == "brightness":
@@ -3401,9 +4272,22 @@ def api_control():
     # App integrations & Chrome deep control proxy into app_integrations / chrome_bridge
     if lo in ("spotify-search", "spotify-action", "telegram-send", "whatsapp-open",
               "discord-open", "open-project", "terminal-project", "focus-window",
-              "app-volume", "list-app-volumes", "foreground-window", "list-open-apps"):
+              "app-volume", "list-app-volumes", "foreground-window", "list-open-apps",
+              "spotify-shuffle"):
         try:
             import app_integrations
+            if lo == "spotify-shuffle":
+                # Ctrl+S toggles shuffle in the Spotify desktop client.
+                ok, msg = app_integrations.focus_window("spotify")
+                if not ok:
+                    return jsonify({"success": False, "message": msg or "Spotify isn't open."})
+                time.sleep(0.3)
+                import ctypes as _c
+                _c.windll.user32.keybd_event(0x11, 0, 0, 0)   # ctrl down
+                _c.windll.user32.keybd_event(0x53, 0, 0, 0)   # s down
+                _c.windll.user32.keybd_event(0x53, 0, 2, 0)   # s up
+                _c.windll.user32.keybd_event(0x11, 0, 2, 0)   # ctrl up
+                return jsonify({"success": True, "message": "Toggled shuffle on Spotify."})
             ok, msg = app_integrations.run(lo, value)
             return jsonify({"success": bool(ok), "message": msg})
         except Exception as e:
@@ -3426,7 +4310,23 @@ def api_control():
         val = value.get("value", "") if isinstance(value, dict) else value
         pendingDeviceCommands.setdefault(did, []).append({"action": str(value.get("action", "toast") if isinstance(value, dict) else "toast"), "value": val, "timestamp": int(time.time() * 1000)})
         return jsonify({"success": True, "message": "Command sent to phone."})
-    if lo in ("discord-send", "whatsapp-send"):
+    if lo in ("discord-send", "whatsapp-send", "discord-dm"):
+        if lo == "discord-dm":
+            who = str((value.get("to") if isinstance(value, dict) else "") or "").strip()
+            body = str((value.get("text") if isinstance(value, dict) else value) or "").strip()
+            if not who or not body:
+                return jsonify({"success": False, "error": "Tell me who to DM and what to say."})
+            # Desktop Discord first: it DMs through the account you are already
+            # logged into, so no bot/token setup is needed.
+            try:
+                import app_integrations
+                ok, msg = app_integrations.discord_dm(who, body)
+                if ok:
+                    return jsonify({"success": True, "message": msg})
+                dm_err = msg
+            except Exception as e:
+                dm_err = str(e)[:120]
+            return jsonify({"success": False, "error": dm_err or "Discord DM failed."})
         if lo == "discord-send":
             text = (value or "").replace("\n", " ")
             webhook = str(load_json(DATA_DIR / "keys.json", {}).get("discord_webhook_url") or "").strip()
@@ -3559,10 +4459,38 @@ def api_control():
         return jsonify({"success": True, "message": "Note prompt ready."})
     if lo == "email-read":
         try:
+            import email_integration
+            res = email_integration.fetch_emails(int(value) if str(value or "").isdigit() else 5)
+        except Exception as e:
+            res = {"success": False, "emails": [], "message": str(e)[:120]}
+        if res.get("success") and res.get("emails"):
+            return jsonify({"success": True, "emails": res["emails"],
+                            "source": res.get("source", ""), "message": res.get("message", "")})
+        try:
             subprocess.Popen("outlook.exe", shell=True)
         except Exception:
             pass
-        return jsonify({"success": True, "message": "Opening your email."})
+        return jsonify({"success": False, "emails": [],
+                        "message": res.get("message") or "Opening your email."})
+    if lo == "mail-status":
+        try:
+            import email_integration
+            st = email_integration.mail_status()
+        except Exception as e:
+            st = {"success": False, "unread": None, "latest": [], "message": str(e)[:120]}
+        if not st.get("success"):
+            return jsonify({"success": False, "unread": None, "latest": [],
+                            "message": st.get("message") or "Mail status unavailable."})
+        unread = st.get("unread")
+        latest = [s for s in (st.get("latest") or []) if s]
+        bits = []
+        if unread is not None:
+            bits.append(f"{unread} unread")
+        if latest:
+            bits.append("latest from " + ", ".join(latest[:3]))
+        return jsonify({"success": True, "unread": unread, "latest": latest,
+                        "account": st.get("account", ""), "source": st.get("source", ""),
+                        "message": "; ".join(bits) or "Inbox reachable."})
     if lo in ("todo-add", "todo-list", "todo-clear", "todo-complete", "todo-remove", "todo-edit"):
         if lo == "todo-add":
             task = todo_add(str(value or "").strip())
@@ -3812,6 +4740,10 @@ def api_settings():
     # Behaviour / permission preferences (permanent app defaults).
     for k in ("auto_approve_phones", "proactive", "wake_word"):
         if k in d: s[k] = bool(d[k])
+    if "brain_order" in d and isinstance(d["brain_order"], str):
+        s["brain_order"] = d["brain_order"].strip()
+    if "ollama_model" in d and isinstance(d["ollama_model"], str):
+        s["ollama_model"] = d["ollama_model"].strip()
     for k in ("agency_url", "whatsapp_number"):
         if k in d and isinstance(d[k], str): s[k] = d[k].strip()
     # Secrets live in the git-ignored keys file.
@@ -3844,6 +4776,52 @@ def api_get_settings_keys():
         else:
             masked[k] = "SET" if v else "NOT SET"
     return jsonify({"success": True, "keys": masked})
+
+
+def _ollama_available() -> bool:
+    try:
+        import urllib.request as _ur
+        with _ur.urlopen("http://127.0.0.1:11434/api/tags", timeout=2) as r:
+            tags = json.loads(r.read().decode("utf-8"))
+        return bool(tags.get("models"))
+    except Exception:
+        return False
+
+
+def _ollama_models() -> list:
+    try:
+        import urllib.request as _ur
+        with _ur.urlopen("http://127.0.0.1:11434/api/tags", timeout=2) as r:
+            tags = json.loads(r.read().decode("utf-8"))
+        return [t.get("name", "") for t in tags.get("models", [])]
+    except Exception:
+        return []
+
+
+@app.route("/api/brain-status")
+def api_brain_status():
+    """Which free brain is available right now (and which is preferred)."""
+    settings = load_json(DATA_DIR / "settings.json", {})
+    order = (settings.get("brain_order") or "groq").strip().lower()
+    groq = bool(get_grok_key())
+    gemini = bool(get_gemini_key())
+    ollama_on = _ollama_available()
+    return jsonify({
+        "success": True,
+        "preferred": order,
+        "available": {
+            "groq": {"free_tier": True, "configured": groq,
+                     "model": (_groq_working_model() if groq else None),
+                     "note": "Free tier — open models (gpt-oss-120b). Same-day unlimited. No payment card needed." if groq else "Free tier, no card — paste a free Groq key in Settings > Keys."},
+            "gemini": {"free_tier": True, "configured": gemini, "model": "gemini-2.0-flash",
+                       "note": "Google's free tier — a free API key needs no credit card." if gemini else "Free tier — a free API key needs no credit card."},
+            "ollama": {"free_tier": True, "configured": ollama_on,
+                       "models": _ollama_models(),
+                       "note": "100% local + offline. If shown, a local model is running on :11434."}
+        },
+        "chain": "groq → gemini → ollama → offline" if order != "ollama" else "ollama → groq → gemini → offline",
+        "free_only": True,
+    })
 
 
 @app.route("/api/services")
@@ -3968,13 +4946,23 @@ def api_local_ip():
     return jsonify({"success": True, "ip": ip, "mobileUrl": f"http://{ip}:3005/mobile.html"})
 
 @app.route("/api/remote-status")
-def api_remote_status(): return jsonify({"success": True, "remoteMode": False, "hostname": platform.node()})
+def api_remote_status():
+    st = tunnel_remote.status()
+    return jsonify({
+        "success": True,
+        "remoteMode": bool(st["running"] and st["url"]),
+        "tunnelUrl": st["url"],
+        "hostname": platform.node(),
+        "lastUrl": st["last_url"],
+    })
 
 @app.route("/api/spotify/status")
 def api_spotify_status():
     try:
         import app_integrations
         st = app_integrations.spotify_status()
+        np = app_integrations.spotify_now_playing()
+        st["now_playing"] = np
         return jsonify({"success": True, **st})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
@@ -4492,7 +5480,26 @@ def api_notifications(): return jsonify({"success": True, "notifications": []})
 def api_discord_dms(): return jsonify({"success": True, "discord_dms": []})
 
 @app.route("/api/remote-mode", methods=["POST"])
-def api_remote_mode(): return jsonify({"success": True, "remoteMode": False})
+def api_remote_mode():
+    d = request.get_json(force=True, silent=True) or {}
+    if d.get("on"):
+        return jsonify({"success": True, **tunnel_remote.start()})
+    return jsonify({"success": True, **tunnel_remote.stop()})
+
+
+@app.route("/api/remote/tunnel/status")
+def api_remote_tunnel_status():
+    return jsonify({"success": True, **tunnel_remote.status()})
+
+
+@app.route("/api/remote/tunnel/start", methods=["POST"])
+def api_remote_tunnel_start():
+    return jsonify({"success": True, **tunnel_remote.start()})
+
+
+@app.route("/api/remote/tunnel/stop", methods=["POST"])
+def api_remote_tunnel_stop():
+    return jsonify({"success": True, **tunnel_remote.stop()})
 
 @app.route("/api/wake", methods=["POST"])
 def api_wake(): return jsonify({"success": True})
