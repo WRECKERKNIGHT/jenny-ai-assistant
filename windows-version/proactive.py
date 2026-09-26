@@ -122,15 +122,45 @@ def _speak(text):
         pass
 
 
+_mode_selected = threading.Event()
+
+
+def mark_mode_selected() -> None:
+    """Signal that the user finished the intro + mode pick (set by /api/mode).
+
+    This is the ONLY thing that arms the boot greeting. Waiting on generic UI
+    pings was too eager: the mini app pings every 3s, so a greeting could fire
+    over the cinematic intro or before any mode was ever chosen.
+    """
+    _mode_selected.set()
+
+
 def _boot_greeting():
-    time.sleep(BOOT_DELAY_S)
+    # The greeting only fires AFTER the user actually picks a mode. The app
+    # opens on modes.html first (intro video + mode cards); modes.html POSTs
+    # /api/mode the instant a mode is selected, which arms this event. So the
+    # greeting can never leak over the intro or pre-selection — and the front
+    # end still claims/stays-on-time for it right after the redirect.
+    if not _mode_selected.wait(60):
+        return
     if _stop.is_set():
         return
     if not proactive_enabled():
         return
-    # Single-voice coordination: if the UI already claimed the greeting
-    # (frontend called /api/greeting), we stay silent - otherwise the
-    # server would speak over the browser's greeting (the two-voices bug).
+    # Single-voice coordination: give the just-loaded dashboard a generous
+    # window (intro may still be dismissing on ULTRON) to claim the greeting
+    # via /api/greeting. If it claims, we stay silent - otherwise the server
+    # falls back to a spoken greeting (headless this boot: no UI claimed).
+    deadline = time.time() + BOOT_DELAY_S
+    while time.time() < deadline:
+        if _stop.is_set():
+            return
+        if tts_engine.boot_greeting_claimed():
+            tts_engine.mark_boot_greeting_done()
+            return
+        time.sleep(0.5)
+    if _stop.is_set():
+        return
     if tts_engine.boot_greeting_claimed():
         return
     mode = read_mode()

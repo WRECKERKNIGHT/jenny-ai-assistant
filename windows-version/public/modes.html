@@ -329,11 +329,14 @@ function selectMode(mode) {
 }
 
 async function activateMode(mode) {
+  // Greeting gate: index.html only greets after the intro video + mode
+  // selection have both finished — this flag tells it the right moment.
+  localStorage.setItem('jenny_greet_after_mode', mode || 'friday');
   try {
     await fetch('/api/mode', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode })
+      body: JSON.stringify({ mode, fromIntro: true })
     });
     document.body.style.transition = 'opacity 0.6s ease';
     document.body.style.opacity = '0';

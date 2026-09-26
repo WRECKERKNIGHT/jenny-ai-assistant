@@ -414,6 +414,9 @@ var ULTRON_GREETINGS = [
 ];
 
 function greet() {
+  // Single-voice rule: claim the server's boot greeting so the proactive
+  // thread (proactive.py) stays silent — ULTRON speaks its own greeting here.
+  fetch('/api/greeting', { cache: 'no-store' }).catch(function() {});
   var g = ULTRON_GREETINGS[Math.floor(Math.random() * ULTRON_GREETINGS.length)];
   aiResponse.textContent = g;
   aiResponse.classList.add('show');
