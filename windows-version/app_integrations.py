@@ -146,6 +146,69 @@ def spotify_running() -> bool:
     return _app_exe_running("spotify")
 
 
+_SMTC_PS1 = r"""$ErrorActionPreference = 'Stop'
+try {
+    [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager,Windows.Media.Control,ContentType=WindowsRuntime] > $null
+    Add-Type -AssemblyName System.Runtime.WindowsRuntime
+    $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]
+    function Await($WinRtTask, $ResultType) {
+        $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)
+        $netTask = $asTask.Invoke($null, @($WinRtTask))
+        $netTask.Wait(-1) | Out-Null
+        $netTask.Result
+    }
+    $manager = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+    $session = $manager.GetCurrentSession()
+    if ($session -ne $null) {
+        $props = Await ($session.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+        $status = $session.GetPlaybackInfo()
+        Write-Output ('TITLE=' + $props.Title)
+        Write-Output ('ARTIST=' + $props.Artist)
+        Write-Output ('ALBUM=' + $props.AlbumTitle)
+        Write-Output ('APPID=' + $session.SourceAppUserModelId)
+    } else {
+        Write-Output 'NOSESSION'
+    }
+} catch {
+    Write-Output ('ERR: ' + $_.Exception.Message)
+}"""
+
+
+def spotify_now_playing() -> dict:
+    """Read the REAL currently-playing track via Windows SMTC (no OAuth, no
+    Spotify API needed). Works for any media app, Spotify included. Falls back
+    cleanly when the API is unavailable, so the assistant never fabricates."""
+    out = {"ok": False, "title": "", "artist": "", "album": "", "app": "", "error": ""}
+    if not spotify_running():
+        out["error"] = "spotify not running"
+        return out
+    try:
+        from pathlib import Path as _P
+        here = _P(__file__).parent
+        ps = here / "_smtc_now_playing.ps1"
+        ps.write_text(_SMTC_PS1, encoding="utf-8-sig")
+        r = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                            "-File", str(ps)], capture_output=True, text=True,
+                           timeout=8, creationflags=subprocess.CREATE_NO_WINDOW)
+        fields = {}
+        for line in r.stdout.strip().splitlines():
+            if "=" in line:
+                k, _, v = line.partition("=")
+                fields[k.strip()] = v.strip()
+        if fields.get("TITLE"):
+            out.update({"ok": True, "title": fields["TITLE"],
+                        "artist": fields.get("ARTIST", ""),
+                        "album": fields.get("ALBUM", ""),
+                        "app": fields.get("APPID", "")})
+        elif fields.get("ERR"):
+            out["error"] = fields["ERR"][:120]
+        else:
+            out["error"] = "no media session"
+    except Exception as e:
+        out["error"] = str(e)[:120]
+    return out
+
+
 def spotify_status() -> dict:
     """Report whether Spotify is installed/running so the GUI can show it as
     'connected'. (Real playback state needs the Spotify Web API + OAuth keys,
@@ -278,6 +341,40 @@ def discord_open() -> tuple[bool, str]:
         return (ok, "Opened Discord") if ok else (False, "Discord open failed")
     except Exception as e:
         return False, f"Discord bridge error: {e}"
+
+
+def discord_dm(contact: str, message: str) -> tuple[bool, str]:
+    """Send a real Discord DM through the logged-in desktop client.
+
+    Same quick-switch flow as Telegram: focus the window, ctrl+K, type the
+    person, enter, type the message, enter. Works with whatever account the
+    user already has open, so no bot token or developer setup is required."""
+    if pyautogui is None:
+        return False, "pyautogui is not installed, so I can't drive the Discord window."
+    ok, msg = focus_window("Discord")
+    if not ok:
+        try:
+            subprocess.Popen(["Discord.exe"], shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+        except Exception:
+            pass
+        time.sleep(3.5)
+        ok, msg = focus_window("Discord")
+        if not ok:
+            return False, "Discord didn't come up - is it installed and logged in?"
+    time.sleep(0.4)
+    try:
+        pyautogui.hotkey("ctrl", "k")        # quick-switch
+        time.sleep(0.5)
+        pyautogui.typewrite(contact[:60])
+        time.sleep(0.6)
+        pyautogui.press("enter")
+        time.sleep(0.8)
+        pyautogui.typewrite(message[:500])
+        time.sleep(0.3)
+        pyautogui.press("enter")
+        return True, f"DM sent to {contact} on Discord"
+    except Exception as e:
+        return False, f"Discord DM failed: {e}"
 
 
 # =====================================================================
@@ -502,6 +599,11 @@ def run(name: str, value=""):
             return whatsapp_open()
         if name == "discord-open":
             return discord_open()
+        if name == "discord-dm":
+            if isinstance(value, dict):
+                return discord_dm(str(value.get("to", "")), str(value.get("text", "")))
+            who, _, body = str(value).partition("|")
+            return discord_dm(who.strip(), body.strip())
         if name == "open-project":
             return open_project(str(value))
         if name == "terminal-project":
