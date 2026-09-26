@@ -14,6 +14,9 @@ bin/JennyDesktop
 bin/JennyAI.app/Contents/MacOS/
 bin/JennyDesktop.app/Contents/MacOS/
 
+# Fetched on demand by tunnel_remote.py (_ensure_binary)
+windows-version/bin/
+
 # OS generated files
 .DS_Store
 *.log
