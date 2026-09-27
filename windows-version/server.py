@@ -3706,6 +3706,15 @@ def api_gesture_cmd():
     if not pc_actions or not action:
         return jsonify({"success": False, "error": "PC actions unavailable"})
     ok = pc_actions.run_action(action, value)
+    if isinstance(ok, dict):
+        # The newer registry actions (clipboard, file search, diagnostics, ...)
+        # return a real payload instead of a bare bool, so pass it through
+        # rather than flattening it to `True` and losing the answer.
+        if d.get("notify") and ok.get("ok") and ok.get("text"):
+            threading.Thread(target=tts_speak, args=(ok["text"],), daemon=True).start()
+        return jsonify({"success": bool(ok.get("ok")), "action": action, **ok})
+    if isinstance(ok, tuple) and len(ok) == 2:
+        return jsonify({"success": bool(ok[0]), "action": action, "message": str(ok[1])})
     if ok and d.get("notify"):
         pretty = action.replace("_", " ").strip()
         threading.Thread(target=tts_speak, args=(f"Executing {pretty}.",), daemon=True).start()
@@ -4048,12 +4057,25 @@ def api_control():
         except Exception as e:
             return jsonify({"success": False, "error": f"Screenshot failed: {str(e)[:100]}"})
     if lo == "clipboard-read":
-        try: r = subprocess.run(["powershell", "-command", "Get-Clipboard"], capture_output=True, text=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW); return jsonify({"success": True, "text": r.stdout.strip()})
-        except: return jsonify({"success": False})
+        # Routed through pc_actions so there is one clipboard implementation.
+        # The old inline `Get-Clipboard` reported success even on failure.
+        try:
+            import pc_actions as _pca
+            r = _pca.clipboard_read()
+            return jsonify({"success": bool(r.get("ok")), "text": r.get("text", ""),
+                            "chars": r.get("chars", 0)})
+        except Exception:
+            return jsonify({"success": False})
     if lo == "clipboard-write":
-        txt = value if isinstance(value, str) else value.get("text", "")
-        try: subprocess.run(["powershell", "-command", f"Set-Clipboard -Value '{txt}'"], capture_output=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW); return jsonify({"success": True, "message": "Copied."})
-        except: return jsonify({"success": False})
+        # The old inline f"Set-Clipboard -Value '{txt}'" broke on any text
+        # containing a single quote; pc_actions escapes it properly.
+        txt = value if isinstance(value, str) else (value or {}).get("text", "")
+        try:
+            import pc_actions as _pca
+            r = _pca.clipboard_write(txt)
+            return jsonify({"success": bool(r.get("ok")), "message": r.get("text", "")})
+        except Exception:
+            return jsonify({"success": False})
     if lo == "processes":
         try:
             r = subprocess.run(["tasklist", "/fo", "csv", "/nh"], capture_output=True, text=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
@@ -4461,6 +4483,11 @@ def api_control():
         "browser-refresh": ("browser_refresh", None),
         "browser-fullscreen": ("browser_fullscreen", None),
         "task-manager": ("task_manager", None),
+        "file-search": ("file_search", value),
+        "recent-files": ("recent_files", None),
+        "large-files": ("large_files", None),
+        "startup-apps": ("startup_apps", None),
+        "system-diagnostics": ("system_diagnostics", None),
     }
     _entry = _pc_map.get(lo)
     if _entry:
@@ -4477,6 +4504,12 @@ def api_control():
                 ok = False
         else:
             ok = False
+        if isinstance(ok, dict):
+            # The registry actions return a real payload plus an honest ok flag;
+            # bool(dict) would report success even when the scan failed.
+            if d.get("notify") and ok.get("ok") and ok.get("text"):
+                threading.Thread(target=tts_speak, args=(ok["text"],), daemon=True).start()
+            return jsonify({"action": lo, **ok})
         message = {"success": bool(ok), "action": lo}
         if ok:
             message["message"] = f"{lo.replace('-', ' ')} done."
@@ -5113,6 +5146,25 @@ def api_spotify_disconnect():
     import spotify_api
     ok, msg = spotify_api.disconnect()
     return jsonify({"success": ok, "message": msg})
+
+
+@app.route("/api/capabilities")
+def api_capabilities():
+    """The honest capability ledger.
+
+    Every requested capability is recorded against its real backing. Large
+    counts of S (needs a service/hardware) and N (not implemented) are the
+    truthful state of this machine -- reporting them is the point, so nothing
+    here claims a skill works when it does not.
+    """
+    import capability_registry
+    if request.args.get("q"):
+        caps = capability_registry.all_capabilities()
+        needle = request.args.get("q").strip().lower()
+        caps = [c for c in caps
+                if needle in c["capability"].lower() or needle in c["category"].lower()]
+        return jsonify({"success": True, "count": len(caps), "capabilities": caps})
+    return jsonify({"success": True, **capability_registry.summary()})
 
 
 @app.route("/api/hermes/status")
