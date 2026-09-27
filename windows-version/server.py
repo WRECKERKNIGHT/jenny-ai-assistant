@@ -1747,7 +1747,17 @@ COMMAND_SYNONYMS = {
     "spotify play": "media play", "spotify pause": "media pause", "spotify next": "media next",
     "spotify previous": "media previous", "play spotify": "open spotify", "resume spotify": "media play",
     "stop spotify": "media pause", "pause spotify": "media pause", "skip on spotify": "media next",
-    "next on spotify": "media next", "shuffle spotify": "spotify shuffle", "youtube next": "media next",
+    "shuffle spotify": "spotify shuffle", "youtube next": "media next",
+    # "next on spotify" used to alias to "media next" here. Because synonym
+    # expansion is word-boundary based, that swallowed every *question* too, so
+    # "what's up next on spotify" skipped the track instead of reading the
+    # queue. Questions now collapse to "spotify queue" (the queue branch keys
+    # off "queue"); the bare imperative "spotify next" still skips.
+    "what's up next on spotify": "spotify queue", "whats up next on spotify": "spotify queue",
+    "what is up next on spotify": "spotify queue", "what's next on spotify": "spotify queue",
+    "whats next on spotify": "spotify queue", "what is next on spotify": "spotify queue",
+    "show spotify queue": "spotify queue", "whats in the spotify queue": "spotify queue",
+    "what's in the spotify queue": "spotify queue", "spotify up next": "spotify queue",
     "youtube play": "media play", "youtube pause": "media pause", "youtube previous": "media previous",
     # ---- browser tab / page controls ----
     "list all tabs": "list tabs", "show all tabs": "list tabs", "see my tabs": "list tabs",
@@ -2553,8 +2563,31 @@ def local_command_router(msg):
             return {"text": line, "speech": re.sub(r"[#*_`]", "", line),
                     "command": {"action": "spotify-info", "value": np}}
         if "queue" in lo or "up next" in lo:
-            # Queue is a Spotify account feature: be honest and useful, offer
-            # real actions instead of fabricating a track list.
+            # The Web API is the ONLY way to truly read the queue. When it is
+            # connected we use it; otherwise we stay honest rather than
+            # guessing, exactly as before.
+            try:
+                import spotify_api as _sp
+                if _sp.connected():
+                    q = _sp.queue()
+                    if not q.get("ok"):
+                        det = q.get("detail", "I couldn't read the queue.")
+                        return {"text": f"{det} {boss}.", "speech": det,
+                                "command": {"action": "spotify-queue", "value": ""}}
+                    nxt = q.get("next") or []
+                    if not nxt:
+                        line = (f"Nothing queued after **{q.get('currently_playing')}**, {boss}. "
+                                "Spotify is at the end of the queue.")
+                        return {"text": line, "speech": "Nothing queued after this track.",
+                                "command": {"action": "spotify-queue", "value": ""}}
+                    top = ", ".join(f"**{t}**" for t in nxt[:3])
+                    more = f" and {len(nxt) - 3} more" if len(nxt) > 3 else ""
+                    line = f"Playing **{q.get('currently_playing')}** now, {boss}. Up next: {top}{more}."
+                    speech = (f"Up next: {nxt[0]}." + (f" Then {nxt[1]}." if len(nxt) > 1 else ""))
+                    return {"text": line, "speech": speech,
+                            "command": {"action": "spotify-queue", "value": ""}}
+            except Exception:
+                pass
             if not spotify_running_now():
                 return {"text": f"Spotify isn't running, {boss}. Say **open spotify** first and I can check what's playing.", "speech": "Spotify is not running.", "command": {"action": "open-app", "value": "spotify"}}
             if np.get("ok"):
@@ -4273,9 +4306,29 @@ def api_control():
     if lo in ("spotify-search", "spotify-action", "telegram-send", "whatsapp-open",
               "discord-open", "open-project", "terminal-project", "focus-window",
               "app-volume", "list-app-volumes", "foreground-window", "list-open-apps",
-              "spotify-shuffle"):
+              "spotify-shuffle", "spotify-queue", "spotify-playlist"):
         try:
             import app_integrations
+            # Once the Web API is connected it is strictly better than the
+            # desktop automation: it plays the RIGHT track by name instead of
+            # typing into the search box, and it is the only way to see the
+            # queue. Automation stays as the fallback when not connected.
+            if lo in ("spotify-search", "spotify-queue", "spotify-playlist"):
+                import spotify_api
+                if spotify_api.connected():
+                    if lo == "spotify-queue":
+                        q = spotify_api.queue()
+                        if not q.get("ok"):
+                            return jsonify({"success": False, "message": q.get("detail", "Queue unavailable.")})
+                        lines = ([f"Now playing: {q['currently_playing']}"] if q.get("currently_playing") else [])
+                        lines += [f"{i}. {t}" for i, t in enumerate(q.get("next") or [], 1)]
+                        return jsonify({"success": True, "message": "\n".join(lines),
+                                        "queue": q, "count": q.get("total", 0)})
+                    if lo == "spotify-playlist":
+                        ok, msg = spotify_api.play_playlist_by_name(str(value or ""))
+                    else:
+                        ok, msg = spotify_api.search_and_play(str(value or ""))
+                    return jsonify({"success": bool(ok), "message": msg})
             if lo == "spotify-shuffle":
                 # Ctrl+S toggles shuffle in the Spotify desktop client.
                 ok, msg = app_integrations.focus_window("spotify")
@@ -4966,6 +5019,140 @@ def api_spotify_status():
         return jsonify({"success": True, **st})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
+
+# --------------------------------------------------------------------------
+# SPOTIFY WEB API - real queue / library / play-by-name.
+#
+# The desktop path above can only press media keys, so it can never answer
+# "what is next". Once the user completes the OAuth flow these routes take
+# over, and the Web API answers become the source of truth. The OAuth dance
+# happens in the user's own browser and lands back on the loopback redirect,
+# so no key ever passes through a third party.
+# --------------------------------------------------------------------------
+@app.route("/api/spotify/connect")
+def api_spotify_connect():
+    import spotify_api
+    if not spotify_api.configured():
+        return jsonify({
+            "success": False,
+            "needsKeys": True,
+            "message": ("Save your Spotify Client ID and Client Secret in Settings > "
+                        "Keys first, then hit Connect."),
+        })
+    if spotify_api.connected():
+        return jsonify({"success": True, "alreadyConnected": True, "message": "Spotify is connected."})
+    spotify_api.mark_waiting()
+    url = spotify_api.auth_url()
+    if not url:
+        return jsonify({"success": False, "message": "Could not build the Spotify authorize URL."})
+    return jsonify({"success": True, "url": url,
+                    "message": "Approve in the browser, this window will close itself."})
+
+
+@app.route("/api/spotify/callback")
+def api_spotify_callback():
+    """Loopback redirect target. Trades the auth code for a token."""
+    import spotify_api
+    code = (request.args.get("code") or "").strip()
+    err = (request.args.get("error") or "").strip()
+    if err or not code:
+        msg = "Spotify connect was cancelled." if err == "access_denied" else "Spotify sent no code."
+        return Response(_callback_page(msg, False), mimetype="text/html")
+    ok, msg = spotify_api.exchange_code(code)
+    return Response(_callback_page(msg, ok), mimetype="text/html")
+
+
+def _callback_page(msg: str, ok: bool) -> str:
+    """Tiny landing page so the user sees what happened without hunting a log."""
+    colour = "#3ddc97" if ok else "#ff6b6b"
+    icon = "&#10003;" if ok else "&#33;"
+    return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>JENNY {'connected' if ok else 'connect failed'}</title></head>
+<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+background:#07080d;color:#e8ecf5;font-family:'Segoe UI',system-ui,sans-serif">
+<div style="text-align:center;max-width:420px;padding:32px">
+  <div style="width:64px;height:64px;margin:0 auto 18px;border-radius:50%;
+    border:2px solid {colour};display:flex;align-items:center;justify-content:center;
+    font-size:30px;color:{colour}">{icon}</div>
+  <h2 style="margin:0 0 8px;font-weight:600;letter-spacing:.3px">
+    {'Spotify connected' if ok else 'Spotify connect failed'}</h2>
+  <p style="margin:0;color:#98a2b8;font-size:14px;line-height:1.55">{msg}</p>
+  <p style="margin:20px 0 0;color:#5b6478;font-size:12px">You can close this tab.</p>
+</div>
+<script>setTimeout(function(){{ try{{ if(window.opener) window.opener.postMessage({{jenny:'spotify'}}, '*'); }}catch(e){{}} }},400);</script>
+</body></html>"""
+
+
+@app.route("/api/spotify/account")
+def api_spotify_account():
+    """Connection state + the real product tier, so we can be honest about
+    Premium-only features before the user hits one."""
+    import spotify_api
+    if not spotify_api.connected():
+        state, detail = spotify_api.wait_state()
+        return jsonify({"success": True, "connected": False, "configured": spotify_api.configured(),
+                        "state": state, "detail": detail})
+    acct = spotify_api.account()
+    return jsonify({"success": True, "connected": True, **acct})
+
+
+@app.route("/api/spotify/queue")
+def api_spotify_queue():
+    import spotify_api
+    return jsonify(spotify_api.queue())
+
+
+@app.route("/api/spotify/playlists")
+def api_spotify_playlists():
+    import spotify_api
+    return jsonify(spotify_api.playlists(request.args.get("limit", 25, type=int)))
+
+
+@app.route("/api/spotify/disconnect", methods=["POST"])
+def api_spotify_disconnect():
+    import spotify_api
+    ok, msg = spotify_api.disconnect()
+    return jsonify({"success": ok, "message": msg})
+
+
+@app.route("/api/hermes/status")
+def api_hermes_status():
+    import hermes_bridge
+    return jsonify(hermes_bridge.status())
+
+
+@app.route("/api/hermes/skills")
+def api_hermes_skills():
+    import hermes_bridge
+    rows = hermes_bridge.skills(enabled_only=request.args.get("enabled") == "1")
+    query = (request.args.get("q") or "").strip().lower()
+    if query:
+        rows = [r for r in rows
+                if query in r["name"].lower() or query in r["category"].lower()]
+    return jsonify({"success": True, "count": len(rows), "skills": rows})
+
+
+@app.route("/api/hermes/memory", methods=["GET", "POST"])
+def api_hermes_memory():
+    import hermes_bridge
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        return jsonify(hermes_bridge.memory_append(
+            data.get("text", ""), (data.get("kind") or "memory")))
+    return jsonify({"success": True, **hermes_bridge.memory_read()})
+
+
+@app.route("/api/hermes/slack-manifest")
+def api_hermes_slack_manifest():
+    import hermes_bridge
+    return jsonify(hermes_bridge.slack_manifest())
+
+
+@app.route("/api/hermes/memory-provider")
+def api_hermes_memory_provider():
+    import hermes_bridge
+    return jsonify(hermes_bridge.memory_provider_status())
+
 
 @app.route("/api/devices")
 def api_devices():
