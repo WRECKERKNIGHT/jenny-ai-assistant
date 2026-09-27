@@ -108,14 +108,28 @@ def parse_trigger(spec):
         """Take the tail of the ORIGINAL string so path case survives."""
         return orig[low_match_end:].strip().strip("'\"")
 
-    m = re.search(r"\b(?:when|if)\s+(?:a|an|any)?\s*([\w*]+)\s+(?:file\s+)?(?:is\s+)?"
-                  r"(?:added|created|appears?|lands?|dropped)\s*(?:in|to|into)\s+", low)
+    m = re.search(r"\b(?:when|if|whenever)\s+(?:a|an|any|some)?\s*(?:new\s+)?(\S+)\s+"
+                  r"(?:files?\s+)?(?:is\s+|are\s+)?"
+                  r"(?:added|created|appears?|lands?|dropped|shows?\s+up)\s*"
+                  r"(?:in|to|into|under|inside)\s+", low)
     if m:
-        ext = m.group(1)
+        # The token between the article and the verb is the extension, but
+        # people write it every way: ".pdf", "pdf", "*.png", "PDF file".
+        # Grab the single token then normalise, rather than trusting a pattern
+        # that silently produced things like ".a .pdf file".
+        ext = m.group(1).strip(".,:;!?\"'()").lower()
+        if ext in ("file", "files", "doc", "document", "documents", "one", "it"):
+            ext = ""
+        if ext in ("*", "*.*", "anything", "any"):
+            ext = "*"
+        elif ext and not ext.startswith(".") and not ext.startswith("*"):
+            ext = "." + ext
         folder = _folder_from(original, m.end())
         if len(folder) < 2:
             return None, "Tell me which folder to watch, e.g. 'when a pdf lands in Downloads'."
-        ext = "*" if ext in ("file", "any") else ("." + ext if not ext.startswith(".") else ext)
+        # Already normalised above; an omitted extension means "any file".
+        if not ext:
+            ext = "*"
         return {"type": "file", "ext": ext.lower(), "folder": folder}, None
     m = re.search(r"\bwhen\s+(.+?)\s+(?:is\s+)?(?:added|created|appears?|lands?|dropped)\s*"
                   r"(?:in|to|into)\s+", low)
@@ -196,10 +210,25 @@ def _describe(wf):
         return (f"daily at {t['daily_at']}" if "daily_at" in t
                 else f"every {t['every_minutes']} min")
     if t["type"] == "file":
-        return f"when a {t['ext']} file appears in {Path(t['folder']).name}"
+        what = "any file" if t["ext"] == "*" else f"a {t['ext']} file"
+        return f"when {what} appears in {Path(t['folder']).name}"
     if t["type"] == "idle":
         return f"after {t['idle_minutes']} min of inactivity"
     return "?"
+
+
+def _ext_matches(name, ext):
+    """Does a filename match the trigger's extension?
+
+    Accepts "*" (anything), ".pdf" and glob forms like "*.png", because
+    parse_trigger preserves whichever form the user typed.
+    """
+    e = str(ext or "*").lower()
+    if e in ("*", "*.*"):
+        return True
+    if e.startswith("*"):
+        return name.lower().endswith(e[1:])
+    return Path(name).suffix.lower() == e
 
 
 def _seed_file_baseline(wf):
@@ -211,12 +240,15 @@ def _seed_file_baseline(wf):
     seen = {}
     try:
         for p in folder.iterdir():
-            if p.is_file() and (ext == "*" or p.suffix.lower() == ext):
+            if p.is_file() and _ext_matches(p.name, ext):
                 seen[p.name] = p.stat().st_mtime
     except Exception:
         pass
     st = _read(STATE, {})
     st.setdefault(wf["id"], {})["seen"] = seen
+    # Must be written, not just set: without this the baseline is thrown away
+    # and the first tick fires on every file that was already in the folder.
+    _write(STATE, st)
 
 
 def list_workflows(enabled_only=False):
@@ -321,7 +353,7 @@ def _newest_file(wf):
     ext = wf["trigger"]["ext"]
     try:
         cands = [p for p in folder.iterdir()
-                 if p.is_file() and (ext == "*" or p.suffix.lower() == ext)]
+                 if p.is_file() and _ext_matches(p.name, ext)]
         return str(max(cands, key=lambda p: p.stat().st_mtime)) if cands else None
     except Exception:
         return None
@@ -433,7 +465,7 @@ def tick(activity=None):
             cur = {}
             try:
                 for p in folder.iterdir():
-                    if p.is_file() and (ext == "*" or p.suffix.lower() == ext):
+                    if p.is_file() and _ext_matches(p.name, ext):
                         cur[p.name] = p.stat().st_mtime
             except Exception:
                 continue
