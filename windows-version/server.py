@@ -5167,6 +5167,100 @@ def api_capabilities():
     return jsonify({"success": True, **capability_registry.summary()})
 
 
+# Explicit tool surface. Keyed tool/function names only -- no dynamic getattr
+# from user input, so this cannot be turned into arbitrary code execution.
+_TOOL_MODULES = {
+    "datascience": "datascience",
+    "pdf": "pdf_tools",
+    "files": "file_intel",
+    "research": "research_api",
+    "web": "web_apis",
+    "tasks": "tasks",
+    "safety": "safety",
+    "flows": "workflows",
+}
+_TOOL_FUNCS = {
+    "datascience": ["describe", "statistical_summary", "missing_values", "outliers",
+                    "correlations", "data_quality", "anomaly_detection", "regression",
+                    "classification", "clustering", "forecast", "trends", "pivot",
+                    "kpis", "validate", "clean", "compare", "chart", "available"],
+    "pdf": ["info", "extract_text", "search", "merge", "split", "extract_pages",
+            "compare", "text_from_text", "file_hash", "available"],
+    "files": ["classify_file", "inventory", "find_duplicates", "rename_plan", "rename_apply",
+              "find_empty_files", "old_files", "metadata", "similar_names", "available"],
+    "research": ["search_papers", "openalex_search", "openalex_author", "crossref_lookup",
+                 "arxiv_by_id", "paper_by_id", "open_access_pdf", "openalex_citations",
+                 "openalex_related", "field_of_study", "available"],
+    "web": ["weather", "air_quality", "geocode", "reverse_geocode", "translate",
+            "detect_language", "supported_languages", "nearby_places", "route", "available"],
+    "tasks": ["add_task", "list_tasks", "complete_task", "uncomplete_task", "delete_task",
+              "update_task", "overdue", "reminder_digest", "stats", "export_ics",
+              "parse_when", "parse_title", "available"],
+    "safety": ["history", "stats", "clear_history", "undo_last", "request_approval",
+               "list_approvals", "resolve_approval", "clear_resolved", "needs_approval",
+               "available"],
+    "flows": ["create", "list_workflows", "run_now", "set_enabled", "delete_workflow",
+              "tick", "available"],
+}
+
+
+@app.route("/api/tool", methods=["POST"])
+def api_tool():
+    """Run one capability tool. {tool, fn, args} -> real result or a real error.
+
+    Tools return their own {ok, text, ...}; ok=False is a genuine failure and
+    is passed through untouched rather than being flattened into success.
+    """
+    d = request.get_json(force=True, silent=True) or {}
+    tool = str(d.get("tool", "")).strip().lower()
+    fn = str(d.get("fn", "")).strip()
+    args = d.get("args") or {}
+    if tool not in _TOOL_MODULES:
+        return jsonify({"ok": False, "success": False,
+                        "error": f"Unknown tool '{tool}'. Available: {', '.join(sorted(_TOOL_MODULES))}"})
+    if fn not in _TOOL_FUNCS.get(tool, []):
+        return jsonify({"ok": False, "success": False,
+                        "error": f"'{tool}' has no function '{fn}'. Available: "
+                                 f"{', '.join(_TOOL_FUNCS.get(tool, []))}"})
+    if not isinstance(args, dict):
+        return jsonify({"ok": False, "success": False, "error": "args must be an object."})
+    try:
+        import importlib
+        mod = importlib.import_module(_TOOL_MODULES[tool])
+    except Exception as e:
+        return jsonify({"ok": False, "success": False,
+                        "error": f"Couldn't load {tool}: {type(e).__name__}: {e}"})
+    func = getattr(mod, fn, None)
+    if func is None:
+        return jsonify({"ok": False, "success": False, "error": f"{tool}.{fn} is missing."})
+    # chat/list helpers return text meant for a human; keep the wire shape small
+    try:
+        out = func(**args)
+    except TypeError as e:
+        return jsonify({"ok": False, "success": False,
+                        "error": f"{tool}.{fn} doesn't accept those arguments: {e}"})
+    except Exception as e:
+        import safety
+        safety.record("tool_call", f"{tool}.{fn}", ok=False, error=str(e)[:200])
+        return jsonify({"ok": False, "success": False,
+                        "error": f"{tool}.{fn} raised {type(e).__name__}: {e}"})
+    if not isinstance(out, dict):
+        return jsonify({"ok": True, "success": True, "result": str(out)[:4000]})
+    payload = {"success": bool(out.get("ok", True)), **out}
+    try:
+        payload = json.loads(json.dumps(payload, ensure_ascii=False, default=str))
+    except Exception:
+        payload = {k: str(v) for k, v in payload.items()}
+    return jsonify(payload)
+
+
+@app.route("/api/tools")
+def api_tools():
+    """List the callable surface, so the UI and the model know what exists."""
+    return jsonify({"success": True, "tools": {
+        t: {"module": _TOOL_MODULES[t], "functions": f} for t, f in _TOOL_FUNCS.items()}})
+
+
 @app.route("/api/hermes/status")
 def api_hermes_status():
     import hermes_bridge
@@ -5968,6 +6062,33 @@ def api_execute_shell():
     except Exception as e: return jsonify({"success": False, "error": str(e)})
 
 
+def _workflow_ticker():
+    """Evaluate scheduled/file/idle automations on a timer.
+
+    Runs in the background so `tick()` actually happens without anyone asking.
+    A failure here is swallowed on purpose: a broken automation must never take
+    the assistant down with it.
+    """
+    import time as _time
+    import workflows as _wf
+    last_error = None
+    while True:
+        try:
+            _time.sleep(60)
+            res = _wf.tick(activity=True)
+            fired = (res or {}).get("fired") or []
+            for f in fired:
+                if not f.get("ok"):
+                    last_error = f.get("text")
+            if fired:
+                names = ", ".join(f.get("name", "?") for f in fired[:3])
+                _ui_feed("info", f"Automation ran: {names}", source="workflow")
+        except Exception as e:
+            # keep looping; surface once so a stuck workflow is visible
+            if str(e) != last_error:
+                last_error = str(e)
+
+
 def start_background_services():
     """Kick off every always-on background routine (idempotent-ish).
 
@@ -5983,6 +6104,7 @@ def start_background_services():
     threading.Thread(target=tts_engine.prewarm, daemon=True).start()
     proactive.start()
     threading.Thread(target=_agency_alert_watcher, daemon=True).start()
+    threading.Thread(target=_workflow_ticker, daemon=True).start()
     # Always-on server-side wake word (restored from saved settings) so it
     # stays active even while the user is in another application.
     if load_json(DATA_DIR / "settings.json", {}).get("wake_word", True):
