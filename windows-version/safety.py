@@ -249,8 +249,10 @@ def needs_approval(kind):
     return base in NEEDS_APPROVAL or k in NEEDS_APPROVAL
 
 
-def request_approval(kind, detail, impact="", requester="voice"):
-    """Queue a risky action instead of running it."""
+def request_approval(kind, detail, impact="", requester="voice", payload=None):
+    """Queue a risky action instead of running it. `payload` (JSON-safe) is
+    stored with the approval so a batch action can be verified before it
+    actually runs."""
     try:
         pend = _read(APPROVALS, [])
         if not isinstance(pend, list):
@@ -258,7 +260,7 @@ def request_approval(kind, detail, impact="", requester="voice"):
     except Exception:
         pend = []
     for p in pend:
-        if p["kind"] == str(kind) and p.get("detail") == str(detail):
+        if p["kind"] == str(kind) and p.get("detail") == str(detail) and p.get("status") == "pending":
             return {"ok": True, "status": "already_pending", "approval": p,
                     "text": f"That one's already waiting for you to confirm (id {p['id']})."}
     entry = {"id": f"a{len(pend) + 1}{int(time.time()) % 1000}",
@@ -266,6 +268,8 @@ def request_approval(kind, detail, impact="", requester="voice"):
              "impact": str(impact)[:300], "requester": str(requester)[:40],
              "requested": datetime.now().isoformat(timespec="seconds"),
              "status": "pending"}
+    if payload is not None:
+        entry["payload"] = payload
     pend.append(entry)
     try:
         _write(APPROVALS, pend)
@@ -322,9 +326,47 @@ def resolve_approval(approval_id, decision, reason=""):
     if p["status"] == "approved":
         return {"ok": True, "status": "approved", "approval": p,
                 "should_execute": True, "action_kind": p["kind"], "action_detail": p["detail"],
+                "payload": p.get("payload"),
                 "text": f"Approved {p['id']}: {p['detail']}. Go ahead."}
     return {"ok": True, "status": "rejected", "approval": p, "should_execute": False,
             "text": f"Rejected {p['id']}: {p['detail']} will not run."}
+
+
+def get_approval(approval_id):
+    """Return one approval record (any status). Used by executor fns to
+    verify an approved plan before running a bulk action."""
+    try:
+        pend = _read(APPROVALS, [])
+        if not isinstance(pend, list):
+            pend = []
+    except Exception:
+        pend = []
+    aid = str(approval_id).strip().lower()
+    for p in pend:
+        if str(p.get("id", "")).lower() == aid:
+            return {"ok": True, "approval": p}
+    return _err(f"No approval with id '{approval_id}'.")
+
+
+def mark_executed(approval_id):
+    """Flag an approved record as consumed so it can't be replayed."""
+    try:
+        pend = _read(APPROVALS, [])
+        if not isinstance(pend, list):
+            pend = []
+    except Exception:
+        pend = []
+    aid = str(approval_id).strip().lower()
+    for p in pend:
+        if str(p.get("id", "")).lower() == aid:
+            p["executed"] = True
+            p["executed_at"] = datetime.now().isoformat(timespec="seconds")
+            try:
+                _write(APPROVALS, pend)
+            except Exception as e:
+                return _err(str(e))
+            return {"ok": True, "id": aid}
+    return _err(f"No approval with id '{approval_id}' to mark executed.")
 
 
 def clear_resolved():
