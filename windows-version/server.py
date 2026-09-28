@@ -5278,6 +5278,7 @@ _TOOL_MODULES = {
     "tasks": "tasks",
     "safety": "safety",
     "flows": "workflows",
+    "memory": "knowledge_graph",
 }
 _TOOL_FUNCS = {
     "datascience": ["describe", "statistical_summary", "missing_values", "outliers",
@@ -5301,6 +5302,7 @@ _TOOL_FUNCS = {
                "available"],
     "flows": ["create", "list_workflows", "run_now", "set_enabled", "delete_workflow",
               "tick", "available"],
+    "memory": ["summarize", "lookup", "related", "build", "available"],
 }
 
 
