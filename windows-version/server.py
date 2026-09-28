@@ -2519,6 +2519,38 @@ def local_command_router(msg):
     if any(w in lo for w in ["open web whatsapp", "web whatsapp", "open whatsapp web", "launch whatsapp web"]):
         return {"text": f"Opening WhatsApp, {boss}!", "speech": "Opening WhatsApp.", "command": {"action": "whatsapp-open", "value": ""}}
 
+    # MEMORY QUERIES over the local knowledge graph (vault + tasks stores). This
+    # runs BEFORE the vault-save branch below so "what do you remember about X"
+    # is read, not saved. "do you know about X" only claims recorded knowledge;
+    # if nothing is stored it falls through to the LLM instead of guessing.
+    if ("what do you remember about" in lo or "tell me what you remember" in lo
+            or "summarize my memory" in lo or "what's in my memory" in lo
+            or "what is in my memory" in lo or "what do you have in memory" in lo
+            or "do you know about" in lo or "what have you recorded about" in lo):
+        try:
+            import knowledge_graph as _kg
+        except Exception as e:
+            return {"text": f"Memory lookup is unavailable right now ({type(e).__name__}), {boss}.",
+                    "speech": "Memory lookup is unavailable."}
+        _me = re.search(r"\b(?:what do you remember about|do you know about|what have you recorded about)\s+(.+)", lo, re.I)
+        if _me:
+            _ent = _me.group(1).strip(" ?.!")[:60]
+            _hit = _kg.lookup(_ent)
+            if _hit and _hit.get("ok"):
+                _f = _hit.get("facts") or _hit.get("summary") or ""
+                return {"text": f"**_{_ent}_**: {_f}",
+                        "speech": f"About {_ent}: {_f}"}
+            if "do you know about" in lo or "what have you recorded about" in lo:
+                return None
+            return {"text": f"I haven't recorded anything about **{_ent}** in my memory yet, {boss}.",
+                    "speech": f"I haven't recorded anything about {_ent} yet."}
+        _sm = _kg.summarize()
+        if _sm and _sm.get("ok"):
+            return {"text": _sm.get("summary") or "The memory graph has no entries yet, so I remembered nothing new.",
+                    "speech": "Here's my summary of what I remember."}
+        return {"text": f"Memory summary failed ({( _sm or {}).get('error', 'no response')}), {boss}.",
+                "speech": "Could not summarize memory."}
+
     # MEMORY VAULT: "remember X", "save a memory", "store that X", "don't forget X",
     # "note this down", "save X to vault". Fully local so memory works offline.
     vmem = re.search(r"(?:remember|memorize|store|save|note(?: it)? down|put in memory|keep in mind)\s+(?:that\s+|this\s+|the fact that\s+)?(.+)$", lo)
@@ -2675,6 +2707,101 @@ def local_command_router(msg):
         if _live.get("ok"):
             return _live
         return _simulated_weather_reply(city, boss, _live.get("reason", "no response"))
+
+    # LIVE TRANSLATION (MyMemory, keyless). "translate X to french",
+    # "say hello in hindi", "how do you say thank you in spanish".
+    _TLANG = {"hindi": "hi", "spanish": "es", "french": "fr", "german": "de", "italian": "it",
+              "portuguese": "pt", "russian": "ru", "japanese": "ja", "chinese": "zh",
+              "korean": "ko", "arabic": "ar", "bengali": "bn", "tamil": "ta", "telugu": "te",
+              "marathi": "mr", "gujarati": "gu", "kannada": "kn", "malayalam": "ml",
+              "punjabi": "pa", "urdu": "ur", "nepali": "ne", "dutch": "nl", "polish": "pl",
+              "turkish": "tr", "swedish": "sv", "greek": "el", "thai": "th", "vietnamese": "vi",
+              "indonesian": "id", "english": "en"}
+    _tt = re.search(r"\b(?:translate|say|how (?:do (?:you|i)|can you) say)\s+(.+?)\s+(?:in|into|to)\s+([a-z]+)\s*[?.!]?\s*$", lo, re.I)
+    if _tt and _tt.group(2).lower() in _TLANG:
+        _txt = _tt.group(1).strip(" '\"[]")
+        _code = _TLANG[_tt.group(2).lower()]
+        try:
+            import web_apis as _tr
+            _tr_res = _tr.translate(text=_txt, target_lang=_code)
+        except Exception as e:
+            _tr_res = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+        if _tr_res and _tr_res.get("ok"):
+            _out = (_tr_res.get("translation") or "").strip(" '\"")
+            if _out:
+                return {"text": f"**{_txt}** in {_tt.group(2).lower()} → **{_out}**",
+                        "speech": f"\"{_txt}\" in {_tt.group(2).lower()} is \"{_out}\"."}
+        return {"text": f"Translation didn't come back cleanly ({( _tr_res or {}).get('error', 'no response')}), {boss}. "
+                        "I won't fake it.",
+                "speech": "Translation didn't come back, so I'm not guessing."}
+
+    # LIVE RESEARCH SEARCH (OpenAlex + Crossref + arXiv, keyless).
+    _pp = re.search(r"\b(?:search papers|find research|look up papers|papers about|papers on|research on|research about|studies on|literature (?:on|about))\s+(.+)$", lo, re.I)
+    if _pp and not any(x in lo for x in ("open research", "research mode", "deep research gpt")):
+        _q = re.sub(r"^(?:about|on)\s+", "", _pp.group(1).strip(" ?.!"))[:120]
+        try:
+            import research_api as _pa
+            _pr = _pa.search_papers(_q, limit=3)
+        except Exception as e:
+            _pr = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+        if _pr and _pr.get("ok"):
+            _papers = _pr.get("results") or []
+            if _papers:
+                _txt = " ; ".join(f"{p.get('title','?')[:80]} ({p.get('year','year?')})" for p in _papers[:3])
+                return {"text": f"**Papers on {_q}**: {_txt}",
+                        "speech": f"Found {len(_papers)} papers on {_q}."}
+            return {"text": f"No papers came back for **{_q}**.", "speech": f"No papers for {_q}."}
+        return {"text": f"Paper search for **{_q}** didn't return results ({( _pr or {}).get('error', 'no response')}), {boss}.",
+                "speech": "Paper search didn't return results, so I'm not guessing."}
+
+    # NEARBY PLACES (OpenStreetMap Overpass, keyless). Kind + location aware.
+    _nby = re.search(r"\b(nearby|near me|around (?:here|me)|what's?\s+around|places?(?:\s+(?:to|to get|near))?)\b", lo)
+    if _nby:
+        _kinds = {"pharmacy": "pharmacy", "pharmacies": "pharmacy", "chemist": "pharmacy",
+                  "hospital": "hospital", "hospitals": "hospital", "clinic": "hospital",
+                  "restaurant": "restaurant", "restaurants": "restaurant", "food": "food", "dhaba": "restaurant",
+                  "cafe": "cafe", "cafes": "cafe", "coffee": "cafe",
+                  "atm": "atm", "atms": "atm", "fuel": "fuel", "petrol": "fuel", "gas station": "fuel",
+                  "bank": "bank", "banks": "bank", "grocer": "supermarket", "grocery": "supermarket",
+                  "supermarket": "supermarket", "park": "park", "gym": "gym", "school": "school",
+                  "library": "library", "hotel": "hotel"}
+        _kind = None
+        for _k in _kinds:
+            if re.search(r"\b" + re.escape(_k) + r"\b", lo):
+                _kind = _kinds[_k]
+                break
+        _mloc = re.search(r"\b(?:in|near|around)\s+([a-zA-Z ,']+?)\s*$", lo, re.I)
+        _st2 = load_json(DATA_DIR / "settings.json", {"cityName": "Lucknow"})
+        _loc = (_mloc.group(1).strip(" ?.,'") if _mloc else "") or (_st2.get("cityName") or "Lucknow")
+        try:
+            import web_apis as _nb
+            _res = _nb.nearby_places(kind=_kind or "food", location=_loc, limit=5)
+        except Exception as e:
+            _res = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+        if _res and _res.get("ok"):
+            _rows = _res.get("results") or []
+            _h = " | ".join(f"{r.get('name','?')} {int(r.get('distance_m',0))}m" for r in _rows[:4]) if _rows else "nothing found nearby"
+            return {"text": f"**{(_kind or 'food').title()} near {str(_loc).title()}**: {_h}",
+                    "speech": f"{_kind or 'food'} near {_loc}: {_h}"}
+        return {"text": f"Nearby search for **{_kind or 'food'}** near {_loc} didn't return data ({( _res or {}).get('error', 'no response')}), {boss}.",
+                "speech": "Nearby search didn't return data, so I'm not guessing."}
+
+    # DIRECTIONS / ROUTE (OSRM, keyless).
+    _rd = re.search(r"\b(?:route|directions|navigate|way|travel)\s+from\s+(.+?)\s+to\s+([a-zA-Z ,']+?)\s*$", lo, re.I)
+    if not _rd and any(w in lo for w in ("get from", "route from", "directions from", "navigate from", "distance from")):
+        _rd = re.search(r"\b(?:from|get from)\s+(.+?)\s+to\s+([a-zA-Z ,']+?)\s*$", lo, re.I)
+    if _rd and not any(x in lo for x in ("weather", "aqi", "flight", "price", "cost", "from 9", "from 10", "degrees")):
+        _from, _to = _rd.group(1).strip(" ?.,'"), _rd.group(2).strip(" ?.,'")
+        try:
+            import web_apis as _rw
+            _rr = _rw.route(origin=_from, destination=_to)
+        except Exception as e:
+            _rr = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+        if _rr and _rr.get("ok"):
+            return {"text": f"**{_from} → {_to}**: {_rr.get('text')}",
+                    "speech": f"Directions from {_from} to {_to}: {_rr.get('text')}"}
+        return {"text": f"I couldn't route {_from} → {_to} ({( _rr or {}).get('error', 'no response')}), so I won't guess, {boss}.",
+                "speech": "Couldn't get directions, so I'm not guessing."}
 
     m = re.search(r"(?:send|message|text)\s+(.+?)\s+to\s+(.+?)\s+(?:on|via)\s+(telegram|whatsapp|discord|sms|text message)\b(?:\s*[:,-]\s*(.*))?$", lo)
     if not m:
