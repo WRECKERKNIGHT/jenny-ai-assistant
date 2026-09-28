@@ -46,6 +46,44 @@ ALLOWED = {
     "pc_actions:recent_files", "pc_actions:startup_apps",
 }
 
+# Internal args the dispatcher itself may supply (the file trigger path).
+_DISPATCH_INTERNALS = {"path"}
+
+
+_allowed_cache = None
+
+
+def _allowed_params():
+    """Union of the real parameter names each allowed function accepts.
+
+    A workflow's stored params may *only* be forwarded to an action if they
+    name a parameter that the target function actually declares. This both
+    keeps unknown/forged kwargs out AND stops rejecting legitimate params
+    simply because the manual list forgot them.
+    """
+    global _allowed_cache
+    if _allowed_cache is not None:
+        return _allowed_cache
+    import importlib
+    import inspect
+    names = set(_DISPATCH_INTERNALS)
+    for key in sorted(ALLOWED):
+        mod_name, _, fn_name = key.partition(":")
+        try:
+            mod = importlib.import_module(mod_name)
+            fn = getattr(mod, fn_name, None)
+            if fn is None:
+                continue
+            sig = inspect.signature(fn)
+            for p in sig.parameters.values():
+                if p.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                              inspect.Parameter.KEYWORD_ONLY):
+                    names.add(p.name)
+        except Exception:
+            continue
+    _allowed_cache = names
+    return names
+
 
 def _err(msg, **extra):
     return {"ok": False, "error": msg, **extra}
@@ -327,15 +365,18 @@ def _dispatch(wf):
             return _err(f"{key} doesn't exist.")
     except Exception as e:
         return _err(f"Couldn't load {key}: {type(e).__name__}: {e}")
-    kwargs = {k: v for k, v in params.items() if k in ("text", "query", "limit", "path",
-                                                       "column", "location", "which", "base",
-                                                       "pattern", "include_done")}
+    kwargs = {k: v for k, v in params.items() if k in _allowed_params()}
     if wf["trigger"]["type"] == "file":
-        kwargs.setdefault("path", str(Path(wf["trigger"]["folder"]) / ""))
-    if wf["trigger"]["type"] == "file" and not kwargs.get("path"):
-        newest = _newest_file(wf)
-        if newest:
-            kwargs["path"] = newest
+        # Only plant the watched path / folder if the target can take it.
+        sig_names = _signature_names(fn)
+        if "path" in sig_names:
+            kwargs.setdefault("path", str(Path(wf["trigger"]["folder"]) / ""))
+            if not kwargs.get("path"):
+                newest = _newest_file(wf)
+                if newest:
+                    kwargs["path"] = newest
+        elif "base" in sig_names:
+            kwargs.setdefault("base", str(Path(wf["trigger"]["folder"])))
     try:
         out = fn(**kwargs)
     except TypeError as e:
@@ -357,6 +398,14 @@ def _newest_file(wf):
         return str(max(cands, key=lambda p: p.stat().st_mtime)) if cands else None
     except Exception:
         return None
+
+
+def _signature_names(fn):
+    import inspect
+    try:
+        return set(inspect.signature(fn).parameters)
+    except Exception:
+        return set()
 
 
 def _run_shell(command, timeout=120):
