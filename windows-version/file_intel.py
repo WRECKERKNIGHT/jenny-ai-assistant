@@ -221,9 +221,37 @@ def rename_plan(folder, pattern, exts=None, recursive=False, start=1):
                     f"Confirm to apply; nothing has changed yet."}
 
 
-def rename_apply(plan_items, overwrite=False):
+def rename_apply(plan_items, overwrite=False, approval_id=None):
+    """Apply a rename plan, but only after an approval record for the same
+    plan has been granted. Without an approval_id this queues the plan (and
+    does nothing to disk). With one, the approval must be approved, must not
+    have been consumed already, and its payload must still match the plan."""
     if not plan_items:
         return _err("No rename plan was supplied.")
+    import safety
+    if not approval_id:
+        first = plan_items[0]
+        req = safety.request_approval(
+            "file_intel.rename_apply",
+            detail=f"Rename {len(plan_items)} file(s), e.g. {first.get('from_name') or first.get('from')} -> {first.get('to_name') or first.get('to')}",
+            impact=f"{len(plan_items)} file renames; no reverse stored.",
+            payload=list(plan_items))
+        aid = (req.get("approval") or {}).get("id")
+        return {"ok": True, "status": "pending", "action_executed": False,
+                "approval_id": aid,
+                "text": f"Held the rename of {len(plan_items)} file(s): nothing changed on disk. "
+                        f"Approve it, then call rename_apply again with approval_id={aid}."}
+    got = safety.get_approval(approval_id)
+    if not got.get("ok"):
+        return _err(got.get("error") or "Approval not found.")
+    a = got["approval"]
+    if a.get("status") != "approved":
+        return _err(f"Approval {approval_id} is {a.get('status')}; it isn't approved yet.")
+    if a.get("executed"):
+        return _err(f"Approval {approval_id} was already used once. Generate a fresh rename_plan and approve that.")
+    payload = a.get("payload")
+    if payload is not None and payload != list(plan_items):
+        return _err("The plan changed since it was approved. Run rename_plan again and re-approve the new plan.")
     done, failed = [], []
     for item in plan_items:
         src = Path(str(item.get("from")))
@@ -240,6 +268,7 @@ def rename_apply(plan_items, overwrite=False):
             done.append({"from": str(src), "to": str(dst)})
         except Exception as e:
             failed.append({"from": str(src), "error": f"{type(e).__name__}: {e}"})
+    safety.mark_executed(approval_id)
     return {"ok": bool(done) or not failed, "renamed": len(done), "failed": failed[:20],
             "detail": done[:200], "dry_run": False,
             "text": f"Renamed {len(done)} file(s)" + (f", {len(failed)} failed." if failed else ".")}
