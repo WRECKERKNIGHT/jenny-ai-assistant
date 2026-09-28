@@ -2630,6 +2630,52 @@ def local_command_router(msg):
                                        "video", "song on", "it again", "that song"])
         if q and not blocked and spotify_running_now():
             return {"text": f"Playing **{q}** on Spotify, {boss}!", "speech": f"Playing {q} on Spotify.", "command": {"action": "spotify-search", "value": q}}
+    # Live weather. This used to fall through to the LLM, which would answer
+    # "I can't fetch live data" -- or worse, guess. It is a real API call now.
+    # Word-boundary-safe so "train in Mumbai" doesn't trigger a forecast.
+    _rain_in = re.search(r"\brain\s+in\b", lo)
+    if any(w in lo for w in ["weather", "temperature", "forecast", "is it raining",
+                             "how hot", "how cold", "rain tomorrow", "air quality",
+                             "aqi", "pollution", "will it rain", "going to rain",
+                             "gonna rain"]) or _rain_in:
+        settings = load_json(DATA_DIR / "settings.json", {"cityName": "Lucknow"})
+        city = settings.get("cityName") or "Lucknow"
+        # "weather in X", "air quality in X", "aqi in X", "rain in X" --
+        # allow an adjective like "bad" to sit between the subject and "in".
+        mc = re.search(r"\b(?:weather|temperature|forecast|air quality|aqi|pollution|air|raining)"
+                       r"\s+(?:bad|good|level|like|inside|outside|right)?\s*in\s+([a-zA-Z ,']+)", lo, re.I)
+        if not mc and _rain_in:
+            mc = re.search(r"\brain\s+in\s+([a-zA-Z ,']+)", lo, re.I)
+        if not mc:
+            mc = re.search(r"\bin\s+([a-zA-Z ,']+?)\s+(?:is\s+it|what(?:'s| is)\s+the\s+weather|right\s+now)", lo)
+        if not mc:
+            mc = re.search(r"\bin\s+([a-zA-Z ,']+)\s*$", lo)
+        if mc:
+            # Trim trailing "tomorrow/today/right now" so the geocoder isn't
+            # handed "bengaluru tomorrow".
+            city = re.sub(r"\b(tomorrow|today|tonight|right\s+now|next\s+\w+|this\s+\w+|later)\b.*$",
+                          "", mc.group(1), flags=re.I).strip(" ?.,'")
+        if any(w in lo for w in ["air quality", "aqi", "pollution"]):
+            try:
+                import web_apis as _aq
+                aq = _aq.air_quality(location=city)
+            except Exception as e:
+                aq = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+            if aq and aq.get("ok"):
+                return {"text": f"**Air quality in {str(city).title()}**: {aq.get('band')} "
+                                f"(AQI **{aq.get('aqi')}**, US AQI {aq.get('us_aqi')}), "
+                                f"PM2.5 {aq.get('pm2_5')} µg/m³, PM10 {aq.get('pm10')} µg/m³. "
+                                f"_Live from Open-Meteo, {boss}._",
+                        "speech": f"Air quality in {city} is {aq.get('band')}, index {aq.get('aqi')}, "
+                                  f"with fine particles at {aq.get('pm2_5')}."}
+            return {"text": f"I couldn't get an air-quality reading for **{str(city).title()}** "
+                            f"({(aq or {}).get('error', 'no response')}). I won't guess at it, {boss}.",
+                    "speech": f"I couldn't get an air quality reading for {city}, {boss}."}
+        _live = live_weather_reply(city, boss)
+        if _live.get("ok"):
+            return _live
+        return _simulated_weather_reply(city, boss, _live.get("reason", "no response"))
+
     m = re.search(r"(?:send|message|text)\s+(.+?)\s+to\s+(.+?)\s+(?:on|via)\s+(telegram|whatsapp|discord|sms|text message)\b(?:\s*[:,-]\s*(.*))?$", lo)
     if not m:
         m = re.search(r"(?:send|message|text)\s+(.+?)\s+(?:on|via)\s+(telegram|whatsapp|discord|sms|text message)\b\s*[:,-]\s*(.+)$", lo)
@@ -3012,6 +3058,52 @@ def api_commands_forget():
     save_json(LEARNED_ALIASES_FILE, data)
     return jsonify({"success": True, "learned": len(data["aliases"])})
 
+def live_weather_reply(city, boss):
+    """Real weather from Open-Meteo. Never invents numbers.
+
+    simulate_weather() is still reachable as a clearly-labelled last resort,
+    but only when the live service actually failed -- the reply says so.
+    """
+    try:
+        import web_apis as _wx
+        live = _wx.weather(location=city, forecast_days=1)
+    except Exception as e:
+        live = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    if live and live.get("ok"):
+        cur = live.get("current") or {}
+        day = (live.get("forecast") or [{}])[0]
+        place = live.get("location") or str(city).title()
+        bits = [f"**{place}**: {str(cur.get('desc') or '?').lower()}, "
+                f"**{cur.get('temp_c')}°C** (feels {cur.get('feels_c')}°C)",
+                f"humidity {cur.get('humidity')}%, wind {cur.get('wind_kmh')} km/h"]
+        if day.get("high") is not None:
+            bits.append(f"today **{day.get('high')}°C** high / **{day.get('low')}°C** low")
+        if day.get("rain_chance") is not None:
+            bits.append(f"{day.get('rain_chance')}% chance of rain")
+        if live.get("will_rain"):
+            bits.append("**take an umbrella**")
+        return {"ok": True,
+                "text": ". ".join(bits) + f".\n\n_Live from Open-Meteo, {boss}._",
+                "speech": f"Weather in {place}: {cur.get('temp_c')} degrees and {cur.get('desc')}. "
+                          f"Humidity {cur.get('humidity')} percent, wind {cur.get('wind_kmh')} "
+                          f"kilometres per hour. That's live data, {boss}."}
+    reason = (live or {}).get("error", "no response")
+    return {"ok": False, "reason": str(reason)}
+
+
+def _simulated_weather_reply(city, boss, reason):
+    """Last-resort offline report, explicitly labelled as not real data."""
+    w = simulate_weather(city)
+    return {"text": f"The live weather service is unavailable ({reason}), so this is a "
+                    f"**simulated** report, not real data, for **{str(city).title()}**: "
+                    f"**{w['temp']}°C**, {w['condition']}, feeling {w['feels']}. Low around "
+                    f"**{w['low']}°C**, high near **{w['high']}°C**. Humidity **{w['humidity']}%**, "
+                    f"wind **{w['wind']}** km/h, about a **{w['rain_pct']}%** chance of rain. "
+                    f"I wouldn't plan around this one, {boss}.",
+            "speech": f"The weather service is down, so that reading for {city} is simulated, "
+                      f"not real. I wouldn't trust it, {boss}."}
+
+
 def offline_reply(text):
     lo = text.lower().strip()
     lo_norm = lo.replace("i am", "i'm").replace("i dont", "i don't").replace("i cant", "i can't").replace("dont", "don't").replace("cant", "can't").replace("wont", "won't").replace("isnt", "isn't").replace("arent", "aren't").replace("wasnt", "wasn't").replace("wouldnt", "wouldn't")
@@ -3155,18 +3247,15 @@ def offline_reply(text):
     if any(w in lo for w in ["weather", "temperature", "forecast", "is it raining", "today's weather"]):
         settings = load_json(DATA_DIR / "settings.json", {"cityName": "Lucknow"})
         city = settings.get("cityName", "Lucknow")
-        w = simulate_weather(city)
-        try:
-            import re as _re
-            mc = _re.search(r"\bweather\s+in\s+([a-zA-Z ]+)", lo)
-            if mc:
-                city = mc.group(1).strip()
-                w = simulate_weather(city)
-        except Exception:
-            pass
-        now = datetime.datetime.now()
-        period = "night" if now.hour < 6 else "early morning" if now.hour < 12 else "afternoon" if now.hour < 17 else "evening" if now.hour < 21 else "night"
-        return {"text": f"Here's the (offline-simulated) weather for **{city.title()}**: **{w['temp']}°C**, {w['condition']}, feeling {w['feels']}. Low around **{w['low']}°C**, high near **{w['high']}°C**. Humidity **{w['humidity']}%**, wind **{w['wind']}** km/h, and about a **{w['rain_pct']}%** chance of rain this {period}. Take an umbrella or leave it — I've got a read on the sky, {boss}.", "speech": f"Weather in {city}: {w['temp']} degrees, {w['condition']}. Humidity {w['humidity']} percent, wind {w['wind']} kmh, {w['rain_pct']} percent chance of rain. This is a simulated report since I'm offline, boss."}
+        mc = re.search(r"\bweather\s+in\s+([a-zA-Z ,']+)", lo, re.I)
+        if mc:
+            city = mc.group(1).strip(" ?.,'")
+        # Live data from Open-Meteo. simulate_weather() is only ever used as a
+        # clearly-labelled last resort, never dressed up as the real thing.
+        _live = live_weather_reply(city, boss)
+        if _live.get("ok"):
+            return _live
+        return _simulated_weather_reply(city, boss, _live.get("reason", "no response"))
     if any(w in lo for w in ["news", "headlines", "what's happening"]):
         return {"text": "Fetching latest news!", "speech": "Fetching news.", "command": {"action": "news", "value": ""}}
     if any(w in lo for w in ["crypto", "bitcoin", "ethereum", "btc", "eth", "prices"]):
@@ -4710,18 +4799,29 @@ def api_speak_next():
 def api_weather():
     settings = load_json(DATA_DIR / "settings.json", {"latitude": 26.8467, "longitude": 80.9462, "cityName": "Lucknow"})
     lat = settings.get("latitude", 26.8467); lon = settings.get("longitude", 80.9462); city = settings.get("cityName", "Lucknow")
+    # Real readings through web_apis.weather -- the old endpoint invented
+    # humidity=50 because current_weather=true doesn't return it.
     try:
-        import requests as _req
-        r = _req.get(f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true&daily=temperature_2m_max,temperature_2m_min&temperature_unit=celsius&timezone=auto", timeout=10)
-        if r.status_code == 200:
-            data = r.json(); cw = data.get("current_weather", {})
-            wmo = {0: "Clear Sky", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast", 45: "Foggy", 61: "Light Rain", 63: "Rain", 65: "Heavy Rain", 71: "Snow", 80: "Showers", 95: "Thunderstorm"}
-            daily = data.get("daily", {}); tmax = daily.get("temperature_2m_max", []); tmin = daily.get("temperature_2m_min", [])
-            days = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]; forecast = []; now = datetime.datetime.now()
-            for i in range(min(4, len(tmax))): d2 = now + datetime.timedelta(days=i+1); forecast.append({"day": days[d2.weekday()], "max": round(tmax[i]), "min": round(tmin[i])})
-            return jsonify({"success": True, "city": city, "tempC": cw.get("temperature", 0), "condition": wmo.get(cw.get("weathercode", 0), "Unknown"), "type": "clear" if cw.get("weathercode", 0) < 3 else "cloudy" if cw.get("weathercode", 0) < 50 else "rain", "humidity": 50, "windKmH": cw.get("windspeed", 0), "isDay": cw.get("is_day", 1) == 1, "forecast": forecast})
-    except: pass
-    return jsonify({"success": True, "city": city, "tempC": "--", "condition": "Offline", "type": "clear", "humidity": 0, "windKmH": 0, "isDay": True, "forecast": []})
+        import web_apis as _wx
+        live = _wx.weather(lat=lat, lon=lon, forecast_days=4)
+        if not live.get("ok"):
+            return jsonify({"success": True, "city": city, "tempC": "--", "condition": "Offline",
+                            "type": "clear", "humidity": 0, "windKmH": 0, "isDay": True, "forecast": []})
+        cur = live.get("current") or {}
+        days = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+        now = datetime.datetime.now()
+        forecast = [{"day": days[(now + datetime.timedelta(days=i + 1)).weekday()],
+                     "min": round(d.get("low") or 0), "max": round(d.get("high") or 0)}
+                    for i, d in enumerate((live.get("forecast") or [])[:4])]
+        kind = cur.get("kind", "clear")
+        return jsonify({"success": True, "city": city, "tempC": cur.get("temp_c"),
+                        "condition": cur.get("desc", "Unknown"), "type": kind,
+                        "humidity": cur.get("humidity", 0),
+                        "windKmH": cur.get("wind_kmh", 0),
+                        "isDay": bool(cur.get("is_day", True)), "forecast": forecast})
+    except Exception:
+        return jsonify({"success": True, "city": city, "tempC": "--", "condition": "Offline",
+                        "type": "clear", "humidity": 0, "windKmH": 0, "isDay": True, "forecast": []})
 
 def generate_forecast_line(mode):
     """Short, mode-flavored system/weather status bumper for the boot greeting."""
