@@ -5279,6 +5279,7 @@ _TOOL_MODULES = {
     "safety": "safety",
     "flows": "workflows",
     "memory": "knowledge_graph",
+    "ocr": "ocr",
 }
 _TOOL_FUNCS = {
     "datascience": ["describe", "statistical_summary", "missing_values", "outliers",
@@ -5303,6 +5304,7 @@ _TOOL_FUNCS = {
     "flows": ["create", "list_workflows", "run_now", "set_enabled", "delete_workflow",
               "tick", "available"],
     "memory": ["summarize", "lookup", "related", "build", "available"],
+    "ocr": ["ocr_image", "available"],
 }
 
 
