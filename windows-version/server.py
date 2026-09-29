@@ -5875,6 +5875,49 @@ def api_voice_info():
     except Exception:
         return jsonify({"success": False, "message": "Voice info unavailable"})
 
+@app.route("/api/voice-engine", methods=["GET", "POST"])
+def api_voice_engine():
+    """Read or change the TTS engine preference (auto | bark | edge-tts | sapi).
+
+    The engine ladder is bark -> edge-tts -> SAPI. GET returns the current
+    setting, the engine that would actually be used, and each rung's status.
+    POST with {"engine": "bark"} pins it (fallback still applies if bark is
+    uninstalled or the model download fails).
+    """
+    import json as _json
+    if request.method == "GET":
+        try:
+            s = _json.loads((DATA_DIR / "settings.json").read_text(encoding="utf-8"))
+        except Exception:
+            s = {}
+        setting = str(s.get("voice_engine", "auto")).lower() or "auto"
+        try:
+            import bark_engine as _bark
+            bark = _bark.status()
+        except Exception as e:
+            bark = {"engine": "bark", "available": False, "reason": f"module error: {type(e).__name__}"}
+        return jsonify({
+            "success": True, "setting": setting,
+            "active": tts_engine._chosen_engine(),
+            "engines": {
+                "bark": bark,
+                "edge-tts": {"available": tts_engine.edge_tts_available()},
+                "sapi": {"available": True},
+            },
+        })
+    d = request.get_json(force=True, silent=True) or {}
+    eng = str(d.get("engine", "")).strip().lower()
+    if eng not in ("auto", "bark", "edge-tts", "sapi"):
+        return jsonify({"success": False, "message": "engine must be auto|bark|edge-tts|sapi"})
+    try:
+        s = _json.loads((DATA_DIR / "settings.json").read_text(encoding="utf-8"))
+    except Exception:
+        s = {}
+    s["voice_engine"] = eng
+    DATA_DIR.mkdir(exist_ok=True, parents=True)
+    (DATA_DIR / "settings.json").write_text(_json.dumps(s, indent=2), encoding="utf-8")
+    return jsonify({"success": True, "setting": eng, "active": tts_engine._chosen_engine()})
+
 @app.route("/api/chrome-bookmarks")
 def api_chrome_bookmarks():
     try:
