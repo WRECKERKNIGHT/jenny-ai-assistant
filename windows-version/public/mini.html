@@ -667,6 +667,29 @@
     .drawer-title { color: var(--acc); }
     .ctrl-card i, .file-item.file i { color: var(--acc); }
 
+    /* Live core-link indicator in the header. */
+    .hdr-live {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 8px; letter-spacing: 1px; font-weight: 700;
+      padding: 4px 8px; border-radius: 20px;
+      color: #7cfc9a;
+      background: rgba(60, 220, 130, 0.08);
+      border: 1px solid rgba(60, 220, 130, 0.3);
+      transition: all 0.3s ease;
+    }
+    .live-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #3cdc82;
+      box-shadow: 0 0 8px rgba(60, 220, 130, 0.9);
+      animation: live-pulse 1.6s infinite;
+    }
+    .hdr-live.offline { color: #ff6b6b; background: rgba(255, 80, 80, 0.08); border-color: rgba(255, 80, 80, 0.3); }
+    .hdr-live.offline .live-dot { background: #ff6b6b; box-shadow: 0 0 8px rgba(255, 80, 80, 0.9); animation: none; }
+    @keyframes live-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.8); }
+    }
+
     /* GLASS FALLBACKS: opaque tint when backdrop-filter is unavailable or the
        user asked for reduced transparency - never a broken see-through panel. */
     @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -684,6 +707,7 @@
       .ctrl-card:hover, .ctrl-card:active { transform: none; }
       .radial-card:hover { transform: none; }
       .hud-outer-frame::after { display: none; }
+      .live-dot { animation: none; }
     }
   </style>
 </head>
@@ -702,6 +726,7 @@
         <span class="hdr-badge">HUD 3.0</span>
       </div>
       <div class="hdr-controls">
+        <span class="hdr-live" id="hdr-live" title="Core link status"><span class="live-dot"></span>LINK</span>
         <button class="hdr-btn" id="training-btn" title="AI Memory & Training"><i class="fa-solid fa-brain"></i></button>
         <button class="hdr-btn" id="fullscreen-btn" title="Expand Interface"><i class="fa-solid fa-expand"></i></button>
       </div>
@@ -812,6 +837,7 @@
     const drawerTitle = document.getElementById('drawer-header-lbl');
     const drawerBody = document.getElementById('drawer-body-content');
     const drawerClose = document.getElementById('drawer-close-btn');
+    const hdrLive = document.getElementById('hdr-live');
 
     let currentActiveTab = '';
 
@@ -1142,6 +1168,7 @@
         const res = await fetch('/api/system-status');
         const d = await res.json();
         if (d.success) {
+          if (hdrLive) hdrLive.classList.remove('offline');
           const cpu = d.cpu?.usage || 0;
           const ram = d.ram?.usage || 0;
           const disk = d.disk?.usage || 0;
@@ -1159,7 +1186,7 @@
           document.getElementById('ring-disk').setAttribute('stroke-dasharray', `${disk}, 100`);
           document.getElementById('ring-net').setAttribute('stroke-dasharray', `${net}, 100`);
         }
-      } catch {}
+      } catch { if (hdrLive) hdrLive.classList.add('offline'); }
     }
     updateTelemetry();
     setInterval(updateTelemetry, 3000);
