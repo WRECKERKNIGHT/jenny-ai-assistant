@@ -2528,7 +2528,7 @@ async function loadVoiceBadge() {
     const v = (d.voices && d.voices[currentMode]) || {};
     let label = (v.voice || '').replace(/\s*\(.*?\)\s*/g, '').trim().split(/[-\s]/).filter(Boolean).slice(0, 2).join(' ');
     if (!label) label = 'Default';
-    const eng = (d.voices && d.voices.__engine_choice__) || '';
+    const eng = ((d.voices && d.voices.__engine__) || {}).__engine_choice__ || '';
     nameEl.textContent = label + (v.rate ? ` \u00d7${v.rate >= 0 ? '+' + v.rate : v.rate}` : '') + (eng ? ` \u00b7 ${eng}` : '');
     if (badge) { badge.classList.remove('loading', 'error'); badge.title = 'Active TTS voice: ' + (v.voice || 'default') + (eng ? ' via ' + eng : ''); }
   } catch (e) {
