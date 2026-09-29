@@ -106,6 +106,8 @@ _play_lock = threading.Lock()
 
 _engine_online = False
 _engine_probed = False
+# Serialises the one-time edge_tts import probe across threads.
+_engine_probe_lock = threading.Lock()
 
 # ---------------------------------------------------------------------------
 # Voice bus - single-voice coordinator
@@ -188,18 +190,29 @@ def ui_queue_depth() -> int:
 # ---------------------------------------------------------------------------
 
 def edge_tts_available() -> bool:
-    """Return True when the edge-tts module is importable."""
+    """Return True when the edge-tts module is importable.
+
+    Thread-safe: the probe is guarded by a lock and the "already probed" flag
+    is only raised once the import has actually finished. Previously the flag
+    was set *before* the import, so any thread that arrived during the (slow)
+    `import edge_tts` read the default False and reported the neural engine as
+    unavailable - the server then degraded to SAPI even though edge-tts was
+    perfectly importable.
+    """
     global _engine_probed, _engine_online
     if _engine_probed:
         return _engine_online
-    _engine_probed = True
-    try:
-        import edge_tts  # noqa: F401
-        _engine_online = True
-        return True
-    except Exception:
-        _engine_online = False
-        return False
+    with _engine_probe_lock:
+        if _engine_probed:
+            return _engine_online
+        try:
+            import edge_tts  # noqa: F401
+            ok = True
+        except Exception:
+            ok = False
+        _engine_online = ok
+        _engine_probed = True
+        return ok
 
 
 def prewarm(mode: str | None = None) -> None:
