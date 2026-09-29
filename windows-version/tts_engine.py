@@ -1,16 +1,21 @@
 """
-J.E.N.N.Y - Neural TTS Engine (edge-tts with Windows SAPI fallback)
+J.E.N.N.Y - Neural TTS Engine (Bark/edge-tts with Windows SAPI fallback)
 
 A completely new audio experience for the assistant:
 
-  1. PRIMARY  - Microsoft Azure neural voices via `edge-tts` (near-human quality,
+  1. BARK     - suno-ai/bark transformer voice, fully on-device (torch). The
+               highest-quality tier, chosen via Settings when installed.
+  2. PRIMARY  - Microsoft Azure neural voices via `edge-tts` (near-human quality,
                streamed sentence-by-sentence for near-zero perceived latency).
                Voice per persona:
                    friday          -> en-US-JennyNeural  (feminine, warm, fun)
                    jarvis          -> en-GB-RyanNeural   (formal British male)
                    ultron          -> en-US-ChristopherNeural (deep, hard)
-  2. FALLBACK - Windows SAPI voice (legacy) when edge-tts is offline/unavailable.
-  3. CACHE    - synthesized WAVs are cached so repeat phrases are instant.
+  3. FALLBACK - Windows SAPI voice (legacy) when the above are unavailable.
+  4. CACHE    - synthesized WAVs are cached so repeat phrases are instant.
+
+The engine ladder never fakes output: each rung reports its own status, and
+the active engine is always visible through /api/voice-info.
 
 All speak() calls run on background threads so HTTP handlers never block.
 """
@@ -48,6 +53,41 @@ SAPI_PROFILES = {
     "jarvis": (["george", "guy", "ryan", "natural", "male"], ["george", "david", "mark", "male"], -1),
     "ultron": (["guy", "ryan", "christopher", "mark", "natural"], ["david", "mark", "michael", "male"], -2),
 }
+
+# Voice-engine preference stored in data/settings.json -> "voice_engine".
+#   "auto" -> best available rung (bark first),  "bark" / "edge-tts" / "sapi" -> pinned.
+def _engine_setting() -> str:
+    try:
+        from pathlib import Path
+        import json as _json
+        s = _json.loads((BASE_DIR / "data" / "settings.json").read_text(encoding="utf-8"))
+    except Exception:
+        s = {}
+    return str(s.get("voice_engine", "auto")).lower() or "auto"
+
+
+def _chosen_engine() -> str:
+    """Active engine for the current settings + availability ladder.
+
+    bark  ->  edge-tts  ->  SAPI. An unavailable rung is reported, never
+    silently emulated: the returned name is what the user actually hears.
+    """
+    setting = _engine_setting()
+    try:
+        import bark_engine as _bark
+        bark_ok = _bark.available()
+    except Exception:
+        bark_ok = False
+    if setting == "bark":
+        return "bark" if bark_ok else ("edge-tts" if edge_tts_available() else "sapi")
+    if setting == "edge-tts":
+        return "edge-tts" if edge_tts_available() else "sapi"
+    if setting == "sapi":
+        return "sapi"
+    # auto: best rung first
+    if bark_ok:
+        return "bark"
+    return "edge-tts" if edge_tts_available() else "sapi"
 
 # ---------------------------------------------------------------------------
 # Engine state
@@ -376,6 +416,65 @@ def _clean(text: str) -> str:
     return t
 
 
+def _speak_bark(text: str, mode: str | None) -> str:
+    """Speak text through the on-device bark engine (cache + chunking).
+
+    Returns the engine actually used ("bark" on success; on a download/model
+    failure it degrades once to edge-tts or SAPI and reports THAT engine so
+    the user is never told "bark" when they heard edge-tts).
+    """
+    try:
+        import bark_engine as _bark
+    except Exception:
+        return "unavailable"
+    if not _bark.available():
+        return "unavailable"
+    CACHE_DIR.mkdir(exist_ok=True, parents=True)
+    sentences = split_sentences(text)
+    for i, sent in enumerate(sentences):
+        if _stop_flag.is_set():
+            break
+        wav = cached_wav(sent, mode)
+        if wav is None:
+            wav = _bark.cached_wav(sent, mode)
+            if wav is None:
+                wav = _bark._cache_key(sent, mode)
+                ok = _bark.synthesize_wav(sent, wav, mode)
+                if not ok or not wav.exists():
+                    _fallback_once(text, mode)
+                    return "fallback"
+        if _stop_flag.is_set():
+            break
+        try:
+            _play_wav(wav)
+        except Exception:
+            pass
+    return "bark"
+
+
+def _fallback_once(text: str, mode: str | None) -> None:
+    """Last-resort speak after a bark model failure (never loops)."""
+    if edge_tts_available():
+        voice, rate, pitch, volume = MODE_VOICES.get(mode, (DEFAULT_VOICE, DEFAULT_RATE, DEFAULT_PITCH, DEFAULT_VOLUME))
+        try:
+            wav = CACHE_DIR / f"_barkfallback_{mode or 'default'}.wav"
+            probe = split_sentences(text)[0] or text
+            if synthesize_wav(probe, wav, voice, rate, pitch, volume) and wav.exists():
+                _play_wav(wav)
+                return
+        except Exception:
+            pass
+        try:
+            _sapi_speak(text, mode)
+        except Exception:
+            pass
+    else:
+        try:
+            _sapi_speak(text, mode)
+        except Exception:
+            pass
+
+
 def _speak_worker(text: str, mode: str | None, use_chime: bool) -> None:
     """Stream text aloud using edge-tts (cache + sentence streaming), else SAPI."""
     global _speaking, _last_text, _last_start
@@ -400,7 +499,9 @@ def _speak_worker(text: str, mode: str | None, use_chime: bool) -> None:
             except Exception:
                 pass
 
-        if edge_tts_available():
+        if _chosen_engine() == "bark":
+            _speak_bark(text, mode)
+        elif edge_tts_available():
             voice, rate, pitch, volume = MODE_VOICES.get(mode, (DEFAULT_VOICE, DEFAULT_RATE, DEFAULT_PITCH, DEFAULT_VOLUME))
             cache = CACHE_DIR
             cache.mkdir(exist_ok=True)
@@ -493,8 +594,19 @@ def status() -> dict:
 
 def voice_map() -> dict:
     """Describe the active neural voice per mode (used by /api/voice-info)."""
+    active = _chosen_engine()
     out = {}
     for m, (v, r, p, vol) in MODE_VOICES.items():
-        out[m] = {"neural_voice": v, "rate": r, "pitch": p, "volume": vol, "engine": "edge-tts" if edge_tts_available() else "SAPI-fallback",
+        out[m] = {"neural_voice": v, "rate": r, "pitch": p, "volume": vol,
+                  "engine": active,
                   "cached": bool(CACHE_DIR.exists() and any(CACHE_DIR.glob("*.wav")))}
+    try:
+        import bark_engine as _bark
+        out["__bark__"] = _bark.status()
+    except Exception as e:
+        out["__bark__"] = {"engine": "bark", "available": False,
+                           "reason": f"module error: {type(e).__name__}"}
+    out["__engine_choice__"] = active
+    out["__engine_setting__"] = _engine_setting()
+    out["__ladder__"] = "bark -> edge-tts -> SAPI"
     return out
