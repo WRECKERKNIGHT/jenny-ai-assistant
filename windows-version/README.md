@@ -48,12 +48,44 @@ Wake words "Hey Friday", "Hey Jarvis" and "Hey Ultron" auto-switch the persona.
 
 ## Voice / TTS System (brand-new audio engine)
 
-The old robotic SAPI-only voice is replaced by a **neural voice engine** (`tts_engine.py`):
+The old robotic SAPI-only voice is replaced by a **neural voice engine** (`tts_engine.py`)
+that always picks the best rung it can actually use:
 
-- **Primary — edge-tts (Microsoft neural voices)**: near-human quality, streamed
+    Bark (on-device, best)  →  edge-tts (Microsoft neural)  →  Windows SAPI (offline)
+
+- **Bark — on-device neural voice (`bark_engine.py`)**: the highest-quality rung,
+  fully offline and persona-matched (a distinct speaker + sampling temperature per
+  mode). It is *optional* because it needs PyTorch and pulls ~1.2 GB of weights on
+  first use. JENNY only reports Bark when it is genuinely available — otherwise it
+  falls back silently and says which engine it used.
+- **edge-tts (Microsoft neural voices)**: near-human quality, streamed
   sentence-by-sentence with a per-mode speaking rate, so the first words start
-  almost instantly.
-- **Fallback — Windows SAPI** voices automatically when offline/edge-tts fails.
+  almost instantly. This is the default when Bark is absent.
+- **Windows SAPI** voices automatically when offline/edge-tts fails.
+
+### Selecting the engine
+Pick a rung in **Settings → TTS ENGINE** (`auto | bark | edge-tts | sapi`), or hit
+the API directly:
+
+```bash
+curl http://127.0.0.1:3005/api/voice-engine            # read setting + active + status
+curl -X POST http://127.0.0.1:3005/api/voice-engine \
+     -H "Content-Type: application/json" -d '{"engine":"bark"}'
+```
+
+The preference lives in `data/settings.json` under `voice_engine`. `auto` prefers
+Bark, then edge-tts, then SAPI. Pinning `bark` on a machine without the deps is
+allowed but degrades honestly — `/api/voice-info` and the voice badge will show
+the engine that actually spoke.
+
+### Installing Bark (optional)
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install suno-bark
+```
+Until those are present, `bark_engine.status()` reports the precise missing
+dependency and the reason — it never claims to be online when it is not.
+
 - **WAV cache**: repeated phrases and sentences play instantly with zero synthesis latency.
 - **Talkative mode** (`proactive.py`): JENNY now *speaks on its own* — boot greeting,
   time-of-day openers, friendly idle nudges (if you're quiet ~10 min), and a gentle
@@ -81,7 +113,7 @@ The old robotic SAPI-only voice is replaced by a **neural voice engine** (`tts_e
 - **Dual Mode**: Full window app + transparent overlay HUD
 - **Tray + Mini HUD**: system-tray icon → always-on-top Mini HUD (right side of taskbar)
 - **Voice Control**: mode-aware wake words ("Hey Jenny" / "Hey Friday" / "Hey Jarvis" / "Hey Ultron")
-- **Neural TTS**: edge-tts voices per persona with automatic SAPI fallback
+- **Neural TTS**: on-device Bark → edge-tts → SAPI ladder with honest fallback
 - **Greeting**: personalized daily greetings with weather, date, and system status
 - **Personality**: Jenny calls you "Boss"; Jarvis is formal, ULTRON is hard
 - **Proactive / talkative**: boot greeting, idle chit-chat, low-battery alerts
