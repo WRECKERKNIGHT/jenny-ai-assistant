@@ -96,5 +96,26 @@ class TtsEngineLadderTests(unittest.TestCase):
             self.assertIn("engine", vm[m])
 
 
+    def test_edge_probe_is_thread_safe(self):
+        import threading as _th
+        with mock.patch.object(tts_engine, "_engine_probed", False), \
+             mock.patch.object(tts_engine, "_engine_online", False):
+            results = []
+            guard = _th.Lock()
+
+            def worker():
+                v = tts_engine.edge_tts_available()
+                with guard:
+                    results.append(v)
+
+            threads = [_th.Thread(target=worker) for _ in range(8)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(60)
+            self.assertEqual(len(results), 8)
+            self.assertEqual(set(results), {tts_engine.edge_tts_available()})
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
