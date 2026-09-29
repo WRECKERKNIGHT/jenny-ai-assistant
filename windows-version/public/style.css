@@ -2294,3 +2294,98 @@ body.mode-ultron .jd-cmd {
   }
 }
 
+/* =====================================================================
+   GLASS ACCENT THEMING — one accent triplet per persona
+   The base glass material is persona-neutral; each mode supplies a single
+   --accent-rgb triplet and every surface derives its tint, edge and glow
+   from it. This replaces the hand-copied rgba() literals so jarvis, friday
+   and ultron share exactly the same glass physics, only re-coloured.
+   ===================================================================== */
+body.mode-jarvis {
+  --accent: #00d4ff;
+  --accent-2: #22d3ee;
+  --accent-rgb: 0, 212, 255;
+  --accent-grad: linear-gradient(135deg, #00d4ff, #22d3ee);
+}
+body.mode-friday {
+  --accent: #a855f7;
+  --accent-2: #d946ef;
+  --accent-rgb: 168, 85, 247;
+  --accent-grad: linear-gradient(135deg, #a855f7, #d946ef);
+}
+body.mode-ultron {
+  --accent: #ff3e3e;
+  --accent-2: #ff6b35;
+  --accent-rgb: 255, 62, 62;
+  --accent-grad: linear-gradient(135deg, #ff3e3e, #ff6b35);
+}
+:root {
+  /* Derived from the active mode's triplet; the fallback keeps the base
+     indigo accent on surfaces rendered before a mode class is applied. */
+  --accent-edge: rgba(var(--accent-rgb, 109, 139, 255), 0.30);
+  --accent-edge-strong: rgba(var(--accent-rgb, 109, 139, 255), 0.55);
+  --accent-tint: rgba(var(--accent-rgb, 109, 139, 255), 0.12);
+  --accent-tint-2: rgba(var(--accent-rgb, 109, 139, 255), 0.035);
+  --accent-glow: 0 0 26px rgba(var(--accent-rgb, 109, 139, 255), 0.30);
+}
+
+/* Accent-tinted glass: the shared material with the persona colour baked in. */
+.glass-accent {
+  background: linear-gradient(160deg, var(--accent-tint), var(--accent-tint-2));
+  border: 1px solid var(--accent-edge);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  box-shadow: var(--glass-shadow-sm), var(--glass-inset);
+}
+/* A 1px accent rim light along the top edge — reads as a lit glass bevel. */
+.glass-rim {
+  position: relative;
+}
+.glass-rim::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 1px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, var(--accent-edge-strong), transparent);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+/* ---- JARVIS: cyan-lit instrument panels ---- */
+body.mode-jarvis .jd-op,
+body.mode-jarvis .jd-cmd,
+body.mode-jarvis .sys-graph-card,
+body.mode-jarvis .am-stat {
+  background: linear-gradient(160deg, var(--accent-tint), var(--accent-tint-2)) !important;
+  border-color: var(--accent-edge) !important;
+}
+body.mode-jarvis .jd-op:hover,
+body.mode-jarvis .jd-cmd:hover,
+body.mode-jarvis .sys-graph-card:hover {
+  border-color: var(--accent-edge-strong) !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.46), var(--accent-glow), var(--glass-inset) !important;
+}
+body.mode-jarvis .jd-dashboard,
+body.mode-jarvis .jarvis-dashboard {
+  background: linear-gradient(165deg, rgba(0, 40, 60, 0.34), rgba(2, 8, 18, 0.52)) !important;
+  border: 1px solid var(--accent-edge) !important;
+  box-shadow: var(--glass-shadow), var(--glass-inset), var(--accent-glow) !important;
+}
+/* Cyan status rails in jarvis so the dashboard reads as live telemetry. */
+body.mode-jarvis .jd-status,
+body.mode-jarvis .sys-info-chip,
+body.mode-jarvis .sys-graph-card {
+  border-color: var(--accent-edge) !important;
+}
+body.mode-jarvis .jd-status.online,
+body.mode-jarvis .jd-status.speaking {
+  box-shadow: var(--accent-glow), var(--glass-inset) !important;
+}
+/* Jarvis orb gains a cyan containment ring. */
+body.mode-jarvis .holo-orb-stage::before,
+body.mode-jarvis .holo-orb-stage::after {
+  border-color: var(--accent-edge) !important;
+}
+
