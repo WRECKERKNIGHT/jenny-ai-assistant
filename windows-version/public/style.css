@@ -2389,3 +2389,96 @@ body.mode-jarvis .holo-orb-stage::after {
   border-color: var(--accent-edge) !important;
 }
 
+/* ---- FRIDAY: violet-lit companion panels (parity with jarvis) ---- */
+body.mode-friday .fd-card,
+body.mode-friday .fd-ctrl-btn,
+body.mode-friday .fd-cmd,
+body.mode-friday .sys-graph-card,
+body.mode-friday .welcome-card {
+  background: linear-gradient(160deg, var(--accent-tint), var(--accent-tint-2)) !important;
+  border-color: var(--accent-edge) !important;
+}
+body.mode-friday .fd-card:hover,
+body.mode-friday .fd-ctrl-btn:hover,
+body.mode-friday .fd-cmd:hover,
+body.mode-friday .sys-graph-card:hover,
+body.mode-friday .welcome-card:hover {
+  border-color: var(--accent-edge-strong) !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.46), var(--accent-glow), var(--glass-inset) !important;
+}
+body.mode-friday .friday-dashboard,
+body.mode-friday .friday-orb-panel {
+  background: linear-gradient(165deg, rgba(48, 18, 70, 0.34), rgba(10, 4, 20, 0.52)) !important;
+  border: 1px solid var(--accent-edge) !important;
+  box-shadow: var(--glass-shadow), var(--glass-inset), var(--accent-glow) !important;
+}
+body.mode-friday .fd-status,
+body.mode-friday .speech-preview {
+  border-color: var(--accent-edge) !important;
+}
+body.mode-friday .speech-waves .wave-bar {
+  background: var(--accent-grad) !important;
+}
+
+/* ---- Shared material upgrade: warmer bevel + accent sheen on the active mode.
+   These apply to the base classes so both dashboards inherit the same feel. ---- */
+.glass,
+.glass-soft {
+  box-shadow: var(--glass-shadow-sm), var(--glass-inset);
+}
+.glass-strong {
+  box-shadow: var(--glass-shadow), var(--glass-inset), 0 0 0 1px rgba(var(--accent-rgb, 109, 139, 255), 0.06);
+}
+/* A faint accent wash behind the whole HUD so glass has colour to pick up. */
+body.mode-jarvis .holo-glow {
+  background:
+    radial-gradient(ellipse at 50% 18%, rgba(0, 212, 255, 0.18) 0%, transparent 62%),
+    radial-gradient(ellipse at 18% 78%, rgba(34, 211, 238, 0.09) 0%, transparent 55%),
+    radial-gradient(ellipse at 82% 68%, rgba(0, 150, 220, 0.08) 0%, transparent 55%),
+    radial-gradient(ellipse at 50%, rgba(192, 192, 192, 0.05) 0%, transparent 70%);
+}
+body.mode-friday .holo-glow {
+  background:
+    radial-gradient(ellipse at 50% 18%, rgba(168, 85, 247, 0.20) 0%, transparent 62%),
+    radial-gradient(ellipse at 18% 78%, rgba(217, 70, 239, 0.10) 0%, transparent 55%),
+    radial-gradient(ellipse at 82% 68%, rgba(139, 92, 246, 0.09) 0%, transparent 55%),
+    radial-gradient(ellipse at 50%, rgba(192, 192, 192, 0.05) 0%, transparent 70%);
+}
+
+/* Accent focus rings: keyboard users get the persona colour, not a grey box. */
+body.mode-jarvis .hud-input:focus,
+body.mode-jarvis .chat-input:focus,
+body.mode-jarvis input:focus-visible,
+body.mode-jarvis textarea:focus-visible,
+body.mode-friday .hud-input:focus,
+body.mode-friday .chat-input:focus,
+body.mode-friday input:focus-visible,
+body.mode-friday textarea:focus-visible {
+  outline: none;
+  border-color: var(--accent-edge-strong) !important;
+  box-shadow: var(--accent-glow) !important;
+}
+
+/* ---- Fallbacks for the new material under no-blur / reduced transparency ---- */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-accent {
+    background: rgba(12, 16, 28, 0.94) !important;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass-accent {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(12, 16, 28, 0.96) !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.mode-friday .fd-card:hover,
+  body.mode-friday .fd-ctrl-btn:hover,
+  body.mode-friday .fd-cmd:hover,
+  body.mode-jarvis .jd-op:hover,
+  body.mode-jarvis .jd-cmd:hover {
+    transform: none;
+  }
+}
+
