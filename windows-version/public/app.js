@@ -1790,6 +1790,7 @@ function loadSettingsPanel(el) {
   // Build settings HTML
   let html = `
     <div class="setting-row"><label>VOICE</label><select id="voice-select" style="width:140px"><optgroup label="ElevenLabs"><option value="21m00Tcm4TlvDq8ikWAM">Rachel</option><option value="EXAVITQu4vr4xnSDxMaL">Bella</option><option value="MF3mGyEYCl7XYWbV9V6O">Elli</option><option value="pFZP5JQG7iQjIQuC4Bku">Lily</option><option value="AZnzlk1XvdvUeBnXmlld">Domi</option><option value="TxGEqnHWrfWFTfGW9XjX">Josh</option><option value="VR6AewLTigWG4xSOukaG">Arnold</option><option value="yoZ06aMxZJJ28mfd3POQ">Sam</option></optgroup><optgroup label="Web Speech (Free)"><option value="web-samantha">Samantha (macOS)</option><option value="web-karen">Karen (macOS)</option><option value="web-moira">Moira (macOS)</option><option value="web-tessa">Tessa (macOS)</option></optgroup></select></div>
+    <div class="setting-row"><label>TTS ENGINE</label><select id="engine-select" style="width:140px"><option value="auto">Auto (best available)</option><option value="bark">Bark (neural, needs torch)</option><option value="edge-tts">Edge-TTS (neural)</option><option value="sapi">Windows SAPI (offline)</option></select></div>
     <div class="setting-row"><label>SPEECH RATE</label><input type="range" id="speech-rate" min="0.5" max="2" step="0.1" value="1.0" style="width:100px"></div>
     <div class="setting-row"><label>SPEECH PITCH</label><input type="range" id="speech-pitch" min="0.5" max="2" step="0.1" value="1.0" style="width:100px"></div>
     <div class="setting-row"><label></label><button id="test-voice-btn" style="padding:4px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--txt2);font-family:var(--mono);font-size:9px;cursor:pointer;"><i class="fa-solid fa-volume-high"></i> TEST VOICE</button></div>
@@ -1860,6 +1861,31 @@ function loadSettingsPanel(el) {
   
   // Event listeners
   document.getElementById('voice-select').addEventListener('change', (e) => { mem.voiceId = e.target.value; saveOfflineMemory(mem); const vv = e.target.value; if (/^web-/i.test(vv)) { _cachedVoice = null; _cachedMode = null; } toast('Voice updated, BOSS.', 'ok'); });
+  const engineSelect = document.getElementById('engine-select');
+  if (engineSelect) {
+    fetch('/api/voice-engine', { cache: 'no-store' }).then(r => r.json()).then(d => {
+      if (d && d.success && d.setting) engineSelect.value = d.setting;
+    }).catch(() => {});
+    engineSelect.addEventListener('change', async (e) => {
+      const wanted = e.target.value;
+      try {
+        const r = await fetch('/api/voice-engine', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ engine: wanted }) });
+        const d = await r.json();
+        if (d && d.success) {
+          _cachedVoice = null; _cachedMode = null;
+          if (wanted === 'bark' && d.active !== 'bark') {
+            toast(`Bark unavailable (${(d.engines && d.engines.bark && d.engines.bark.reason) || 'deps missing'}). Using ${d.active}.`, 'err');
+            if (d.setting) engineSelect.value = d.setting;
+          } else {
+            toast(`TTS engine: ${d.active}`, 'ok');
+          }
+          loadVoiceBadge();
+        } else {
+          toast('Could not set TTS engine.', 'err');
+        }
+      } catch (err) { toast('Could not set TTS engine.', 'err'); }
+    });
+  }
   const testVoiceBtn = document.getElementById('test-voice-btn');
   if (testVoiceBtn) testVoiceBtn.addEventListener('click', () => { _cachedVoice = null; _cachedMode = null; speak('Hello Boss. This is how I sound now. Does this work for you?'); });
   document.getElementById('speech-rate').addEventListener('input', (e) => { mem.speechRate = parseFloat(e.target.value); saveOfflineMemory(mem); });
@@ -2502,8 +2528,9 @@ async function loadVoiceBadge() {
     const v = (d.voices && d.voices[currentMode]) || {};
     let label = (v.voice || '').replace(/\s*\(.*?\)\s*/g, '').trim().split(/[-\s]/).filter(Boolean).slice(0, 2).join(' ');
     if (!label) label = 'Default';
-    nameEl.textContent = label + (v.rate ? ` \u00d7${v.rate >= 0 ? '+' + v.rate : v.rate}` : '');
-    if (badge) { badge.classList.remove('loading', 'error'); badge.title = 'Active TTS voice: ' + (v.voice || 'default'); }
+    const eng = (d.voices && d.voices.__engine_choice__) || '';
+    nameEl.textContent = label + (v.rate ? ` \u00d7${v.rate >= 0 ? '+' + v.rate : v.rate}` : '') + (eng ? ` \u00b7 ${eng}` : '');
+    if (badge) { badge.classList.remove('loading', 'error'); badge.title = 'Active TTS voice: ' + (v.voice || 'default') + (eng ? ' via ' + eng : ''); }
   } catch (e) {
     if (nameEl) nameEl.textContent = 'offline';
     if (badge) badge.classList.remove('loading'); badge.classList.add('error');

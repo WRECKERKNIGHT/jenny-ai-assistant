@@ -5916,7 +5916,20 @@ def api_voice_engine():
     s["voice_engine"] = eng
     DATA_DIR.mkdir(exist_ok=True, parents=True)
     (DATA_DIR / "settings.json").write_text(_json.dumps(s, indent=2), encoding="utf-8")
-    return jsonify({"success": True, "setting": eng, "active": tts_engine._chosen_engine()})
+    try:
+        import bark_engine as _bark
+        bark = _bark.status()
+    except Exception as e:
+        bark = {"engine": "bark", "available": False, "reason": f"module error: {type(e).__name__}"}
+    return jsonify({
+        "success": True, "setting": eng,
+        "active": tts_engine._chosen_engine(),
+        "engines": {
+            "bark": bark,
+            "edge-tts": {"available": tts_engine.edge_tts_available()},
+            "sapi": {"available": True},
+        },
+    })
 
 @app.route("/api/chrome-bookmarks")
 def api_chrome_bookmarks():
