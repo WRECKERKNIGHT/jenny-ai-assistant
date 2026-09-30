@@ -333,31 +333,69 @@ function initDataStreams() {
   draw();
 }
 
+// Every subsystem the dashboard needs, started in one place. Both entry paths
+// repeated this identical 15-call block, which made it easy for one of them to
+// quietly miss a subsystem.
+function startAllSubsystems() {
+  startClock(); startOrb(); initSpeechWaves(); startHoloShimmer();
+  startSysMonitor(); startAmbientBar(); startParticles(); startPingMonitor();
+  startInputStats(); fetchQuota(); setInterval(fetchQuota, 60000);
+  setInterval(updateTimerDisplay, 1000); checkPermissions();
+  startConnectionMonitor(); initPhoneLinkManager(); initWakeWord();
+}
+
+function bindWelcomeCards() {
+  document.querySelectorAll('.welcome-card').forEach(card => {
+    card.addEventListener('click', () => { const cmd = card.dataset.cmd; if (cmd) sendMessage(cmd); });
+  });
+}
+
+// A mode pick opens a clean output window: the previous conversation is dropped
+// rather than replayed, so the dashboard reflects the mode just chosen. The
+// welcome screen is deliberately left up so the mode's starters are waiting
+// instead of an empty bubble area.
+function startFreshSession() {
+  try { localStorage.removeItem('jenny_chat_history'); } catch (e) {}
+  const msgs = document.getElementById('msgs');
+  if (msgs) msgs.innerHTML = '';
+}
+
+async function revealDashboard({ fresh }) {
+  const app = document.getElementById('main-app');
+  if (!app) return;
+  app.style.display = 'flex';
+  try { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch(e) {}
+  if (fresh) startFreshSession();
+  else restoreChatHistory();
+  bindWelcomeCards();
+  await loadMode();
+  if (currentMode === 'friday') initFridayDashboard();
+  greetAfterBoot();
+}
+
 async function runBoot() {
   const savedMem = loadOfflineMemory();
   applyDarkMode(savedMem.darkMode !== false);
 
   const bootScreen = document.getElementById('boot-screen');
-  const app = document.getElementById('main-app');
 
-  if (localStorage.getItem('jenny_booted') === '1') {
+  // The intro and the mode pick already ran in modes.html, so arriving from
+  // there means a mode was just chosen and the dashboard should simply appear.
+  // Playing the boot cinematic here was a second intro running straight after
+  // the first one, skipped only because modes.html happened to have set
+  // jenny_booted already - so cleared storage or a direct load of / brought the
+  // whole splash back. jenny_from_modes states the intent explicitly.
+  const fromModes = localStorage.getItem('jenny_from_modes') === '1';
+  const alreadyBooted = localStorage.getItem('jenny_booted') === '1';
+  localStorage.removeItem('jenny_from_modes');
+
+  if (fromModes || alreadyBooted) {
+    localStorage.setItem('jenny_booted', '1');
     if (bootScreen) bootScreen.style.display = 'none';
     try { initBootStars(); } catch(e) {}
     try { initDataStreams(); } catch(e) {}
-    startClock(); startOrb(); initSpeechWaves(); startHoloShimmer();
-    startSysMonitor(); startAmbientBar(); startParticles(); startPingMonitor();
-    startInputStats(); fetchQuota(); setInterval(fetchQuota, 60000);
-    setInterval(updateTimerDisplay, 1000); checkPermissions();
-    startConnectionMonitor(); initPhoneLinkManager(); initWakeWord();
-    app.style.display = 'flex';
-    try { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch(e) {}
-    restoreChatHistory();
-    document.querySelectorAll('.welcome-card').forEach(card => {
-      card.addEventListener('click', () => { const cmd = card.dataset.cmd; if (cmd) sendMessage(cmd); });
-    });
-    await loadMode();
-    if (currentMode === 'friday') initFridayDashboard();
-    greetAfterBoot();
+    startAllSubsystems();
+    await revealDashboard({ fresh: fromModes });
     return;
   }
 
@@ -414,31 +452,8 @@ async function runBoot() {
     bootScreen.classList.add('done');
     bootScreen.classList.remove('exiting');
   }
-  startClock();
-  startOrb();
-  initSpeechWaves();
-  startHoloShimmer();
-  startSysMonitor();
-  startAmbientBar();
-  startParticles();
-  startPingMonitor();
-  startInputStats();
-  fetchQuota();
-  setInterval(fetchQuota, 60000);
-  setInterval(updateTimerDisplay, 1000);
-  checkPermissions();
-  startConnectionMonitor();
-  initPhoneLinkManager();
-  initWakeWord();
-  app.style.display = 'flex';
-  try { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch(e) {}
-  restoreChatHistory();
-  document.querySelectorAll('.welcome-card').forEach(card => {
-    card.addEventListener('click', () => { const cmd = card.dataset.cmd; if (cmd) sendMessage(cmd); });
-  });
-  await loadMode();
-  if (currentMode === 'friday') initFridayDashboard();
-  greetAfterBoot();
+  startAllSubsystems();
+  await revealDashboard({ fresh: false });
 }
 
 async function greetAfterBoot() {
