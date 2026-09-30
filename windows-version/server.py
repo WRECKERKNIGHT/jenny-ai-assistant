@@ -6015,6 +6015,48 @@ def api_stt_record():
     result = speech_stt.record_and_transcribe(seconds, device=device, language=language)
     return jsonify(result)
 
+@app.route("/api/stt/upload", methods=["POST"])
+def api_stt_upload():
+    """Transcribe audio the BROWSER recorded — i.e. the phone's own microphone.
+
+    Mobile browsers only hand out getUserMedia()/MediaRecorder on a secure
+    origin, so the phone captures a webm/opus (or mp4) blob and posts it here.
+    Groq Whisper consumes the container directly, which means the PC's own
+    microphone is never opened: what you speak on the phone is what gets
+    transcribed. Multipart fields: `audio` (file), `language` (optional).
+    """
+    import speech_stt
+    audio = request.files.get("audio") if request.files else None
+    if audio is None:
+        return jsonify({"success": False, "error": "No 'audio' file in request"}), 400
+    raw = audio.read()
+    if not raw:
+        return jsonify({"success": False, "error": "Recorded clip was empty"}), 400
+    if len(raw) > 25 * 1024 * 1024:
+        return jsonify({"success": False, "error": "Clip too large (max 25 MB)"}), 413
+    filename = audio.filename or "phone.webm"
+    mime = audio.mimetype or "audio/webm"
+    language = str(request.form.get("language", "") or "").lower().strip()
+    if language and language not in speech_stt.ALLOWED_STT_LANGS:
+        language = ""
+    text = speech_stt.transcribe_groq_file(raw, filename, mime, language) or ""
+    if not text:
+        return jsonify({
+            "success": False,
+            "text": "",
+            "engine": "groq-whisper",
+            "source": "phone-mic",
+            "error": "Could not recognize speech. Hold the phone closer and try again.",
+        })
+    return jsonify({
+        "success": True,
+        "text": text,
+        "engine": "groq-whisper",
+        "source": "phone-mic",
+        "language": language or speech_stt.get_stt_language(),
+    })
+
+
 @app.route("/api/stt/live/start", methods=["POST"])
 def api_stt_live_start():
     """Open a streaming STT session. Returns {sessionId} — poll
