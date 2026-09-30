@@ -2386,14 +2386,18 @@ body.mode-ultron {
   --accent-rgb: 255, 62, 62;
   --accent-grad: linear-gradient(135deg, #ff3e3e, #ff6b35);
 }
-:root {
-  /* Derived from the active mode's triplet; the fallback keeps the base
-     indigo accent on surfaces rendered before a mode class is applied. */
-  --accent-edge: rgba(var(--accent-rgb, 109, 139, 255), 0.30);
-  --accent-edge-strong: rgba(var(--accent-rgb, 109, 139, 255), 0.55);
-  --accent-tint: rgba(var(--accent-rgb, 109, 139, 255), 0.12);
-  --accent-tint-2: rgba(var(--accent-rgb, 109, 139, 255), 0.035);
-  --accent-glow: 0 0 26px rgba(var(--accent-rgb, 109, 139, 255), 0.30);
+/* These have to be derived where --accent-rgb is actually set. Declaring them
+   on :root resolved var(--accent-rgb) against the root element, where it is
+   never defined, so the fallback indigo won every time: jarvis, friday and
+   ultron all got the same blue-tinted glass no matter who was answering. */
+body {
+  /* Base accent for surfaces rendered before a mode class lands on <body>. */
+  --accent-rgb: 109, 139, 255;
+  --accent-edge: rgba(var(--accent-rgb), 0.30);
+  --accent-edge-strong: rgba(var(--accent-rgb), 0.55);
+  --accent-tint: rgba(var(--accent-rgb), 0.12);
+  --accent-tint-2: rgba(var(--accent-rgb), 0.035);
+  --accent-glow: 0 0 26px rgba(var(--accent-rgb), 0.30);
 }
 
 /* Accent-tinted glass: the shared material with the persona colour baked in. */
