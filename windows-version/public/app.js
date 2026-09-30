@@ -466,6 +466,9 @@ async function greetAfterBoot() {
   const greetFlag = localStorage.getItem('jenny_greet_after_mode');
   if (!greetFlag) return;
   localStorage.removeItem('jenny_greet_after_mode');
+  // modes.html stores the chosen mode in this flag, so the dashboard can say
+  // out loud which personality it just switched into.
+  const modeName = String(greetFlag).toUpperCase();
   let text = getGreeting();
   let speech = text;
   let serverSpoke = false;
@@ -478,7 +481,14 @@ async function greetAfterBoot() {
       serverSpoke = !!d.boot_greeted;
     }
   } catch(e) {}
-  if (typeof addAIMessage === 'function') addAIMessage(text);
+  // Announce the mode coming up before the greeting itself, so the dashboard
+  // opens by saying what it is now running instead of jumping into chat. The
+  // speech queue serialises, so the two come out in order.
+  const activation = modeName ? `Activating ${modeName} mode.` : '';
+  if (typeof addAIMessage === 'function') {
+    if (activation) addAIMessage(activation);
+    addAIMessage(text);
+  }
   if (window.__bootGreeted) return;
   window.__bootGreeted = true;
   // Single-voice rule: if the server's proactive thread already spoke the
@@ -486,7 +496,11 @@ async function greetAfterBoot() {
   if (serverSpoke) return;
   // Cinematic opening: warm swell first, spoken greeting rides on top.
   setTimeout(() => { try { sfx.startupMusic(); } catch(e) {} }, 120);
-  setTimeout(() => { if (typeof speak === 'function') speak(speech); }, 2100);
+  setTimeout(() => {
+    if (typeof speak !== 'function') return;
+    if (activation) speak(activation);
+    speak(speech);
+  }, 2100);
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }

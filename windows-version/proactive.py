@@ -179,6 +179,10 @@ def _boot_greeting():
         line = f"{period_greet}, Boss! {mp.get(mode, mp['friday'])}"
     else:
         line = f"{period_greet}, {mp.get(mode, mp['friday'])}"
+    # Lead with the mode that was just picked. When the dashboard is on screen it
+    # claims the greeting and says this itself, so it is only spoken here for a
+    # headless boot where nobody else would announce the switch.
+    line = f"Activating {mode.upper()} mode. {line}"
     _speak(line)
     tts_engine.mark_boot_greeting_done()
 
