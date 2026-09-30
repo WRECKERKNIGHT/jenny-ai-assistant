@@ -325,6 +325,142 @@
       color: #fff;
     }
 
+    /* TOP COMMAND DECK — first thing on the page, mic sits above the input */
+    .command-deck {
+      position: relative;
+      z-index: 3;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px 16px 14px;
+      background: linear-gradient(180deg, rgba(109,139,255,0.18), rgba(6,8,18,0.82) 78%);
+      border-bottom: 1px solid rgba(109,139,255,0.3);
+      box-shadow: 0 16px 40px -20px rgba(109,139,255,0.7);
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+    }
+    .deck-mic-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .deck-mic {
+      width: 52px;
+      height: 52px;
+      flex: 0 0 52px;
+      border-radius: 16px;
+      background: radial-gradient(circle at 35% 28%, rgba(34,211,238,0.32), rgba(109,139,255,0.16) 55%, rgba(5,6,12,0.92));
+      border: 1px solid rgba(34,211,238,0.5);
+      color: #67e8f9;
+      font-size: 19px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 0 20px rgba(34,211,238,0.26);
+      transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    }
+    .deck-mic:active { transform: scale(0.93); }
+    .deck-mic.recording {
+      border-color: rgba(248,113,113,0.85);
+      color: #fecaca;
+      animation: deck-rec 1.05s infinite;
+    }
+    @keyframes deck-rec {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(248,113,113,0.5); }
+      50% { box-shadow: 0 0 0 13px rgba(248,113,113,0); }
+    }
+    .deck-mic.busy {
+      border-color: rgba(245,194,66,0.8);
+      color: #fde68a;
+      animation: none;
+    }
+    .deck-mic-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 0;
+      flex: 1;
+    }
+    .deck-mic-title {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 2px;
+      font-weight: 700;
+      color: #e8eeff;
+    }
+    .deck-mic-sub {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      letter-spacing: 1px;
+      color: #93a3c9;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .deck-wave {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 20px;
+      flex: 0 0 auto;
+    }
+    .deck-wave[hidden] { display: none; }
+    .deck-wave span {
+      width: 3px;
+      border-radius: 2px;
+      background: linear-gradient(180deg, #22d3ee, #6d8bff);
+      animation: deck-bounce 0.9s infinite ease-in-out;
+    }
+    @keyframes deck-bounce {
+      0%, 100% { height: 4px; }
+      50% { height: 18px; }
+    }
+    .deck-alert {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 9px 11px;
+      border-radius: 12px;
+      background: rgba(248,113,113,0.12);
+      border: 1px solid rgba(248,113,113,0.4);
+      font-family: var(--mono);
+      font-size: 9.5px;
+      line-height: 1.5;
+      letter-spacing: 0.5px;
+      color: #fecaca;
+    }
+    .deck-alert.show { display: flex; }
+    .deck-alert-btn {
+      margin-left: auto;
+      background: rgba(248,113,113,0.2);
+      border: 1px solid rgba(248,113,113,0.55);
+      color: #ffe4e6;
+      border-radius: 9px;
+      padding: 6px 11px;
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 1.5px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .deck-alert-btn:active { background: rgba(248,113,113,0.4); }
+    .deck-pc-mic {
+      display: none;
+      background: transparent;
+      border: none;
+      color: #93a3c9;
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 1px;
+      text-decoration: underline;
+      cursor: pointer;
+      padding: 0;
+      text-align: left;
+    }
+    .deck-pc-mic.show { display: block; }
+
     /* RESPONSE LOG FEED */
     .log-feed {
       background: var(--glass-card);
@@ -706,6 +842,40 @@
     <div class="net-badge" id="net-status">ONLINE</div>
   </header>
 
+  <!-- COMMAND DECK — first thing on the page: phone mic ABOVE the command input -->
+  <section class="command-deck">
+    <div class="deck-mic-row">
+      <button class="deck-mic" id="deck-mic" type="button" aria-label="Tap to speak to JENNY">
+        <i class="fa-solid fa-microphone"></i>
+      </button>
+      <div class="deck-mic-meta">
+        <div class="deck-mic-title" id="deck-mic-title">TAP TO SPEAK</div>
+        <div class="deck-mic-sub" id="deck-mic-sub">PHONE MICROPHONE</div>
+      </div>
+      <div class="deck-wave" id="deck-wave" hidden>
+        <span style="height:5px;animation-delay:0s"></span>
+        <span style="height:9px;animation-delay:.1s"></span>
+        <span style="height:14px;animation-delay:.2s"></span>
+        <span style="height:7px;animation-delay:.3s"></span>
+        <span style="height:12px;animation-delay:.4s"></span>
+        <span style="height:6px;animation-delay:.5s"></span>
+        <span style="height:11px;animation-delay:.6s"></span>
+      </div>
+    </div>
+
+    <div class="deck-alert" id="deck-alert">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      <span id="deck-alert-txt">Phone mic needs a secure HTTPS link.</span>
+      <button class="deck-alert-btn" id="deck-secure-btn" type="button">GET SECURE LINK</button>
+    </div>
+
+    <div class="terminal-box">
+      <input type="text" id="term-input" class="terminal-input" placeholder="Ask JENNY anything..." enterkeyhint="send" autocomplete="off" autocapitalize="sentences">
+      <button id="term-send" class="terminal-btn" aria-label="Send command"><i class="fa-solid fa-paper-plane"></i></button>
+    </div>
+    <button class="deck-pc-mic" id="deck-pc-mic" type="button">Use the laptop microphone instead</button>
+  </section>
+
   <!-- BODY -->
   <div class="app-body">
 
@@ -714,11 +884,11 @@
       <div class="mic-orb" id="mic-orb">
         <i class="fa-solid fa-microphone"></i>
       </div>
-      <div class="orb-hint" id="orb-hint">TAP ORB FOR VOICE COMMAND</div>
+      <div class="orb-hint" id="orb-hint">TAP TO SPEAK — PHONE MIC</div>
       <div class="mic-lang-row">
         <button id="mic-lang-btn" class="mic-lang-chip" onclick="toggleMicLang()"><i class="fa-solid fa-language"></i> <span id="mic-lang-txt">EN</span></button>
         <button id="voice-chip" class="mic-lang-chip" onclick="toggleVoiceReplies()"><i class="fa-solid fa-volume-up"></i> <span id="voice-chip-txt">VOICE</span></button>
-        <span class="mic-lang-note">Hi/EN toggle for PC-mic voice</span>
+        <span class="mic-lang-note">Hi/EN voice language</span>
       </div>
       <button id="start-call-btn" style="margin-top:10px;width:100%;background:radial-gradient(circle at 50% 50%, rgba(109,139,255,0.22), rgba(8,10,20,0.6));border:1px solid rgba(109,139,255,0.55);border-radius:14px;padding:12px;color:#c4b5fd;font-family:var(--mono);font-size:12px;letter-spacing:2px;font-weight:700;box-shadow:0 0 18px rgba(109,139,255,0.25);">
         <i class="fa-solid fa-phone-volume"></i> CALL J.E.N.N.Y.
@@ -827,12 +997,6 @@
       <button class="media-btn" id="mobile-media-next" title="Next"><i class="fa-solid fa-forward"></i></button>
     </div>
 
-    <!-- COMMAND TERMINAL -->
-    <div class="terminal-box">
-      <input type="text" id="term-input" class="terminal-input" placeholder="Type remote command...">
-      <button id="term-send" class="terminal-btn"><i class="fa-solid fa-paper-plane"></i></button>
-    </div>
-
     <!-- NOTIFICATION RELAY -->
     <div class="section-title" style="margin-top: 20px;"><i class="fa-solid fa-bell"></i> Notification Relay</div>
     <button class="clip-get" id="notif-send"><i class="fa-solid fa-paper-plane"></i> SEND PC A NOTIFICATION</button>
@@ -854,6 +1018,14 @@
     const termSend = document.getElementById('term-send');
     const micOrb = document.getElementById('mic-orb');
     const orbHint = document.getElementById('orb-hint');
+    const deckMic = document.getElementById('deck-mic');
+    const deckMicTitle = document.getElementById('deck-mic-title');
+    const deckMicSub = document.getElementById('deck-mic-sub');
+    const deckWave = document.getElementById('deck-wave');
+    const deckAlert = document.getElementById('deck-alert');
+    const deckAlertTxt = document.getElementById('deck-alert-txt');
+    const deckSecureBtn = document.getElementById('deck-secure-btn');
+    const deckPcMic = document.getElementById('deck-pc-mic');
 
     function appendLog(sender, text) {
       const d = document.createElement('div');
@@ -1336,113 +1508,248 @@
       } catch (e) {}
     });
 
-    // REAL-TIME DICTATION & VOICE MIC CONTROL
-    // NOTE: mobile browsers block the *phone* mic on plain http:// LAN (insecure
-    // context). We auto-detect and fall back to the PC's microphone via the
-    // server (/api/stt/record) so voice commands still work over LAN.
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    // ======================================================================
+    // PHONE MICROPHONE — records on THIS device, uploads to /api/stt/upload
+    //
+    // Mobile browsers only expose getUserMedia()/MediaRecorder on a secure
+    // origin. Over plain http:// LAN the phone mic is simply unavailable, and
+    // we no longer silently swap in the laptop's microphone: the deck says so
+    // plainly and offers a one-tap secure HTTPS link (the existing Cloudflare
+    // quick tunnel) that unlocks the real phone mic.
+    // ======================================================================
     const isSecureCtx = window.isSecureContext === true || location.protocol === 'https:';
-    const PC_MIC_FALLBACK = !(isSecureCtx && SR && navigator.mediaDevices);
-    let recognition = null;
-    let listening = false;
-    let dictationTimer = null;
-    let pcMicListening = false;
+    const PHONE_MIC_OK = !!(isSecureCtx && navigator.mediaDevices
+                            && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+    const MAX_CLIP_MS = 12000;
+    let phoneRec = null, phoneStream = null, phoneChunks = [];
+    let phoneStopTimer = null, phoneBusy = false, pcMicListening = false;
 
-    if (isSecureCtx && SR) {
-      recognition = new SR();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-
-      recognition.onstart = () => {
-        listening = true;
-        micOrb.classList.add('listening');
-        orbHint.textContent = 'DICTATING... SPEAK NOW';
-      };
-
-      recognition.onresult = (e) => {
-        let interim = '';
-        let final = '';
-        for (let i = e.resultIndex; i < e.results.length; ++i) {
-          if (e.results[i].isFinal) final += e.results[i][0].transcript;
-          else interim += e.results[i][0].transcript;
-        }
-        const text = final || interim;
-        termInput.value = text;
-        orbHint.textContent = text ? `"${text}"` : 'DICTATING... SPEAK NOW';
-
-        clearTimeout(dictationTimer);
-        if (final.trim()) {
-          dictationTimer = setTimeout(() => {
-            executeRemote(final.trim());
-            recognition.stop();
-          }, 800);
-        }
-      };
-
-      recognition.onend = () => {
-        listening = false;
-        micOrb.classList.remove('listening');
-        orbHint.textContent = 'TAP ORB FOR VOICE COMMAND';
-      };
-
-      recognition.onerror = (err) => {
-        listening = false;
-        micOrb.classList.remove('listening');
-        orbHint.textContent = 'TAP ORB FOR VOICE COMMAND';
-      };
+    function deckState(title, sub) {
+      if (deckMicTitle) deckMicTitle.textContent = title;
+      if (deckMicSub) deckMicSub.textContent = sub;
+      if (orbHint) orbHint.textContent = title;
     }
 
+    function deckSetAlert(msg, show) {
+      if (!deckAlert) return;
+      if (msg) deckAlertTxt.textContent = msg;
+      deckAlert.classList.toggle('show', !!show);
+    }
+
+    function deckSetRecording(on) {
+      if (deckMic) deckMic.classList.toggle('recording', !!on);
+      if (deckWave) deckWave.hidden = !on;
+      if (micOrb) micOrb.classList.toggle('listening', !!on);
+    }
+
+    function deckSetBusy(on) {
+      phoneBusy = !!on;
+      if (deckMic) {
+        deckMic.classList.toggle('busy', !!on);
+        deckMic.disabled = !!on;
+      }
+    }
+
+    function pickMicMime() {
+      const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+      for (const m of candidates) {
+        try {
+          if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) return m;
+        } catch (e) {}
+      }
+      return '';
+    }
+
+    function releasePhoneStream() {
+      const st = phoneStream;
+      phoneStream = null;
+      if (st) {
+        st.getTracks().forEach((t) => { try { t.stop(); } catch (e) {} });
+      }
+    }
+
+    function stopPhoneMic() {
+      if (phoneStopTimer) { clearTimeout(phoneStopTimer); phoneStopTimer = null; }
+      const rec = phoneRec;
+      phoneRec = null;
+      if (rec && rec.state && rec.state !== 'inactive') {
+        try { rec.stop(); } catch (e) {}
+      }
+      deckSetRecording(false);
+      releasePhoneStream();
+    }
+
+    async function startPhoneMic() {
+      if (phoneBusy) return;
+      if (phoneRec) { stopPhoneMic(); return; }
+      if (!PHONE_MIC_OK) { explainNoPhoneMic(); return; }
+
+      try {
+        phoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (e) {
+        deckState('MIC BLOCKED', 'ALLOW MIC IN BROWSER SETTINGS');
+        deckSetAlert('The browser blocked the microphone. Tap the site-settings/lock icon, allow the mic, then try again.', true);
+        return;
+      }
+
+      phoneChunks = [];
+      const mime = pickMicMime();
+      try {
+        phoneRec = mime ? new MediaRecorder(phoneStream, { mimeType: mime }) : new MediaRecorder(phoneStream);
+      } catch (e) {
+        stopPhoneMic();
+        phoneChunks = [];
+        deckState('MIC ERROR', 'RECORDER COULD NOT START');
+        return;
+      }
+      phoneRec.ondataavailable = (ev) => { if (ev.data && ev.data.size) phoneChunks.push(ev.data); };
+      phoneRec.onstop = () => { uploadPhoneClip(); };
+      try {
+        phoneRec.start();
+      } catch (e) {
+        stopPhoneMic();
+        phoneChunks = [];
+        deckState('MIC ERROR', 'COULD NOT START RECORDING');
+        return;
+      }
+
+      deckSetAlert('', false);
+      deckSetRecording(true);
+      deckState('LISTENING...', 'PHONE MIC — TAP AGAIN TO SEND');
+      phoneStopTimer = setTimeout(() => stopPhoneMic(), MAX_CLIP_MS);
+    }
+
+    async function uploadPhoneClip() {
+      const type = (phoneChunks[0] && phoneChunks[0].type) || pickMicMime() || 'audio/webm';
+      const total = phoneChunks.reduce((n, c) => n + c.size, 0);
+      const blob = new Blob(phoneChunks, { type });
+      phoneChunks = [];
+      if (!total) {
+        deckState('TAP TO SPEAK', 'NOTHING WAS RECORDED');
+        return;
+      }
+
+      const ext = type.indexOf('mp4') >= 0 ? 'm4a' : (type.indexOf('ogg') >= 0 ? 'ogg' : 'webm');
+      const fd = new FormData();
+      fd.append('audio', blob, `phone.${ext}`);
+      fd.append('language', window.__sttLang || 'en');
+
+      deckSetBusy(true);
+      deckState('TRANSCRIBING...', 'PHONE MIC -> JENNY');
+      try {
+        const res = await fetch(`${serverUrl}/api/stt/upload`, { method: 'POST', body: fd });
+        const d = await res.json();
+        if (d.success && d.text && d.text.trim()) {
+          deckState('HEARD IT', '');
+          termInput.value = d.text.trim();
+          appendLog('YOU', d.text.trim());
+          executeRemote(d.text.trim());
+        } else {
+          deckState('NO MATCH', 'TRY AGAIN, SPEAK CLEARER');
+          appendLog('JENNY', 'Mic: ' + ((d && d.error) || 'Could not recognize speech.'));
+        }
+      } catch (e) {
+        deckState('UPLOAD FAILED', 'CHECK WI-FI AND RETRY');
+      } finally {
+        deckSetBusy(false);
+        setTimeout(() => { if (!phoneRec) deckState('TAP TO SPEAK', 'PHONE MICROPHONE'); }, 2600);
+      }
+    }
+
+    function explainNoPhoneMic() {
+      const why = !isSecureCtx
+        ? 'This link is plain http://, so your browser blocks the phone microphone.'
+        : 'This browser will not expose the phone microphone here.';
+      deckState('PHONE MIC OFF', 'SECURE LINK REQUIRED');
+      deckSetAlert(why + ' Get a secure HTTPS link, then open JENNY on that address.', true);
+      if (deckPcMic) deckPcMic.classList.add('show');
+      appendLog('GENIE', why);
+    }
+
+    // Deliberate, clearly-labelled escape hatch — never automatic.
     async function orbListenPcMic() {
       if (pcMicListening) return;
       pcMicListening = true;
       micOrb.classList.add('listening');
-      orbHint.textContent = 'PC MIC LISTENING... SPEAK NEAR LAPTOP';
-      appendLog('GENIE', 'Using PC microphone... speak near the laptop.');
+      deckMic.classList.add('recording');
+      deckState('LAPTOP MIC...', 'SPEAK NEAR THE PC');
+      appendLog('GENIE', 'Using the laptop microphone...');
       try {
         const res = await fetch(serverUrl + '/api/stt/record', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ seconds: 8, language: window.__sttLang || (navigator.language && navigator.language.toLowerCase().indexOf('hi') >= 0 ? 'hi' : 'en') })
+          body: JSON.stringify({ seconds: 8, language: window.__sttLang || 'en' })
         });
         const d = await res.json();
         if (d.success && d.text && d.text.trim()) {
           appendLog('YOU', d.text.trim());
           executeRemote(d.text.trim());
-        } else if (d.error) {
-          appendLog('JENNY', 'Mic: ' + d.error);
-          orbHint.textContent = 'MIC ERROR - RETRY';
-          setTimeout(() => { orbHint.textContent = 'TAP ORB FOR VOICE (PC MIC)'; }, 1600);
         } else {
-          orbHint.textContent = 'NO SPEECH - RETRY';
-          setTimeout(() => { orbHint.textContent = 'TAP ORB FOR VOICE (PC MIC)'; }, 1600);
+          appendLog('JENNY', 'Mic: ' + (d.error || 'no speech recognized'));
         }
       } catch (e) {
-        appendLog('JENNY', 'PC mic unavailable.');
+        appendLog('JENNY', 'Laptop mic unavailable.');
+      } finally {
+        pcMicListening = false;
+        micOrb.classList.remove('listening');
+        deckMic.classList.remove('recording');
+        setTimeout(() => { if (!phoneRec) deckState('TAP TO SPEAK', 'PHONE MICROPHONE'); }, 1800);
       }
-      pcMicListening = false;
-      micOrb.classList.remove('listening');
     }
 
-    micOrb.addEventListener('click', async () => {
-      if (listening && recognition) { recognition.stop(); return; }
-      if (pcMicListening) return;
-      if (recognition) {
-        try {
-          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
-          }
-          recognition.start();
-        } catch (e) {
-          orbHint.textContent = 'MIC ACCESS DENIED';
-        }
-      } else {
-        orbListenPcMic();
-      }
-    });
+    function showSecureUrl(url) {
+      const full = String(url).replace(/\/+$/, '') + '/mobile.html';
+      deckSecureBtn.disabled = false;
+      deckSecureBtn.textContent = 'COPY LINK';
+      deckSetAlert('Open this on your phone, then tap the mic: ' + full, true);
+      deckSecureBtn.onclick = () => {
+        const ta = document.createElement('textarea');
+        ta.value = full;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); showMobileToast('Secure link copied.'); }
+        catch (e) { showMobileToast('Copy failed — long-press the link instead.'); }
+        ta.remove();
+      };
+    }
 
-    if (PC_MIC_FALLBACK && orbHint) {
-      orbHint.textContent = 'TAP ORB FOR VOICE (PC MIC)';
+    async function getSecureLink() {
+      deckSecureBtn.disabled = true;
+      deckSecureBtn.textContent = 'STARTING...';
+      deckSetAlert('Starting a secure HTTPS tunnel. The first run downloads cloudflared, so this can take a minute.', true);
+      let tries = 0;
+      const done = () => { deckSecureBtn.disabled = false; deckSecureBtn.textContent = 'GET SECURE LINK'; };
+      try {
+        const r = await fetch(`${serverUrl}/api/remote/tunnel/start`, { method: 'POST' });
+        const d = await r.json();
+        if (d && d.url) { showSecureUrl(d.url); return; }
+      } catch (e) {}
+      const poll = setInterval(async () => {
+        tries += 1;
+        try {
+          const r = await fetch(`${serverUrl}/api/remote/tunnel/status`, { cache: 'no-store' });
+          const s = await r.json();
+          if (s && s.url) { clearInterval(poll); showSecureUrl(s.url); return; }
+          if ((s && s.error) || tries > 45) {
+            clearInterval(poll);
+            done();
+            deckSetAlert('Could not start the secure tunnel' + (s && s.error ? ': ' + s.error : '.'), true);
+          }
+        } catch (e) {
+          if (tries > 45) { clearInterval(poll); done(); }
+        }
+      }, 1500);
+    }
+
+    if (deckMic) deckMic.addEventListener('click', startPhoneMic);
+    if (micOrb) micOrb.addEventListener('click', startPhoneMic);
+    if (deckSecureBtn) deckSecureBtn.addEventListener('click', getSecureLink);
+    if (deckPcMic) deckPcMic.addEventListener('click', orbListenPcMic);
+
+    if (PHONE_MIC_OK) {
+      deckState('TAP TO SPEAK', 'PHONE MICROPHONE');
+    } else {
+      explainNoPhoneMic();
     }
 
     // TELEMETRY REFRESH (real-time via SSE, polling fallback)
