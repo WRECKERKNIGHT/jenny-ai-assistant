@@ -3,11 +3,15 @@ J.E.N.N.Y v2.0 - Desktop Tray App (system tray icon + Mini HUD)
 
 One tiny icon on the right side of the Windows taskbar with everything you need:
 
-  * Double-click the icon -> opens/closes the MINI HUD (always-on-top panel).
+  * Double-click the icon -> show/hide the MINI HUD (a frameless, translucent,
+    always-on-top WebView2 window rendering public/mini.html).
   * Right-click menu -> Mini HUD / Modes / Dashboard / Holographic HUD,
                         wake-word on/off, test voice, and Quit.
   * Actually starts the whole assistant: Flask server + neural voice engine
     + proactive speaker + optional wake word — all in one process.
+
+If the WebView2 runtime is missing, the same Mini HUD falls back to a plain Tk
+panel so the assistant always has some UI.
 
 Usage:  pythonw tray.py      (background, no console)
         python  tray.py      (foreground with logs)
@@ -217,7 +221,104 @@ def _run_tray():
 
 
 # ---------------------------------------------------------------------------
-# Mini HUD (Tk, always-on-top, bottom-right)
+# Mini HUD (WebView2: frameless, translucent, always-on-top)
+#
+# The Mini HUD is a *companion*, so it lives in its own transparent window
+# instead of a plain Tk panel. pywebview must own the main thread, which is
+# why the tray icon runs in a daemon thread and this window is the process's
+# main loop. If WebView2 is missing we drop back to the Tk panel below so the
+# assistant is never left with no UI at all.
+# ---------------------------------------------------------------------------
+
+_hud_state = {"visible": True}
+_webview_window = None
+
+
+def _hud_geometry(width=460, height=680, margin=24):
+    """Dock the HUD to the bottom-right, like a taskbar companion."""
+    try:
+        import ctypes
+        sw = ctypes.windll.user32.GetSystemMetrics(0)
+        sh = ctypes.windll.user32.GetSystemMetrics(1)
+    except Exception:
+        return {"x": 50, "y": 50, "width": width, "height": height}
+    return {
+        "x": max(0, sw - width - margin),
+        "y": max(0, sh - height - margin),
+        "width": width,
+        "height": height,
+    }
+
+
+def _create_webview_hud():
+    """Build the translucent Mini HUD window (pywebview / WebView2)."""
+    global _webview_window
+    import webview
+
+    window = webview.create_window(
+        "J.E.N.N.Y",
+        f"{SERVER_URL}/mini.html",
+        frameless=True,
+        transparent=True,
+        on_top=True,
+        easy_drag=True,
+        resizable=False,
+        shadow=False,
+        background_color="#000000",
+        text_select=False,
+        **_hud_geometry(),
+    )
+
+    def _on_closing():
+        # Closing the HUD hides it; the tray icon brings it back.
+        try:
+            _hud_state["visible"] = False
+            window.hide()
+        except Exception:
+            pass
+        return False
+
+    window.events.closing += _on_closing
+    _webview_window = window
+    _hud_state["visible"] = True
+    return window
+
+
+def _toggle_webview_hud():
+    """Show/hide the WebView HUD. Returns False if it is not usable."""
+    window = _webview_window
+    if window is None:
+        return False
+    try:
+        if _hud_state.get("visible"):
+            window.hide()
+            _hud_state["visible"] = False
+        else:
+            window.show()
+            _hud_state["visible"] = True
+        return True
+    except Exception as e:
+        print(f"[!] HUD toggle failed: {e}")
+        return False
+
+
+def _shutdown():
+    set_wake_word(False)
+    try:
+        if _webview_window is not None:
+            _webview_window.destroy()
+    except Exception:
+        pass
+    try:
+        if _icon is not None:
+            _icon.stop()
+    except Exception:
+        pass
+    os._exit(0)
+
+
+# ---------------------------------------------------------------------------
+# Fallback Mini HUD (plain Tk panel — only used if WebView2 is unavailable)
 # ---------------------------------------------------------------------------
 
 def _json_get(path):
@@ -390,7 +491,8 @@ def _hud_wake(wake_btn):
         pass
 
 
-def _toggle_hud(root, hud):
+def _toggle_hud_tk(root, hud):
+    """Legacy plain-Tk panel. Kept as a fallback for machines without WebView2."""
     if hud.get("win") is not None and hud["win"].winfo_exists():
         hud["win"].destroy()
         hud["win"] = None
@@ -516,51 +618,65 @@ def _toggle_hud(root, hud):
     refresh()
 
 
-def _poll_queue(root, hud):
-    while _command_queue:
-        cmd, args = _command_queue.pop(0)
-        if cmd == "toggle_hud":
-            _toggle_hud(root, hud)
-        elif cmd == "quit":
-            try:
-                root.destroy()
-            except Exception:
-                pass
-            if _icon is not None:
-                try:
-                    _icon.stop()
-                except Exception:
-                    pass
-            os._exit(0)
+def _poll_queue(hud):
+    """Drain the cross-thread command queue (tray callbacks run off-thread)."""
+    while True:
+        while _command_queue:
+            cmd, args = _command_queue.pop(0)
+            if cmd == "toggle_hud":
+                if not _toggle_webview_hud():
+                    root = hud.get("root")
+                    if root is not None:
+                        try:
+                            _toggle_hud_tk(root, hud)
+                        except Exception as e:
+                            print(f"[!] Could not open the HUD: {e}")
+                    else:
+                        print("[!] No HUD window available to toggle.")
+            elif cmd == "quit":
+                _shutdown()
+        time.sleep(0.15)
+
+
+def _fallback_tk_main():
+    """Minimal Tk host used when the WebView HUD cannot be created."""
+    import tkinter as tk
+    root = tk.Tk()
+    root.withdraw()
+    _hud_state["root"] = root
+    _hud_state.setdefault("win", None)
+    root.after(300, lambda: _toggle_hud_tk(root, _hud_state))
     try:
-        root.after(150, _poll_queue, root, hud)
-    except Exception:
+        root.mainloop()
+    except KeyboardInterrupt:
         pass
 
 
 def main():
     print("=" * 55)
     print("  J.E.N.N.Y v2.0 — Tray + Mini HUD (port 3005)")
-    print("  Double-click the tray icon for the Mini HUD.")
+    print("  Double-click the tray icon to show/hide the Mini HUD.")
     print("=" * 55)
 
     ensure_server()
 
-    import tkinter as tk
-    root = tk.Tk()
-    root.withdraw()
-    hud = {"root": root, "win": None, "visible": False}
-
     threading.Thread(target=_run_tray, daemon=True).start()
+    threading.Thread(target=_poll_queue, args=(_hud_state,), daemon=True).start()
 
-    # Auto-open the Mini HUD on first launch so the user sees it immediately.
-    root.after(1800, lambda: _toggle_hud(root, hud))
-    root.after(250, _poll_queue, root, hud)
-
+    # pywebview owns the main thread; the HUD is visible from the start.
     try:
-        root.mainloop()
-    except KeyboardInterrupt:
-        pass
+        _create_webview_hud()
+        import webview
+        webview.start()
+        # The window was closed for good rather than hidden — shut everything down.
+        _shutdown()
+        return
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"[!] WebView HUD unavailable ({e}) — using the basic panel instead.")
+
+    _fallback_tk_main()
 
 
 if __name__ == "__main__":

@@ -36,9 +36,9 @@ if not defined DEPS (
 
 :menu
 echo.
-echo   [1] Start JENNY (Tray + Mini HUD)  - tray icon in taskbar, mini HUD, server, voice
+echo   [1] Start JENNY (Tray + Mini HUD)  - taskbar icon + glass Mini HUD, server, voice
 echo   [2] Full Desktop App               - main JENNY window
-echo   [3] HUD Overlay                    - transparent always-on-top holographic HUD
+echo   [3] HUD Overlay                    - draggable holographic HUD
 echo   [4] Voice Assistant                - wake word "Hey Jenny" / "Hey Friday" / "Hey Jarvis" / "Hey Ultron"
 echo   [5] Server Only                    - web UI on port 3005 (no window)
 echo   [6] Debug Launcher                 - verbose logs to run.log
@@ -48,7 +48,7 @@ set /p "CHOICE=Select: "
 
 if "%CHOICE%"=="1" (
     start "" "%PY%"w tray.py
-    echo [*] JENNY tray started. Look for the icon near the clock.
+    echo [*] JENNY started — Mini HUD is open, tray icon is near the clock.
     timeout /t 2 >nul
 ) else if "%CHOICE%"=="2" (
     start "" "%PY%"w app.py
