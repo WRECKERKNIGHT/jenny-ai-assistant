@@ -598,11 +598,14 @@
                 <i class="fa-solid fa-globe"></i>
                 <span>Open Link</span>
               </button>
-            </div>
-            
-            <div class="ctrl-row">
-              <span class="ctrl-lbl">Device Volume</span>
-              <input type="range" min="0" max="100" value="70" class="ctrl-slider" oninput="setPhoneVolume(this.value)">
+              <button class="ctrl-btn" onclick="triggerPhoneAction('sms')" title="Open the phone's SMS composer with a message">
+                <i class="fa-solid fa-comment-sms"></i>
+                <span>Send SMS</span>
+              </button>
+              <button class="ctrl-btn" onclick="callPhone()" title="Ring the linked phone">
+                <i class="fa-solid fa-phone"></i>
+                <span>Ring Phone</span>
+              </button>
             </div>
           </div>
         </div>
