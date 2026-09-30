@@ -332,6 +332,9 @@ async function activateMode(mode) {
   // Greeting gate: index.html only greets after the intro video + mode
   // selection have both finished — this flag tells it the right moment.
   localStorage.setItem('jenny_greet_after_mode', mode || 'friday');
+  // Tells index.html the intro and the pick already happened, so it reveals the
+  // dashboard straight away instead of replaying its own boot splash.
+  localStorage.setItem('jenny_from_modes', '1');
   try {
     await fetch('/api/mode', {
       method: 'POST',
