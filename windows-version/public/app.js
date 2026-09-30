@@ -3428,6 +3428,12 @@ async function triggerPhoneAction(action, value = '') {
     finalVal = prompt('Enter URL to open on the phone:', 'https://www.google.com');
     if (finalVal === null) return;
     if (!/^https?:\/\//i.test(finalVal)) finalVal = 'https://' + finalVal;
+  } else if (action === 'sms' && !value) {
+    const num = prompt('Phone number to text:', '');
+    if (num === null) return;
+    const body = prompt('Message:', 'Hello from your desktop, Boss!');
+    if (body === null) return;
+    finalVal = JSON.stringify({ number: num.trim(), body });
   }
 
   try {
