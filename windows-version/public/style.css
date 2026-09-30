@@ -2104,7 +2104,7 @@ body.mode-ultron.pc-call-active .call-phone-btn { animation-name: call-btn-breat
 /* ---- Large surfaces: panels, modals, bars (blur is affordable here) ---- */
 .holo-panel,
 .sys-monitor,
-.jd-dashboard,
+#jarvis-dashboard,
 .friday-dashboard,
 .agency-max-modal,
 .speech-preview,
@@ -2367,8 +2367,11 @@ body.mode-jarvis .sys-graph-card:hover {
   border-color: var(--accent-edge-strong) !important;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.46), var(--accent-glow), var(--glass-inset) !important;
 }
-body.mode-jarvis .jd-dashboard,
-body.mode-jarvis .jarvis-dashboard {
+/* The dashboard is #jarvis-dashboard (an id), so the old .jd-dashboard /
+   .jarvis-dashboard selectors never matched anything and the whole cyan glass
+   treatment silently did nothing. FRIDAY kept its look because .friday-dashboard
+   is a real class - which is exactly why the two dashboards looked nothing alike. */
+body.mode-jarvis #jarvis-dashboard {
   background: linear-gradient(165deg, rgba(0, 40, 60, 0.34), rgba(2, 8, 18, 0.52)) !important;
   border: 1px solid var(--accent-edge) !important;
   box-shadow: var(--glass-shadow), var(--glass-inset), var(--accent-glow) !important;
