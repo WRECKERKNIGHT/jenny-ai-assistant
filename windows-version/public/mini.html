@@ -143,6 +143,28 @@
       color: #ffffff;
       transform: translateY(-1px);
     }
+    /* Live states for the header mic / voice buttons */
+    .hdr-btn.rec {
+      color: #fff;
+      border-color: rgba(248, 113, 113, 0.85);
+      background: rgba(248, 113, 113, 0.18);
+      box-shadow: 0 0 14px rgba(248, 113, 113, 0.55);
+      animation: hdr-pulse 1s infinite;
+    }
+    .hdr-btn.err {
+      color: #fecaca;
+      border-color: rgba(248, 113, 113, 0.6);
+    }
+    .hdr-btn.speaking {
+      color: #fff;
+      border-color: rgba(34, 211, 238, 0.85);
+      background: rgba(34, 211, 238, 0.16);
+      box-shadow: 0 0 14px rgba(34, 211, 238, 0.5);
+    }
+    @keyframes hdr-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.5); }
+      50% { box-shadow: 0 0 0 8px rgba(248, 113, 113, 0); }
+    }
 
     /* CENTRAL ORB STAGE */
     .central-orb-stage {
@@ -727,6 +749,8 @@
       </div>
       <div class="hdr-controls">
         <span class="hdr-live" id="hdr-live" title="Core link status"><span class="live-dot"></span>LINK</span>
+        <button class="hdr-btn" id="hud-mic-btn" title="Voice input — tap to talk"><i class="fa-solid fa-microphone"></i></button>
+        <button class="hdr-btn" id="hud-voice-btn" title="Test JENNY's voice"><i class="fa-solid fa-volume-high"></i></button>
         <button class="hdr-btn" id="training-btn" title="AI Memory & Training"><i class="fa-solid fa-brain"></i></button>
         <button class="hdr-btn" id="fullscreen-btn" title="Expand Interface"><i class="fa-solid fa-expand"></i></button>
       </div>
@@ -933,7 +957,8 @@
       serverSpeechQ.playing = true;
       const el = new Audio('/api/speak?text=' + encodeURIComponent(next.slice(0, 6000)) + '&fmt=mp3&t=' + Date.now());
       serverSpeechQ.currentEl = el;
-      const step = () => { serverSpeechQ.playing = false; serverSpeechQ.currentEl = null; pumpServerQueue(); };
+      hudVoiceState(true);
+      const step = () => { serverSpeechQ.playing = false; serverSpeechQ.currentEl = null; hudVoiceState(false); pumpServerQueue(); };
       el.onended = step;
       el.onerror = step;
       el.play().catch(() => {
@@ -1294,6 +1319,25 @@
     let sttSessionId = null;
     let sttMicIndex = null;
 
+    // Header mic/voice buttons make the HUD's capabilities obvious instead of
+    // hiding them behind the orb, and they surface failures rather than
+    // falling over silently.
+    const hudMicBtn = document.getElementById('hud-mic-btn');
+    const hudVoiceBtn = document.getElementById('hud-voice-btn');
+
+    function setHudMicState(cls) {
+      if (!hudMicBtn) return;
+      hudMicBtn.classList.toggle('rec', cls === 'rec');
+      hudMicBtn.classList.toggle('err', cls === 'err');
+      hudMicBtn.title = cls === 'rec' ? 'Listening — tap to stop'
+        : cls === 'err' ? 'Microphone problem — tap to retry'
+        : 'Voice input — tap to talk';
+    }
+
+    function hudVoiceState(on) {
+      if (hudVoiceBtn) hudVoiceBtn.classList.toggle('speaking', !!on);
+    }
+
     async function resolveMicIndex() {
       try {
         const mi = await fetch('/api/stt/mics', { cache: 'no-store' });
@@ -1321,11 +1365,15 @@
         sttSessionId = d.sessionId;
       } catch (e) {
         console.warn('[HUD] server STT unavailable, falling back to Web Speech:', e);
+        revealText('Server microphone unavailable — trying browser dictation.');
+        setHudMicState('err');
         startWebSpeechFallback();
         return;
       }
       isListening = true;
+      setHudMicState('rec');
       document.querySelector('.center-mic-icon').style.color = '#ffffff';
+      revealText('Listening… speak now.');
 
       let finalText = '';
       let errored = false;
@@ -1335,7 +1383,7 @@
           const r2 = await fetch('/api/stt/live/status/' + sttSessionId, { cache: 'no-store' });
           const s = await r2.json();
           if (s && s.success) {
-            if (s.error) { errored = true; break; }
+            if (s.error) { errored = true; revealText('Microphone error: ' + s.error); break; }
             if (s.done && s.final) { finalText = s.final.trim(); break; }
             if (s.done) break;
           }
@@ -1344,13 +1392,17 @@
       }
       const sid = sttSessionId;
       stopListening();
-      if (sid && !errored && finalText) sendCmd(finalText);
+      if (sid && !errored) {
+        if (finalText) sendCmd(finalText);
+        else revealText('No speech detected. Tap the mic and try again.');
+      }
       sttSessionId = null;
     }
 
     function stopListening() {
       const wasListening = isListening;
       isListening = false;
+      setHudMicState('');
       document.querySelector('.center-mic-icon').style.color = 'var(--cyan)';
       if (wasListening && sttSessionId) {
         fetch('/api/stt/live/stop/' + sttSessionId, { method: 'POST' }).catch(() => {});
@@ -1363,8 +1415,9 @@
     let webRecognition = null;
     function startWebSpeechFallback() {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SR) { playBeep(220, 'square', 0.2); revealText('Voice input unavailable on this device.'); return; }
+      if (!SR) { playBeep(220, 'square', 0.2); setHudMicState('err'); revealText('Voice input unavailable on this device.'); return; }
       isListening = true;
+      setHudMicState('rec');
       document.querySelector('.center-mic-icon').style.color = '#ffffff';
       webRecognition = new SR();
       webRecognition.continuous = false;
@@ -1374,19 +1427,49 @@
         stopListening();
         if (txt.trim()) sendCmd(txt.trim());
       };
-      webRecognition.onend = () => { document.querySelector('.center-mic-icon').style.color = 'var(--cyan)'; isListening = false; };
+      webRecognition.onend = () => { document.querySelector('.center-mic-icon').style.color = 'var(--cyan)'; isListening = false; setHudMicState(''); };
       webRecognition.onerror = (e) => {
         document.querySelector('.center-mic-icon').style.color = 'var(--cyan)';
         isListening = false;
+        setHudMicState('err');
         if (e.error === 'not-allowed') revealText('Mic access denied. Allow it and try again.');
+        else if (e.error === 'no-speech') revealText('No speech detected. Tap the mic and try again.');
+        else revealText('Voice input error: ' + (e.error || 'unknown') + '. Tap to retry.');
       };
       try { webRecognition.start(); } catch(err) {}
+    }
+
+    // Header mic button mirrors the orb; voice button proves the neural voice
+    // actually works in this window.
+    if (hudMicBtn) {
+      hudMicBtn.addEventListener('click', () => {
+        if (isListening) stopListening();
+        else startListening();
+      });
+    }
+    if (hudVoiceBtn) {
+      hudVoiceBtn.addEventListener('click', () => {
+        fetch('/api/voice-engine', { cache: 'no-store' })
+          .then(r => r.json())
+          .then(v => {
+            const eng = (v && (v.active || v.engine)) || 'unknown';
+            revealText('Voice engine: ' + String(eng).toUpperCase() + '. Testing…');
+            hudVoiceState(true);
+            setTimeout(() => hudVoiceState(false), 4000);
+            queueServerSpeech('Voice check complete. All neural engines are ready.');
+          })
+          .catch(() => {
+            revealText('Could not reach the server to test the voice.');
+            setHudMicState('err');
+          });
+      });
     }
 
     orbTrigger.addEventListener('click', () => {
       if (isListening) stopListening();
       else startListening();
     });
+    setHudMicState('');
   </script>
 </body>
 </html>
