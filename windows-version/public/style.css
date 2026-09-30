@@ -111,9 +111,76 @@ html,body { height:100%; background:var(--bg); color:var(--txt); font-family:var
 /* MAIN LAYOUT */
 #main-app {
   display:flex; height:100vh; width:100vw;
+  position:relative;
   background: radial-gradient(circle at 50% 10%, rgba(139,104,255,0.08), transparent 60%),
               radial-gradient(circle at 10% 90%, rgba(192,192,192,0.05), transparent 50%),
               #000000;
+}
+
+/* =====================================================================
+   GLASS BACKDROP
+   Frosted glass is only visible when there is something behind it to
+   refract. Blurring a flat near-black page just gives you flat near-black,
+   which is why the material system could be technically applied across the
+   whole app and still read as "no visible change". This paints a slow,
+   mode-tinted aurora across the entire app so the blur, the sheen and the
+   rims finally have real depth to work against.
+
+   Gradient-only on purpose: one oversized layer moved with transform is a
+   single composited layer, whereas a full-screen backdrop-filter here would
+   re-run on every repaint of every panel sitting above it.
+   ===================================================================== */
+#main-app::before {
+  content:'';
+  position:absolute; left:50%; top:50%;
+  width:170vmax; height:170vmax;
+  margin:-85vmax 0 0 -85vmax;
+  z-index:0; pointer-events:none;
+  background:
+    radial-gradient(38vmax 38vmax at 24% 30%, var(--backdrop-1) 0%, transparent 62%),
+    radial-gradient(32vmax 32vmax at 76% 22%, var(--backdrop-2) 0%, transparent 60%),
+    radial-gradient(42vmax 42vmax at 66% 78%, var(--backdrop-3) 0%, transparent 64%),
+    radial-gradient(24vmax 24vmax at 44% 58%, var(--backdrop-4) 0%, transparent 66%);
+  animation: glass-aurora 48s ease-in-out infinite alternate;
+  will-change:transform;
+}
+@keyframes glass-aurora {
+  0%   { transform:translate3d(-2%, -1.5%, 0) scale(1) rotate(0deg); }
+  100% { transform:translate3d(2.5%, 2%, 0) scale(1.08) rotate(4deg); }
+}
+/* Base field is violet (FRIDAY's home colour); each mode overrides the four
+   stops so the whole window is tinted by whoever is answering. */
+:root {
+  --backdrop-1: rgba(139,104,255,0.20);
+  --backdrop-2: rgba(236,72,153,0.14);
+  --backdrop-3: rgba(168,85,247,0.18);
+  --backdrop-4: rgba(34,211,238,0.10);
+}
+body.mode-jarvis {
+  --backdrop-1: rgba(0,212,255,0.20);
+  --backdrop-2: rgba(37,99,235,0.18);
+  --backdrop-3: rgba(14,165,233,0.14);
+  --backdrop-4: rgba(103,232,249,0.08);
+}
+body.mode-friday {
+  --backdrop-1: rgba(168,85,247,0.20);
+  --backdrop-2: rgba(236,72,153,0.14);
+  --backdrop-3: rgba(124,58,237,0.16);
+  --backdrop-4: rgba(192,132,252,0.10);
+}
+body.mode-ultron {
+  --backdrop-1: rgba(255,62,62,0.16);
+  --backdrop-2: rgba(249,115,22,0.13);
+  --backdrop-3: rgba(190,18,60,0.14);
+  --backdrop-4: rgba(251,191,36,0.08);
+}
+/* Light mode keeps a whisper of it so the frosted surfaces still have
+   something behind them instead of sitting on flat white. */
+body.light-mode {
+  --backdrop-1: rgba(124,58,237,0.10);
+  --backdrop-2: rgba(219,39,119,0.07);
+  --backdrop-3: rgba(79,70,229,0.08);
+  --backdrop-4: rgba(6,182,212,0.06);
 }
 
 /* LEFT PANEL */
