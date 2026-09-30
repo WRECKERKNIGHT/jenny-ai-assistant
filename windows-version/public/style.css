@@ -2120,16 +2120,19 @@ body.mode-ultron.pc-call-active .call-phone-btn { animation-name: call-btn-breat
   --glass-blur-sm: blur(6px) saturate(1.35);
   --glass-blur-md: blur(16px) saturate(1.6);
   --glass-blur-lg: blur(30px) saturate(1.8);
-  --glass-tint: rgba(255, 255, 255, 0.045);
-  --glass-tint-strong: rgba(255, 255, 255, 0.075);
-  --glass-edge: rgba(255, 255, 255, 0.11);
-  --glass-edge-strong: rgba(255, 255, 255, 0.18);
+  /* Stronger than the first pass on purpose: with the aurora now behind the
+     app there is real colour for the surfaces to pick up, so the tint and the
+     edges can afford to be denser without going milky. */
+  --glass-tint: rgba(255, 255, 255, 0.06);
+  --glass-tint-strong: rgba(255, 255, 255, 0.10);
+  --glass-edge: rgba(255, 255, 255, 0.14);
+  --glass-edge-strong: rgba(255, 255, 255, 0.26);
   /* The specular sheen is what actually sells glass: a bright 1px top edge
      fading out, plus a soft ambient shadow so panels lift off the backdrop. */
-  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.03) 42%, transparent 100%);
-  --glass-shadow: 0 10px 34px rgba(0, 0, 0, 0.42), 0 2px 8px rgba(0, 0, 0, 0.3);
-  --glass-shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.34);
-  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 24px rgba(255, 255, 255, 0.02);
+  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0.06) 44%, transparent 100%);
+  --glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.48), 0 2px 10px rgba(0, 0, 0, 0.34);
+  --glass-shadow-sm: 0 6px 20px rgba(0, 0, 0, 0.40);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 0 30px rgba(255, 255, 255, 0.03);
 }
 
 /* ---- Reusable material classes ---- */
@@ -2163,9 +2166,33 @@ body.mode-ultron.pc-call-active .call-phone-btn { animation-name: call-btn-breat
   inset: 0;
   border-radius: inherit;
   background: var(--glass-sheen);
-  opacity: 0.55;
+  opacity: 0.72;
   pointer-events: none;
   mix-blend-mode: screen;
+}
+
+/* ---- Accent-lit rim ----
+   A neutral white edge washes out against the aurora. Recolouring just the top
+   edge of a card with the active mode's accent makes the whole surface look lit
+   from the same source as the rest of the window - the cheapest thing there is
+   for turning a flat translucent box into something that reads as glass.
+   Only applied to cards that already carry a full 1px border, so it costs
+   nothing in layout. */
+.jd-op,
+.jd-cmd,
+.fd-card,
+.fd-ctrl-btn,
+.fd-cmd,
+.sys-graph-card,
+.welcome-card,
+.am-stat,
+.stat-box,
+.device-spec-card,
+.linked-device-card,
+.linked-stats-grid > *,
+.ctrl-btn,
+.agency-chip {
+  border-top-color: var(--accent-edge) !important;
 }
 
 /* ---- Large surfaces: panels, modals, bars (blur is affordable here) ---- */
