@@ -291,10 +291,30 @@ function initBootParticles() {
   window.addEventListener('resize', () => { w=canvas.width=window.innerWidth; h=canvas.height=window.innerHeight; });
 }
 
+// The cards have just appeared, so JENNY asks what to run out loud. Without
+// this the mode screen was silent and the only cue was "pick one of three",
+// which is the one moment where speaking up matters most.
+let modePromptDone = false;
+function speakModePrompt() {
+  // revealModes() can fire more than once (cinematic onDone, splash click,
+  // Enter), and the greeting must never be spoken twice or over itself.
+  if (modePromptDone) return;
+  modePromptDone = true;
+  const url = '/api/speak?text=' + encodeURIComponent('Which mode will you choose, BOSS?') + '&fmt=mp3';
+  const audio = new Audio(url);
+  const play = () => { const p = audio.play(); if (p && p.catch) p.catch(() => {}); };
+  play();
+  // Autoplay is blocked until the page has been interacted with, and the intro
+  // deliberately needs no click, so retry on the first real gesture.
+  document.addEventListener('click', play, { once: true });
+  document.addEventListener('keydown', play, { once: true });
+}
+
 function revealModes() {
   localStorage.setItem('jenny_booted', '1');
   bootScreen.classList.add('done');
   if (modeRoot) modeRoot.style.opacity = '1';
+  speakModePrompt();
 }
 
 initBootParticles();
