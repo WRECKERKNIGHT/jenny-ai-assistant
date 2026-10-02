@@ -3935,3 +3935,9 @@ app.get('/api/spotify/playlists', (req,res)=>res.json({success:true, playlists:[
 app.post('/api/spotify/queue', (req,res)=>res.json({success:true}));
 app.get('/api/spotify/account', (req,res)=>res.json({success:true, account:{}}));
 
+
+app.post('/api/call/start', (req,res)=>res.json({success:true}));
+app.post('/api/call/talk', (req,res)=>res.json({success:true, reply:''}));
+app.post('/api/call/hangup', (req,res)=>res.json({success:true}));
+app.get('/api/call/status', (req,res)=>res.json({success:true, call:{active:false,duration:0,transcript:[]}}));
+
