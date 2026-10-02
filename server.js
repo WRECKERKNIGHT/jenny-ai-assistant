@@ -3831,3 +3831,14 @@ server.on('error', (err) => {
     process.exit(1);
   }
 });
+
+app.get('/api/stt/status', (req, res) => {
+  res.json({ success: true, ready: true, engine: 'browser-upload-or-os', listening: false });
+});
+app.get('/api/stt/language', (req, res) => {
+  res.json({ success: true, language: 'en-US', supported: ['en-US', 'en-IN', 'hi-IN'] });
+});
+app.get('/api/stt/mics', (req, res) => {
+  res.json({ success: true, devices: [] });
+});
+
