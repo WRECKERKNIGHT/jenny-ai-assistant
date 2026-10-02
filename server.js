@@ -3949,3 +3949,10 @@ app.get('/api/device/location', (req,res)=>res.json({success:true, location:{}})
 app.get('/api/device/notifications', (req,res)=>res.json({success:true, notifications:[]}));
 app.get('/api/device/command/poll/:did', (req,res)=>res.json({success:true, commands:[]}));
 
+
+app.post('/api/commands/teach', (req,res)=>res.json({success:true}));
+app.get('/api/commands/taught', (req,res)=>res.json({success:true, commands:[]}));
+app.post('/api/commands/forget', (req,res)=>res.json({success:true}));
+app.get('/api/smart-suggestions', (req,res)=>res.json({success:true, suggestions:[]}));
+app.get('/api/groq-usage', (req,res)=>res.json({success:true, usage:{}}));
+
