@@ -3989,3 +3989,5 @@ app.get('/api/app', (req,res)=>res.redirect('/'));
 app.get('/api/mobile', (req,res)=>res.redirect('/mobile.html'));
 app.get('/api/<path:p>', (req,res,next)=>next());
 app.get('/', (req,res)=>res.sendFile(require('path').join(__dirname,'public','index.html')));
+app.get('/api/proactive/status', (req,res)=>res.json({success:true,active:false}));
+app.post('/api/proactive/enable', (req,res)=>res.json({success:true}));
