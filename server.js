@@ -3856,3 +3856,17 @@ app.get('/api/settings/keys', (req, res) => {
   res.json({ success: true, keys: { elevenlabs: !!process.env.ELEVENLABS_API_KEY, openai: !!process.env.OPENAI_API_KEY, groq: !!process.env.GROQ_API_KEY } });
 });
 
+
+app.get('/api/greeting', (req, res) => {
+  res.json({ success: true, greeting: 'Good to see you, Boss.' });
+});
+app.get('/api/quotes', (req, res) => {
+  res.json({ success: true, quotes: ['The only way to do great work is to love what you do.'] });
+});
+app.get('/api/jokes', (req, res) => {
+  res.json({ success: true, joke: 'Why did the developer go broke? Because he used up all his cache.' });
+});
+app.get('/api/riddles', (req, res) => {
+  res.json({ success: true, riddle: 'What has keys but no locks?', answer: 'A keyboard' });
+});
+
