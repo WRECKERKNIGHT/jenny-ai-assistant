@@ -3886,3 +3886,13 @@ app.get('/api/services', (req,res)=>res.json({success:true, services:{}}));
 app.get('/api/tools', (req,res)=>res.json({success:true, tools:[]}));
 app.post('/api/tool', (req,res)=>res.json({success:true}));
 
+
+app.get('/api/hermes/status', (req,res)=>res.json({success:true, status:'ok'}));
+app.get('/api/hermes/memory', (req,res)=>res.json({success:true, memory:[]}));
+app.post('/api/hermes/memory', (req,res)=>res.json({success:true}));
+app.get('/api/hermes/memory-provider', (req,res)=>res.json({success:true, provider:'local'}));
+app.get('/api/hermes/skills', (req,res)=>res.json({success:true, skills:[]}));
+app.get('/api/hermes/slack-manifest', (req,res)=>res.json({success:true, manifest:{}}));
+app.get('/api/facts', (req,res)=>res.json({success:true, facts:[]}));
+app.get('/api/user-habits', (req,res)=>res.json({success:true, habits:[]}));
+
