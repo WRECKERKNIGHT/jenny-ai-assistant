@@ -3876,3 +3876,13 @@ app.get('/api/agency/mission', (req,res)=>res.json({success:true, missions:[]}))
 app.get('/api/agency/response', (req,res)=>res.json({success:true}));
 app.post('/api/agency/outreach', (req,res)=>res.json({success:true}));
 
+
+app.get('/api/mobile-stats', (req,res)=>res.json({success:true, stats:{}}));
+app.post('/api/notifications-forward', (req,res)=>res.json({success:true}));
+app.post('/api/notifications-push', (req,res)=>res.json({success:true}));
+app.get('/api/pc-notifications', (req,res)=>res.json({success:true, notifications:[]}));
+app.get('/api/brain-status', (req,res)=>res.json({success:true, status:'ok'}));
+app.get('/api/services', (req,res)=>res.json({success:true, services:{}}));
+app.get('/api/tools', (req,res)=>res.json({success:true, tools:[]}));
+app.post('/api/tool', (req,res)=>res.json({success:true}));
+
