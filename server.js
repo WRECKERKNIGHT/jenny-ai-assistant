@@ -3921,3 +3921,8 @@ app.post('/api/gesture/mode', (req,res)=>res.json({success:true}));
 app.get('/api/gesture/watchdog', (req,res)=>res.json({success:true, ok:true}));
 app.post('/api/gesture/watchdog-log', (req,res)=>res.json({success:true}));
 
+
+app.get('/api/chrome-bookmarks', (req,res)=>res.json({success:true, bookmarks:[]}));
+app.post('/api/open-chrome', (req,res)=>res.json({success:true}));
+app.get('/api/clipboard-sync', (req,res)=>res.json({success:true, text:''}));
+
