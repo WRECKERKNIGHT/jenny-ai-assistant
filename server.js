@@ -3870,3 +3870,9 @@ app.get('/api/riddles', (req, res) => {
   res.json({ success: true, riddle: 'What has keys but no locks?', answer: 'A keyboard' });
 });
 
+
+app.get('/api/agency', (req,res)=>res.json({success:true, status:'online'}));
+app.get('/api/agency/mission', (req,res)=>res.json({success:true, missions:[]}));
+app.get('/api/agency/response', (req,res)=>res.json({success:true}));
+app.post('/api/agency/outreach', (req,res)=>res.json({success:true}));
+
