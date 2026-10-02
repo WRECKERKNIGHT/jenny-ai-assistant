@@ -4000,3 +4000,4 @@ app.get('/api/capabilities', (req,res,next)=>{ next(); }); // ensure flexible ma
 app.get('/api/voice-engine/status', (req,res)=>res.json({success:true,active:global._voiceEnginePref||'say'}));
 app.post('/api/stt/upload', (req,res,next)=>{ next(); }); // allow multipart later
 app.get('/api/emails', (req,res,next)=>{ next(); }); // keep existing handler precedence
+app.get('/api/notifications', (req,res,next)=>{ if(req.query.raw==='1') return next(); res.json({success:true,notifications:[]}); });
