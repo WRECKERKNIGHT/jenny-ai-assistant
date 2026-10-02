@@ -3972,3 +3972,7 @@ app.get('/api/screenshot-base64', (req,res)=>res.json({success:true, data:null})
 app.get('/api/open-app', (req,res)=>res.json({success:true}));
 app.get('/api/close-app', (req,res)=>res.json({success:true}));
 
+app.get('/api/remote-mode', (req,res)=>res.json({success:true,enabled:false}));
+app.get('/api/remote-status', (req,res)=>res.json({success:true,connected:false}));
+app.get('/api/dictionary', (req,res)=>res.json({success:true,definitions:[]}));
+app.get('/api/crypto', (req,res)=>res.json({success:true,prices:{}}));
