@@ -4003,3 +4003,4 @@ app.get('/api/emails', (req,res,next)=>{ next(); }); // keep existing handler pr
 app.get('/api/notifications', (req,res,next)=>{ if(req.query.raw==='1') return next(); res.json({success:true,notifications:[]}); });
 app.get('/api/wakeword/status', (req,res)=>res.json({success:true,active:false}));
 app.post('/api/wakeword/toggle', (req,res)=>res.json({success:true,active:false}));
+app.get('/api/assistant/status', (req,res)=>res.json({success:true,idle:true}));
