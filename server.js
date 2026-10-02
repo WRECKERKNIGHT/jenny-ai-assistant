@@ -3999,3 +3999,4 @@ app.post('/api/device/command/send', (req,res)=>res.json({success:true}));
 app.get('/api/capabilities', (req,res,next)=>{ next(); }); // ensure flexible matching
 app.get('/api/voice-engine/status', (req,res)=>res.json({success:true,active:global._voiceEnginePref||'say'}));
 app.post('/api/stt/upload', (req,res,next)=>{ next(); }); // allow multipart later
+app.get('/api/emails', (req,res,next)=>{ next(); }); // keep existing handler precedence
