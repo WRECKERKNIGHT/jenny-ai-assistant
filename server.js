@@ -3978,3 +3978,8 @@ app.get('/api/dictionary', (req,res)=>res.json({success:true,definitions:[]}));
 app.get('/api/crypto', (req,res)=>res.json({success:true,prices:{}}));
 app.get('/api/discord-dms', (req,res)=>res.json({success:true,dms:[]}));
 app.post('/api/vault', (req,res)=>{ if(!req.body.key||!req.body.value){return res.status(400).json({success:false});} const v=require('fs').existsSync(VAULT_FILE)?JSON.parse(require('fs').readFileSync(VAULT_FILE)):[]; v.push({key:req.body.key,value:req.body.value,ts:Date.now()}); require('fs').writeFileSync(VAULT_FILE,JSON.stringify(v,null,2)); res.json({success:true}); });
+app.get('/api/vault/search', (req,res)=>res.json({success:true,results:[]}));
+app.post('/api/training', (req,res)=>res.json({success:true}));
+app.get('/api/timers', (req,res)=>res.json({success:true,timers:[]}));
+app.post('/api/toggle-mic', (req,res)=>res.json({success:true}));
+app.get('/api/toggle-mic-poll', (req,res)=>res.json({success:true,muted:false}));
