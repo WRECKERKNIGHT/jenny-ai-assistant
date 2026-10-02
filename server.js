@@ -3896,3 +3896,10 @@ app.get('/api/hermes/slack-manifest', (req,res)=>res.json({success:true, manifes
 app.get('/api/facts', (req,res)=>res.json({success:true, facts:[]}));
 app.get('/api/user-habits', (req,res)=>res.json({success:true, habits:[]}));
 
+
+app.post('/api/remote/tunnel/start', (req,res)=>res.json({success:true, tunnelUrl:null}));
+app.get('/api/remote/tunnel/status', (req,res)=>res.json({success:true, active:false}));
+app.post('/api/remote/tunnel/stop', (req,res)=>res.json({success:true}));
+app.get('/api/mode', (req,res)=>res.json({success:true, mode:'JENNY'}));
+app.post('/api/mode', (req,res)=>res.json({success:true, mode:req.body?.mode||'JENNY'}));
+
