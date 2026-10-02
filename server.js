@@ -3256,6 +3256,66 @@ app.get('/api/health', (req, res) => {
 });
 
 // Endpoint for ElevenLabs Text-to-Speech (Voice ID: 21m00Tcm4TlvDq8ikWAM - "Rachel")
+
+app.get('/api/capabilities', (req, res) => {
+  res.json({
+    success: true,
+    platform: os.platform(),
+    features: {
+      stt: { available: os.platform() === 'darwin', note: 'uses say/OSX or browser upload' },
+      tts: { available: os.platform() === 'darwin', engines: ['say', 'elevenlabs'] },
+      pcActions: { available: os.platform() === 'darwin' },
+      tray: { available: os.platform() === 'darwin' },
+      phoneLink: { available: true },
+    }
+  });
+});
+
+
+app.get('/api/voice-info', (req, res) => {
+  res.json({
+    success: true,
+    voices: {
+      narrator: 'macOS say (Victoria/Samantha/Karen/Tessa/Veena)',
+      assistant: 'macOS say (Victoria/Samantha/Karen/Tessa/Veena)',
+      alerts: 'macOS say',
+      modes: {
+        FRIDAY: 'Victoria',
+        JARVIS: 'Samantha',
+        ULTRON: 'Tessa',
+        BIXBY: 'Veena',
+        JENNY: 'Karen'
+      },
+      __engine__: {
+        active: 'say',
+        available: { say: true, elevenlabs: !!process.env.ELEVENLABS_API_KEY }
+      }
+    },
+    mode: 'JENNY'
+  });
+});
+
+
+app.get('/api/voice-engine', (req, res) => {
+  res.json({
+    success: true,
+    setting: process.env.TTS_ENGINE || 'auto',
+    active: process.env.TTS_ENGINE || 'say',
+    engines: {
+      say: { available: os.platform()==='darwin' },
+      elevenlabs: { available: !!process.env.ELEVENLABS_API_KEY }
+    }
+  });
+});
+app.post('/api/voice-engine', (req, res) => {
+  const { engine } = req.body || {};
+  if (engine) {
+    // non-persistent (in-memory) reflection only, to keep parity
+    global._voiceEnginePref = engine;
+  }
+  res.json({ success: true, setting: engine || global._voiceEnginePref || 'auto' });
+});
+
 app.post('/api/tts', async (req, res) => {
   const { text, voiceId = '21m00Tcm4TlvDq8ikWAM', apiKey } = req.body;
   const elevenKey = apiKey || process.env.ELEVENLABS_API_KEY;
