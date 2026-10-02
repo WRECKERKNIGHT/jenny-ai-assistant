@@ -3976,3 +3976,5 @@ app.get('/api/remote-mode', (req,res)=>res.json({success:true,enabled:false}));
 app.get('/api/remote-status', (req,res)=>res.json({success:true,connected:false}));
 app.get('/api/dictionary', (req,res)=>res.json({success:true,definitions:[]}));
 app.get('/api/crypto', (req,res)=>res.json({success:true,prices:{}}));
+app.get('/api/discord-dms', (req,res)=>res.json({success:true,dms:[]}));
+app.post('/api/vault', (req,res)=>{ if(!req.body.key||!req.body.value){return res.status(400).json({success:false});} const v=require('fs').existsSync(VAULT_FILE)?JSON.parse(require('fs').readFileSync(VAULT_FILE)):[]; v.push({key:req.body.key,value:req.body.value,ts:Date.now()}); require('fs').writeFileSync(VAULT_FILE,JSON.stringify(v,null,2)); res.json({success:true}); });
