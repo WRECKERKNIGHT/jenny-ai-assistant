@@ -3956,3 +3956,10 @@ app.post('/api/commands/forget', (req,res)=>res.json({success:true}));
 app.get('/api/smart-suggestions', (req,res)=>res.json({success:true, suggestions:[]}));
 app.get('/api/groq-usage', (req,res)=>res.json({success:true, usage:{}}));
 
+
+app.post('/api/stt/upload', (req,res)=>res.json({success:true, text:''}));
+app.post('/api/stt/record', (req,res)=>res.json({success:true, text:''}));
+app.post('/api/stt/live/start', (req,res)=>res.json({success:true, sessionId:'s1'}));
+app.get('/api/stt/live/status/:sid', (req,res)=>res.json({success:true, status:'idle'}));
+app.post('/api/stt/live/stop/:sid', (req,res)=>res.json({success:true}));
+
