@@ -3909,3 +3909,15 @@ app.post('/api/wake/toggle', (req,res)=>res.json({success:true, active:false}));
 app.post('/api/wake/restart', (req,res)=>res.json({success:true}));
 app.post('/api/wake/events', (req,res)=>res.json({success:true}));
 
+
+app.get('/api/gesture/status', (req,res)=>res.json({success:true, active:false}));
+app.post('/api/gesture/start', (req,res)=>res.json({success:true}));
+app.post('/api/gesture/stop', (req,res)=>res.json({success:true}));
+app.post('/api/gesture/config', (req,res)=>res.json({success:true}));
+app.post('/api/gesture/cmd', (req,res)=>res.json({success:true}));
+app.post('/api/gesture/frame', (req,res)=>res.json({success:true}));
+app.get('/api/gesture/orb', (req,res)=>res.json({success:true}));
+app.post('/api/gesture/mode', (req,res)=>res.json({success:true}));
+app.get('/api/gesture/watchdog', (req,res)=>res.json({success:true, ok:true}));
+app.post('/api/gesture/watchdog-log', (req,res)=>res.json({success:true}));
+
