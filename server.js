@@ -3941,3 +3941,11 @@ app.post('/api/call/talk', (req,res)=>res.json({success:true, reply:''}));
 app.post('/api/call/hangup', (req,res)=>res.json({success:true}));
 app.get('/api/call/status', (req,res)=>res.json({success:true, call:{active:false,duration:0,transcript:[]}}));
 
+
+app.post('/api/device/sms/send', (req,res)=>res.json({success:true}));
+app.post('/api/device/notify-pc', (req,res)=>res.json({success:true}));
+app.get('/api/device/status/:deviceId', (req,res)=>res.json({success:true, device:{}}));
+app.get('/api/device/location', (req,res)=>res.json({success:true, location:{}}));
+app.get('/api/device/notifications', (req,res)=>res.json({success:true, notifications:[]}));
+app.get('/api/device/command/poll/:did', (req,res)=>res.json({success:true, commands:[]}));
+
