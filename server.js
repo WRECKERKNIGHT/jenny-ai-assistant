@@ -3903,3 +3903,9 @@ app.post('/api/remote/tunnel/stop', (req,res)=>res.json({success:true}));
 app.get('/api/mode', (req,res)=>res.json({success:true, mode:'JENNY'}));
 app.post('/api/mode', (req,res)=>res.json({success:true, mode:req.body?.mode||'JENNY'}));
 
+
+app.get('/api/wake/status', (req,res)=>res.json({success:true, active:false}));
+app.post('/api/wake/toggle', (req,res)=>res.json({success:true, active:false}));
+app.post('/api/wake/restart', (req,res)=>res.json({success:true}));
+app.post('/api/wake/events', (req,res)=>res.json({success:true}));
+
