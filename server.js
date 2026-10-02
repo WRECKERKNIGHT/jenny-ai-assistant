@@ -3993,3 +3993,6 @@ app.get('/api/proactive/status', (req,res)=>res.json({success:true,active:false}
 app.post('/api/proactive/enable', (req,res)=>res.json({success:true}));
 app.get('/api/smart/suggestions', (req,res)=>res.json({success:true,suggestions:[]}));
 app.post('/api/smart/feedback', (req,res)=>res.json({success:true}));
+app.post('/api/device/approve', (req,res)=>res.json({success:true}));
+app.post('/api/device/register', (req,res)=>res.json({success:true,deviceId:'dev1'}));
+app.post('/api/device/command/send', (req,res)=>res.json({success:true}));
