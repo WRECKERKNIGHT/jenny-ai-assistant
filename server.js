@@ -4001,3 +4001,5 @@ app.get('/api/voice-engine/status', (req,res)=>res.json({success:true,active:glo
 app.post('/api/stt/upload', (req,res,next)=>{ next(); }); // allow multipart later
 app.get('/api/emails', (req,res,next)=>{ next(); }); // keep existing handler precedence
 app.get('/api/notifications', (req,res,next)=>{ if(req.query.raw==='1') return next(); res.json({success:true,notifications:[]}); });
+app.get('/api/wakeword/status', (req,res)=>res.json({success:true,active:false}));
+app.post('/api/wakeword/toggle', (req,res)=>res.json({success:true,active:false}));
