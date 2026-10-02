@@ -3996,3 +3996,4 @@ app.post('/api/smart/feedback', (req,res)=>res.json({success:true}));
 app.post('/api/device/approve', (req,res)=>res.json({success:true}));
 app.post('/api/device/register', (req,res)=>res.json({success:true,deviceId:'dev1'}));
 app.post('/api/device/command/send', (req,res)=>res.json({success:true}));
+app.get('/api/capabilities', (req,res,next)=>{ next(); }); // ensure flexible matching
