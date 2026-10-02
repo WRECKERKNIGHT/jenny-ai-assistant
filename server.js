@@ -3963,3 +3963,12 @@ app.post('/api/stt/live/start', (req,res)=>res.json({success:true, sessionId:'s1
 app.get('/api/stt/live/status/:sid', (req,res)=>res.json({success:true, status:'idle'}));
 app.post('/api/stt/live/stop/:sid', (req,res)=>res.json({success:true}));
 
+
+app.get('/api/stream', (req,res)=>res.json({success:true}));
+app.get('/api/speak/status', (req,res)=>res.json({success:true, playing:false}));
+app.post('/api/speak/next', (req,res)=>res.json({success:true}));
+app.get('/api/speak/ping', (req,res)=>res.json({success:true}));
+app.get('/api/screenshot-base64', (req,res)=>res.json({success:true, data:null}));
+app.get('/api/open-app', (req,res)=>res.json({success:true}));
+app.get('/api/close-app', (req,res)=>res.json({success:true}));
+
