@@ -3842,3 +3842,17 @@ app.get('/api/stt/mics', (req, res) => {
   res.json({ success: true, devices: [] });
 });
 
+
+app.get('/api/runtime', (req, res) => {
+  res.json({ success: true, uptime: Math.floor((Date.now()-SERVER_START)/1000), version: APP_VERSION });
+});
+app.get('/api/system', (req, res) => {
+  res.json({ success: true, data: { battery: { percent: cachedBattery.level||80, state: cachedBattery.charging?'charging':'discharging' }, uptime: Math.floor(os.uptime()), volume: 50, brightness: 0.8, ip: '127.0.0.1', os: `${os.type()} ${os.release()}`, cpu: 'Host CPU', ram: `${cachedSystemStatus.ram.usage}%` } });
+});
+app.get('/api/preferences', (req, res) => {
+  res.json({ success: true, prefs: appSettings });
+});
+app.get('/api/settings/keys', (req, res) => {
+  res.json({ success: true, keys: { elevenlabs: !!process.env.ELEVENLABS_API_KEY, openai: !!process.env.OPENAI_API_KEY, groq: !!process.env.GROQ_API_KEY } });
+});
+
