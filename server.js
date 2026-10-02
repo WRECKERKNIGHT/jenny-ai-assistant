@@ -3926,3 +3926,12 @@ app.get('/api/chrome-bookmarks', (req,res)=>res.json({success:true, bookmarks:[]
 app.post('/api/open-chrome', (req,res)=>res.json({success:true}));
 app.get('/api/clipboard-sync', (req,res)=>res.json({success:true, text:''}));
 
+
+app.get('/api/spotify/connect', (req,res)=>res.json({success:true}));
+app.get('/api/spotify/callback', (req,res)=>res.json({success:true}));
+app.get('/api/spotify/status', (req,res)=>res.json({success:true, connected:false}));
+app.post('/api/spotify/disconnect', (req,res)=>res.json({success:true}));
+app.get('/api/spotify/playlists', (req,res)=>res.json({success:true, playlists:[]}));
+app.post('/api/spotify/queue', (req,res)=>res.json({success:true}));
+app.get('/api/spotify/account', (req,res)=>res.json({success:true, account:{}}));
+
