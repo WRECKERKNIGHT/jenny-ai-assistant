@@ -1320,7 +1320,10 @@ function openPanel(name) {
   const parts = titleStr.split(' ');
   const iconClass = parts[0];
   const titleText = parts.slice(1).join(' ');
-  panel.innerHTML = `<div class="panel-hdr" data-drag="true"><h3><i class="fa-solid ${iconClass}"></i> ${titleText}</h3><button class="panel-close" onclick="closePanel('${name}')">&times;</button></div><div class="panel-body" id="panel-body-${name}"><div class="panel-empty">Loading...</div></div>`;
+  // Maximize sits next to close: a 420px panel cannot show a process table or a
+  // week of weather properly, so the wide layout has to be reachable from the
+  // panel itself. PanelWin owns the geometry, this button just calls it.
+  panel.innerHTML = `<div class="panel-hdr" data-drag="true"><h3><i class="fa-solid ${iconClass}"></i> ${titleText}</h3><div class="panel-hdr-tools"><button class="panel-max" aria-pressed="false" title="Maximize panel" onclick="event.stopPropagation();PanelWin.toggle('${name}')"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button><button class="panel-close" onclick="closePanel('${name}')" title="Close panel">&times;</button></div></div><div class="panel-body" id="panel-body-${name}"><div class="panel-empty">Loading...</div></div>`;
   container.appendChild(panel);
   openPanels.add(name);
   document.querySelector(`.dock-btn[data-panel="${name}"]`)?.classList.add('active');
@@ -1336,10 +1339,26 @@ function closePanel(name) {
   if (!panel) return;
   const cleanup = dragCleanupFns.get(panel);
   if (cleanup) { cleanup(); dragCleanupFns.delete(panel); }
+  // Stop this panel's poller explicitly. The sweep in stopPanelTimerFor only
+  // runs when some panel closes and cannot catch a timer whose body node is
+  // about to be detached along with the panel itself.
+  stopPanelTimer(name);
+  delete panelState[name];
+  // The agency poller lives outside panelTimers, so it needs stopping here too.
+  // Without this it keeps hitting /api/agency once a second until pollAgency
+  // notices its body node is gone.
+  if (name === 'agency' && agencyPollTimer) { clearInterval(agencyPollTimer); agencyPollTimer = null; }
+  if (name === 'agency') agencyLeadHistory = [];
+  // Drop the maximized state too, otherwise the next panel to open would be
+  // refused as "one at a time" by a window that no longer exists.
+  if (typeof PanelWin !== 'undefined') PanelWin.forget(panel);
   panel.classList.add('closing');
   setTimeout(() => panel.remove(), 200);
   openPanels.delete(name);
   document.querySelector(`.dock-btn[data-panel="${name}"]`)?.classList.remove('active');
+  // Sweep any timer whose panel has since gone, so a crash in one loader
+  // cannot leave the whole set running.
+  stopPanelTimerFor();
 }
 
 const dragCleanupFns = new Map();
@@ -1356,7 +1375,11 @@ function initDraggable(panel) {
   const onTouchEnd = () => { if (!isDragging) return; isDragging = false; panel.style.transition = ''; };
 
   const onMouseDown = (e) => {
-    if (e.target.closest('.panel-close')) return;
+    // Never start a drag from a header control, and never drag a maximized
+    // panel: it is pinned to the viewport, so a drag would silently move it
+    // away from the full-bleed geometry PanelWin just applied.
+    if (e.target.closest('.panel-close, .panel-max')) return;
+    if (typeof PanelWin !== 'undefined' && PanelWin.isMaximized(panel)) return;
     isDragging = true;
     startX = e.clientX;
     startY = e.clientY;
@@ -1370,7 +1393,8 @@ function initDraggable(panel) {
     e.preventDefault();
   };
   const onTouchStart = (e) => {
-    if (e.target.closest('.panel-close')) return;
+    if (e.target.closest('.panel-close, .panel-max')) return;
+    if (typeof PanelWin !== 'undefined' && PanelWin.isMaximized(panel)) return;
     isDragging = true;
     const touch = e.touches[0];
     startX = touch.clientX;
@@ -1425,6 +1449,9 @@ async function loadPanelContent(name) {
 // AGENCY OS PANEL (Jarvis business monitoring)
 // ================================================
 let agencyPollTimer = null;
+// Rolling total-leads samples for the agency trend sparkline. Module scoped so
+// it survives the 4s re-render, and cleared whenever the panel opens or closes.
+let agencyLeadHistory = [];
 
 function toggleAgencyPanel(show) {
   if (show) {
@@ -1437,6 +1464,9 @@ function toggleAgencyPanel(show) {
 async function loadAgencyPanel(el) {
   el.innerHTML = '<div class="panel-empty">Connecting to Agency OS...</div>';
   if (agencyPollTimer) clearInterval(agencyPollTimer);
+  // Leads history belongs to the panel, not the page: reopening the panel
+  // starts a fresh trend rather than resurrecting a stale one from last time.
+  agencyLeadHistory = [];
   await pollAgency();
   agencyPollTimer = setInterval(pollAgency, 4000);
 }
@@ -1464,31 +1494,85 @@ function renderAgencyPanel(el, state) {
   const runs = state.agentRuns || [];
   const byStage = stats.byStage || {};
 
+  const n = (v) => (typeof v === 'number' && isFinite(v) ? v : 0);
+
+  // ---- headline rings ----------------------------------------------------
+  // The old panel opened on eight number cards, all the same shape, none of
+  // them saying anything about proportion. Four rings that encode "how full is
+  // this" get the same information across in far less space.
+  const online = n(stats.agentsOnline);
+  const working = n(stats.agentsWorking);
+  const leadsToday = n(stats.leadsToday);
+  const totalLeads = n(stats.totalLeads);
+  const pending = n(stats.pendingApproval);
+  const sent = n(stats.sentOutreach);
+  const runningMissions = missions.filter(m => (m.status || '').toLowerCase() === 'running').length;
+
+  // Outreach outcomes as a funnel: contacted -> sent, and whatever is still
+  // sitting in approval. Shows the drop-off, not just the totals.
+  const outreachAll = state.outreach || [];
+  const byOutreachStatus = (st) => outreachAll.filter(o => (o.status || '').toLowerCase() === st).length;
+  const outreachTouched = outreachAll.length || 1;
+  const replied = byOutreachStatus('replied') + byOutreachStatus('responded');
+
+  const hero = Viz.hero([
+    Viz.ring(online ? Math.min(100, (working / online) * 100) : 0, {
+      label: 'AGENTS BUSY', labelText: working + '/' + online, warn: false, crit: false
+    }),
+    Viz.ring(leadsToday ? Math.min(100, (leadsToday / Math.max(totalLeads, leadsToday)) * 100) : 0, {
+      label: 'TODAY OF TOTAL', labelText: leadsToday + '/' + totalLeads, warn: false, crit: false
+    }),
+    Viz.ring((replied / outreachTouched) * 100, {
+      label: 'REPLY RATE', labelText: Math.round((replied / outreachTouched) * 100) + '%', warn: false, crit: false
+    }),
+    Viz.ring(outreachTouched ? (pending / outreachTouched) * 100 : 0, {
+      // This one IS a queue that can back up, so it keeps the severity ramp.
+      label: 'AWAITING YOU', labelText: String(pending), warn: 25, crit: 60
+    })
+  ], {
+    title: 'AGENCY OS',
+    sub: online ? (working ? working + ' agent' + (working === 1 ? '' : 's') + ' working, ' + runningMissions + ' mission' + (runningMissions === 1 ? '' : 's') + ' running' : 'all agents idle') : 'no agents reporting'
+  });
+
   const stat = (label, val, icon, color) => `
     <div style="flex:1;min-width:84px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(139,104,255,0.18);text-align:center;">
-      <div style="font-family:var(--orbitron);font-size:16px;color:${color};text-shadow:0 0 14px ${color};">${val}</div>
+      <div style="font-family:var(--orbitron);font-size:16px;color:${color};text-shadow:0 0 14px ${color};">${Viz.esc(val)}</div>
       <div style="font-family:var(--mono);font-size:7px;color:var(--txt3);letter-spacing:1px;margin-top:2px;"><i class="fa-solid ${icon}"></i> ${label}</div>
     </div>`;
 
   const stageNames = { 'lead_finder':'LEAD FINDER','outreach_writer':'OUTREACH WRITER','contact_builder':'CONTACT BUILDER','response_manager':'RESPONSE MGR','app_checker':'APP CHECKER','researcher':'RESEARCHER' };
-  const stageRows = Object.keys(byStage).map(k => {
-    const v = byStage[k] || 0;
-    const tot = Object.values(byStage).reduce((a,b)=>a+(b||0),0) || 1;
-    const pct = Math.round((v/tot)*100);
-    return `<div style="margin-bottom:5px;">
-      <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:8px;color:var(--txt2);"><span>${stageNames[k]||k.toUpperCase()}</span><span style="color:var(--gold);">${v}</span></div>
-      <div style="height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;margin-top:2px;"><div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--gold),#ffe9a3);border-radius:3px;box-shadow:0 0 8px rgba(139,104,255,0.6);"></div></div>
-    </div>`;
+  const stageKeys = Object.keys(byStage);
+  // One stacked bar instead of a hand-rolled row per stage: the point of this
+  // data is the shape of the pipeline, and a stack shows the shape directly.
+  const pipeline = stageKeys.length
+    ? Viz.stack(stageKeys.map((k, i) => ({
+        label: stageNames[k] || k.toUpperCase(),
+        value: n(byStage[k]),
+        color: 'hsl(' + Math.round((i / stageKeys.length) * 300) + ',70%,62%)'
+      })))
+    : '<div class="panel-empty" style="padding:8px;">No pipeline data yet.</div>';
+
+  // Per-stage detail is still useful, but as meters against the busiest stage
+  // so the bars are comparable instead of each scaled to its own value.
+  const stageMax = Math.max(1, ...stageKeys.map(k => n(byStage[k])));
+  const stageRows = stageKeys.map(k => {
+    const v = n(byStage[k]);
+    return Viz.bar(v, {
+      max: stageMax,
+      label: stageNames[k] || k.toUpperCase(),
+      valueText: String(v),
+      warn: false, crit: false
+    });
   }).join('');
 
   const agentRows = runs.slice(0, 12).map(r => {
     const st = (r.status || 'idle').toLowerCase();
     const color = st === 'working' ? 'var(--gold)' : st === 'error' ? '#ff5f56' : st === 'done' ? '#4ade80' : 'var(--txt3)';
-    const name = (r.agent_id || 'agent').split('_').map(w=>w[0].toUpperCase()+w.slice(1)).join(' ');
-    const stage = stageNames[r.stage] || (r.stage||'').toUpperCase();
+    const name = String(r.agent_id || 'agent').split('_').map(w => (w[0] || '').toUpperCase() + w.slice(1)).join(' ');
+    const stage = stageNames[r.stage] || (r.stage || '').toUpperCase();
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border-radius:6px;background:rgba(255,255,255,0.02);margin-bottom:4px;">
-      <div style="font-family:var(--mono);font-size:9px;color:var(--txt2);">${name} ${stage?`<span style="color:var(--txt3);font-size:7px;">· ${stage}</span>`:''}</div>
-      <span style="font-family:var(--mono);font-size:7px;letter-spacing:1px;color:${color};"><i class="fa-solid fa-circle" style="font-size:5px;vertical-align:middle;"></i> ${st.toUpperCase()}</span>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--txt2);">${Viz.esc(name)} ${stage ? `<span style="color:var(--txt3);font-size:7px;">· ${Viz.esc(stage)}</span>` : ''}</div>
+      <span style="font-family:var(--mono);font-size:7px;letter-spacing:1px;color:${color};"><i class="fa-solid fa-circle" style="font-size:5px;vertical-align:middle;"></i> ${Viz.esc(st.toUpperCase())}</span>
     </div>`;
   }).join('') || '<div style="font-size:9px;color:var(--txt3);padding:4px 0;">No agent runs recorded yet.</div>';
 
@@ -1496,8 +1580,8 @@ function renderAgencyPanel(el, state) {
     const st = (m.status || '').toLowerCase();
     const color = st === 'running' ? 'var(--gold)' : st === 'done' ? '#4ade80' : st === 'error' ? '#ff5f56' : 'var(--txt3)';
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-radius:6px;background:rgba(255,255,255,0.02);margin-bottom:3px;">
-      <div style="font-family:var(--mono);font-size:8px;color:var(--txt2);">#${m.id} ${m.city||'—'} <span style="color:var(--txt3);">· ${m.category||''} · n=${m.limit_n||0}</span></div>
-      <span style="font-family:var(--mono);font-size:7px;color:${color};">${st.toUpperCase()}</span>
+      <div style="font-family:var(--mono);font-size:8px;color:var(--txt2);">#${Viz.esc(m.id)} ${Viz.esc(m.city || '—')} <span style="color:var(--txt3);">· ${Viz.esc(m.category || '')} · n=${Viz.esc(m.limit_n || 0)}</span></div>
+      <span style="font-family:var(--mono);font-size:7px;color:${color};">${Viz.esc(st.toUpperCase())}</span>
     </div>`;
   }).join('') || '<div style="font-size:9px;color:var(--txt3);padding:4px 0;">No missions yet.</div>';
 
@@ -1505,59 +1589,57 @@ function renderAgencyPanel(el, state) {
     const txt = l.message || l.log || l.text || JSON.stringify(l).slice(0, 90) || '';
     const time = l.timestamp || l.time || '';
     return `<div style="font-family:var(--mono);font-size:8px;color:var(--txt2);padding:3px 0;border-bottom:1px dashed rgba(255,255,255,0.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-      ${time?`<span style="color:var(--txt3);">${String(time).slice(11,19)||time}</span> `:''}${txt}
+      ${time ? `<span style="color:var(--txt3);">${Viz.esc(String(time).slice(11, 19) || time)}</span> ` : ''}${Viz.esc(txt)}
     </div>`;
   }).join('') || '<div style="font-size:9px;color:var(--txt3);padding:4px 0;">No recent activity.</div>';
 
-  const errorAgents = runs.filter(r => (r.status||'').toLowerCase() === 'error').map(r=>r.agent_id).join(', ');
+  const errorAgents = runs.filter(r => (r.status || '').toLowerCase() === 'error').map(r => r.agent_id).join(', ');
 
-  const pendingOutreach = (state.outreach || []).filter(o => (o.status||'').toLowerCase() === 'pending_approval');
+  const pendingOutreach = outreachAll.filter(o => (o.status || '').toLowerCase() === 'pending_approval');
   const outreachRows = pendingOutreach.slice(0, 4).map(o => {
     const channelIcon = o.channel === 'whatsapp' ? 'fa-comment-dots' : o.channel === 'linkedin' ? 'fa-linkedin' : 'fa-envelope';
     const preview = o.subject ? `${o.subject} — ` : '';
     return `<div style="padding:6px 8px;border-radius:6px;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.25);margin-bottom:5px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
-        <span style="font-family:var(--mono);font-size:8px;color:var(--gold);"><i class="fa-solid ${channelIcon}"></i> #${o.id} · ${(o.channel||'').toUpperCase()} · inst #${o.institution_id}</span>
-        <span style="font-family:var(--mono);font-size:7px;color:var(--txt3);">${String(o.created_at||'').slice(0,10)}</span>
+        <span style="font-family:var(--mono);font-size:8px;color:var(--gold);"><i class="fa-solid ${channelIcon}"></i> #${Viz.esc(o.id)} · ${Viz.esc((o.channel || '').toUpperCase())} · inst #${Viz.esc(o.institution_id)}</span>
+        <span style="font-family:var(--mono);font-size:7px;color:var(--txt3);">${Viz.esc(String(o.created_at || '').slice(0, 10))}</span>
       </div>
-      <div style="font-family:var(--mono);font-size:8px;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(preview)}${escHtml((o.body||'').slice(0,110))}</div>
+      <div style="font-family:var(--mono);font-size:8px;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(preview)}${escHtml((o.body || '').slice(0, 110))}</div>
       <div style="display:flex;gap:6px;margin-top:5px;">
-        <button onclick="agencyOutreachAction(${o.id},'approve')" style="flex:1;padding:3px 0;background:rgba(74,222,128,0.15);border:1px solid rgba(74,222,128,0.3);border-radius:4px;color:#4ade80;font-family:var(--mono);font-size:7px;font-weight:700;cursor:pointer;">APPROVE</button>
-        <button onclick="agencyOutreachAction(${o.id},'reject')" style="flex:1;padding:3px 0;background:rgba(255,95,86,0.15);border:1px solid rgba(255,95,86,0.3);border-radius:4px;color:#ff5f56;font-family:var(--mono);font-size:7px;font-weight:700;cursor:pointer;">REJECT</button>
-        <button onclick="agencyOutreachAction(${o.id},'send')" style="flex:1;padding:3px 0;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.3);border-radius:4px;color:#38bdf8;font-family:var(--mono);font-size:7px;font-weight:700;cursor:pointer;">SEND</button>
+        <button onclick="agencyOutreachAction(${Viz.esc(o.id)},'approve')" style="flex:1;padding:3px 0;background:rgba(74,222,128,0.15);border:1px solid rgba(74,222,128,0.3);border-radius:4px;color:#4ade80;font-family:var(--mono);font-size:7px;font-weight:700;cursor:pointer;">APPROVE</button>
+        <button onclick="agencyOutreachAction(${Viz.esc(o.id)},'reject')" style="flex:1;padding:3px 0;background:rgba(255,95,86,0.15);border:1px solid rgba(255,95,86,0.3);border-radius:4px;color:#ff5f56;font-family:var(--mono);font-size:7px;font-weight:700;cursor:pointer;">REJECT</button>
+        <button onclick="agencyOutreachAction(${Viz.esc(o.id)},'send')" style="flex:1;padding:3px 0;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.3);border-radius:4px;color:#38bdf8;font-family:var(--mono);font-size:7px;font-weight:700;cursor:pointer;">SEND</button>
       </div>
     </div>`;
   }).join('') || '<div style="font-size:9px;color:var(--txt3);padding:4px 0;">Queue clear — nothing awaiting approval.</div>';
 
-  el.innerHTML = `
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-      ${stat('AGENTS', stats.agentsOnline ?? '—', 'fa-microchip', 'var(--gold)')}
-      ${stat('WORKING', stats.agentsWorking ?? '—', 'fa-sync fa-spin', 'var(--gold)')}
-      ${stat('LEADS TODAY', stats.leadsToday ?? '—', 'fa-bullseye', '#4ade80')}
-      ${stat('TOTAL LEADS', stats.totalLeads ?? '—', 'fa-database', '#4ade80')}
-      ${stat('PENDING', stats.pendingApproval ?? '—', 'fa-clock', '#fbbf24')}
-      ${stat('SENT', stats.sentOutreach ?? '—', 'fa-paper-plane', 'var(--silver)')}
-      ${stat('MISSIONS', missions.filter(m=>(m.status||'').toLowerCase()==='running').length, 'fa-route', '#38bdf8')}
-      ${stat('MEETINGS', stats.meetings ?? '—', 'fa-handshake', '#c084fc')}
-    </div>
-    ${errorAgents ? `<div style="margin-bottom:8px;padding:6px 8px;border-radius:6px;background:rgba(255,95,86,0.08);border:1px solid rgba(255,95,86,0.3);font-family:var(--mono);font-size:8px;color:#ff5f56;"><i class="fa-solid fa-triangle-exclamation"></i> AGENTS ERRORING: ${errorAgents}</div>` : ''}
+  el.innerHTML = hero +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">' +
+      stat('AGENTS', stats.agentsOnline ?? '—', 'fa-microchip', 'var(--gold)') +
+      stat('WORKING', stats.agentsWorking ?? '—', 'fa-sync fa-spin', 'var(--gold)') +
+      stat('LEADS TODAY', stats.leadsToday ?? '—', 'fa-bullseye', '#4ade80') +
+      stat('TOTAL LEADS', stats.totalLeads ?? '—', 'fa-database', '#4ade80') +
+      stat('PENDING', stats.pendingApproval ?? '—', 'fa-clock', '#fbbf24') +
+      stat('SENT', stats.sentOutreach ?? '—', 'fa-paper-plane', 'var(--silver)') +
+      stat('MISSIONS', runningMissions, 'fa-route', '#38bdf8') +
+      stat('MEETINGS', stats.meetings ?? '—', 'fa-handshake', '#c084fc') +
+    '</div>' +
+    (errorAgents ? `<div style="margin-bottom:8px;padding:6px 8px;border-radius:6px;background:rgba(255,95,86,0.08);border:1px solid rgba(255,95,86,0.3);font-family:var(--mono);font-size:8px;color:#ff5f56;"><i class="fa-solid fa-triangle-exclamation"></i> AGENTS ERRORING: ${Viz.esc(errorAgents)}</div>` : '') +
 
-    <div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:1px;font-weight:700;margin-bottom:6px;"><i class="fa-solid fa-chart-simple"></i> PIPELINE BY STAGE</div>
-    <div style="margin-bottom:12px;">${stageRows}</div>
+    Viz.section('LEADS OVER TIME', '<canvas id="agency-lead-spark" width="520" height="64"></canvas>', 'fa-chart-line') +
+    Viz.section('PIPELINE BY STAGE', pipeline + (stageRows ? '<div style="margin-top:12px">' + stageRows + '</div>' : ''), 'fa-chart-simple') +
+    Viz.section('OUTREACH FUNNEL', Viz.stack([
+      { label: 'Sent', value: sent, color: '#38bdf8' },
+      { label: 'Awaiting approval', value: pending, color: '#fbbf24' },
+      { label: 'Replied', value: replied, color: '#4ade80' },
+      { label: 'Other', value: Math.max(0, outreachAll.length - sent - pending - replied), color: 'rgba(255,255,255,0.22)' }
+    ], { empty: 'No outreach recorded yet.' }), 'fa-funnel') +
+    Viz.section('AGENT ROSTER', agentRows, 'fa-robot') +
+    Viz.section('ACTIVE MISSIONS', missionRows, 'fa-route') +
+    Viz.section('OUTREACH REVIEW (' + pendingOutreach.length + ')', outreachRows, 'fa-envelope-open-text') +
+    Viz.section('LIVE ACTIVITY', logRows, 'fa-wave-square') +
 
-    <div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:1px;font-weight:700;margin-bottom:6px;"><i class="fa-solid fa-robot"></i> AGENT ROSTER</div>
-    <div style="margin-bottom:12px;">${agentRows}</div>
-
-    <div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:1px;font-weight:700;margin-bottom:6px;"><i class="fa-solid fa-route"></i> ACTIVE MISSIONS</div>
-    <div style="margin-bottom:12px;">${missionRows}</div>
-
-    <div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:1px;font-weight:700;margin-bottom:6px;"><i class="fa-solid fa-envelope-open-text"></i> OUTREACH REVIEW (${pendingOutreach.length})</div>
-    <div style="margin-bottom:12px;">${outreachRows}</div>
-
-    <div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:1px;font-weight:700;margin-bottom:6px;"><i class="fa-solid fa-wave-square"></i> LIVE ACTIVITY</div>
-    <div style="margin-bottom:12px;">${logRows}</div>
-
-    <div style="display:flex;gap:8px;">
+    `<div style="display:flex;gap:8px;">
       <button onclick="agencyRefresh()" style="flex:1;padding:7px;background:rgba(139,104,255,0.14);border:1px solid rgba(139,104,255,0.3);border-radius:6px;color:var(--gold);font-family:var(--mono);font-size:8px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-rotate"></i> REFRESH</button>
       <button onclick="document.getElementById('agency-mission-form').style.display = document.getElementById('agency-mission-form').style.display==='none'?'block':'none'" style="flex:1;padding:7px;background:rgba(56,189,248,0.14);border:1px solid rgba(56,189,248,0.3);border-radius:6px;color:#38bdf8;font-family:var(--mono);font-size:8px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-bullseye"></i> NEW MISSION</button>
     </div>
@@ -1568,8 +1650,19 @@ function renderAgencyPanel(el, state) {
         <input id="ag-limit" type="number" placeholder="Limit" value="10" style="width:60px;padding:5px 7px;background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.12);color:#fff;font-family:var(--mono);font-size:9px;border-radius:6px;">
       </div>
       <button onclick="agencySubmitMission()" style="width:100%;padding:6px;background:rgba(56,189,248,0.85);border:none;border-radius:6px;color:#04141f;font-family:var(--mono);font-size:9px;font-weight:800;cursor:pointer;">LAUNCH MISSION</button>
-    </div>
-  `;
+    </div>`;
+
+  // The leads trend accumulates across polls rather than being redrawn from
+  // scratch, so the line actually grows instead of resetting every 4 seconds.
+  // Redraw from the full history each time (the canvas is recreated with the
+  // panel body) but only append a sample when the total actually moved.
+  agencyLeadHistory = agencyLeadHistory || [];
+  const lastSample = agencyLeadHistory[agencyLeadHistory.length - 1];
+  if (lastSample !== totalLeads) {
+    agencyLeadHistory.push(totalLeads);
+    while (agencyLeadHistory.length > 40) agencyLeadHistory.shift();
+  }
+  Viz.spark('agency-lead-spark', agencyLeadHistory, { limit: 40 });
 }
 
 function agencyRefresh() {
@@ -1623,52 +1716,47 @@ async function loadTrainingPanel(el) {
     
     const rulesHtml = (t.rules || []).map(r => `
       <div class="vault-item">
-        <div class="vt"><strong style="color:var(--gold);">${r.trigger}</strong> &rarr; ${r.reply}</div>
-        <button class="vx" onclick="deleteTrainingItem('rule','${r.trigger}')">&times;</button>
+        <div class="vt"><strong style="color:var(--accent,var(--gold));">${Viz.esc(r.trigger)}</strong> &rarr; ${Viz.esc(r.reply)}</div>
+        <button class="vx" onclick="deleteTrainingItem('rule',${JSON.stringify(String(r.trigger))})">&times;</button>
       </div>
     `).join('') || '<div style="font-size:9px; color:var(--txt3); padding:4px 0;">No custom rules trained yet.</div>';
 
     const macrosHtml = (t.macros || []).map(m => `
       <div class="vault-item">
-        <div class="vt"><strong style="color:var(--silver);">${m.trigger}</strong> = [${(m.commands||[]).join(', ')}]</div>
-        <button class="vx" onclick="deleteTrainingItem('macro','${m.trigger}')">&times;</button>
+        <div class="vt"><strong style="color:var(--silver);">${Viz.esc(m.trigger)}</strong> = [${Viz.esc((m.commands || []).join(', '))}]</div>
+        <button class="vx" onclick="deleteTrainingItem('macro',${JSON.stringify(String(m.trigger))})">&times;</button>
       </div>
     `).join('') || '<div style="font-size:9px; color:var(--txt3); padding:4px 0;">No voice macros trained yet.</div>';
 
-    el.innerHTML = `
-      <div style="margin-bottom:12px; padding:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(139,104,255,0.2); border-radius:10px;">
-        <div class="setting-row">
-          <label>USER NAME</label>
-          <input type="text" id="train-name-input" value="${t.name || ''}" placeholder="e.g. BOSS" style="width:140px; padding:4px 8px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.12); color:#fff; font-family:var(--mono); font-size:10px; border-radius:6px;">
-        </div>
-        <div class="setting-row" style="margin-top:6px;">
-          <label>ASSISTANT TONE</label>
-          <select id="train-tone-select" style="width:140px; padding:4px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.12); color:#fff; font-family:var(--mono); font-size:10px; border-radius:6px;">
-            <option value="witty" ${t.tone === 'witty' ? 'selected' : ''}>Witty / Clever</option>
-            <option value="formal" ${t.tone === 'formal' ? 'selected' : ''}>Formal / Precise</option>
-            <option value="friendly" ${t.tone === 'friendly' ? 'selected' : ''}>Friendly / Warm</option>
-            <option value="boss" ${t.tone === 'boss' ? 'selected' : ''}>Executive Jarvis</option>
-          </select>
-        </div>
-        <button onclick="saveProfileTraining()" style="margin-top:8px; width:100%; padding:6px; background:rgba(139,104,255,0.15); border:1px solid rgba(139,104,255,0.3); border-radius:6px; color:var(--gold); font-family:var(--mono); font-size:9px; font-weight:700; cursor:pointer;">
-          <i class="fa-solid fa-floppy-disk"></i> SAVE PROFILE TRAINING
-        </button>
-      </div>
-
-      <div style="margin-bottom:12px;">
-        <div style="font-family:var(--mono); font-size:9px; color:var(--gold); letter-spacing:1px; margin-bottom:6px; font-weight:700;">
-          <i class="fa-solid fa-bolt"></i> CUSTOM VOICE RULES (${(t.rules || []).length})
-        </div>
-        ${rulesHtml}
-      </div>
-
-      <div>
-        <div style="font-family:var(--mono); font-size:9px; color:var(--silver); letter-spacing:1px; margin-bottom:6px; font-weight:700;">
-          <i class="fa-solid fa-terminal"></i> VOICE MACROS (${(t.macros || []).length})
-        </div>
-        ${macrosHtml}
-      </div>
-    `;
+    el.innerHTML =
+      Viz.hero([
+        Viz.ring((t.rules || []).length, { max: Math.max((t.rules || []).length, 8), label: 'RULES', labelText: String((t.rules || []).length) }),
+        Viz.ring((t.macros || []).length, { max: Math.max((t.macros || []).length, 8), label: 'MACROS', labelText: String((t.macros || []).length) })
+      ], { title: 'AI TRAINING HUB', sub: 'teaching JENNY your language' }) +
+      Viz.section('CAPACITY', Viz.stack([
+        { label: 'Custom rules', value: (t.rules || []).length, color: 'var(--accent, #6d8bff)' },
+        { label: 'Voice macros', value: (t.macros || []).length, color: '#22d3ee' }
+      ], { empty: 'Nothing trained yet — add a rule below.' }), 'fa-brain') +
+      `<div style="margin-bottom:12px; padding:10px; background:rgba(255,255,255,0.03); border:1px solid var(--accent-edge,rgba(139,104,255,0.2)); border-radius:10px;">
+         <div class="setting-row">
+           <label>USER NAME</label>
+           <input type="text" id="train-name-input" value="${Viz.esc(t.name || '')}" placeholder="e.g. BOSS" style="width:140px; padding:4px 8px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.12); color:#fff; font-family:var(--mono); font-size:10px; border-radius:6px;">
+         </div>
+         <div class="setting-row" style="margin-top:6px;">
+           <label>ASSISTANT TONE</label>
+           <select id="train-tone-select" style="width:140px; padding:4px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.12); color:#fff; font-family:var(--mono); font-size:10px; border-radius:6px;">
+             <option value="witty" ${t.tone === 'witty' ? 'selected' : ''}>Witty / Clever</option>
+             <option value="formal" ${t.tone === 'formal' ? 'selected' : ''}>Formal / Precise</option>
+             <option value="friendly" ${t.tone === 'friendly' ? 'selected' : ''}>Friendly / Warm</option>
+             <option value="boss" ${t.tone === 'boss' ? 'selected' : ''}>Executive Jarvis</option>
+           </select>
+         </div>
+         <button onclick="saveProfileTraining()" style="margin-top:8px; width:100%; padding:6px; background:rgba(var(--accent-rgb,109,139,255),0.15); border:1px solid var(--accent-edge,rgba(139,139,255,0.3)); border-radius:6px; color:var(--accent,var(--gold)); font-family:var(--mono); font-size:9px; font-weight:700; cursor:pointer;">
+           <i class="fa-solid fa-floppy-disk"></i> SAVE PROFILE TRAINING
+         </button>
+       </div>` +
+      Viz.section('CUSTOM VOICE RULES (' + (t.rules || []).length + ')', rulesHtml, 'fa-bolt') +
+      Viz.section('VOICE MACROS (' + (t.macros || []).length + ')', macrosHtml, 'fa-terminal');
   } catch { el.innerHTML = '<div class="panel-empty">Error loading training.</div>'; }
 }
 
@@ -1701,11 +1789,45 @@ async function deleteTrainingItem(type, trigger) {
 // ================================================
 // PANEL LOADERS
 // ================================================
+// Every panel below opens on a Viz hero - a strip of dials answering "is
+// anything wrong right now" - before the detail rows. The old panels were a
+// flat list of label/value pairs, so a glance told you nothing and you had to
+// read and compare each number by hand.
 function makeCircularGauge(pct, label) {
-  const r = 22;
-  const circ = 2 * Math.PI * r;
-  const offset = circ - (pct / 100) * circ;
-  return `<div class="circular-gauge"><svg viewBox="0 0 52 52"><circle class="track" cx="26" cy="26" r="${r}"/><circle class="fill" cx="26" cy="26" r="${r}" stroke-dasharray="${circ}" stroke-dashoffset="${offset}"/></svg><div class="gauge-label">${pct}%</div></div><div class="stat-lbl">${label}</div>`;
+  // Kept for the callers that still ask for the old 52px gauge; new panels use
+  // Viz.ring, which carries a tick scale and a severity colour.
+  return (typeof Viz !== 'undefined')
+    ? Viz.ring(pct, { size: 62, stroke: 5, label: label })
+    : `<div class="circular-gauge"><div class="gauge-label">${Math.round(pct)}%</div></div><div class="stat-lbl">${label}</div>`;
+}
+
+// Shared sparkline block. `series` is an array of numbers; a short or empty
+// series degrades to a flat line rather than an error, because these panels
+// render on first paint before any poll has come back.
+function sparkBlock(caption, valueText, series, opts) {
+  opts = opts || {};
+  const id = 'vizspk-' + Math.random().toString(36).slice(2, 9);
+  return '' +
+    '<div class="viz-spark-wrap">' +
+      '<div class="viz-spark-cap"><span>' + (opts.icon ? '<i class="fa-solid ' + opts.icon + '"></i> ' : '') +
+        Viz.esc(caption) + '</span><b>' + Viz.esc(valueText) + '</b></div>' +
+      '<canvas class="viz-spark" id="' + id + '" width="600" height="92"></canvas>' +
+    '</div>';
+}
+
+// Sparklines are painted after the markup lands, so the canvas always has a
+// size. Queued as a microtask: the browser has not necessarily laid out the
+// freshly-assigned innerHTML yet, and drawing into a 0x0 canvas is a silent
+// no-op that would leave a permanently blank chart.
+function paintSparks(root, map) {
+  if (typeof Viz === 'undefined' || !root) return;
+  requestAnimationFrame(() => {
+    Object.keys(map || {}).forEach(key => {
+      const spec = map[key];
+      const handle = Viz.spark(spec.id, spec.data, spec.opts);
+      if (handle && spec.onHandle) spec.onHandle(handle);
+    });
+  });
 }
 
 async function loadActivityPanel(el) {
@@ -1716,29 +1838,187 @@ async function loadActivityPanel(el) {
     if (!d.success) { el.innerHTML = '<div class="panel-empty">Failed to load.</div>'; return; }
     const cpu = d.cpu?.usage || 0, ram = d.ram?.usage || 0, disk = d.disk?.usage || 0;
     const bat = d.battery?.level ?? 0;
+    const charging = !!d.battery?.charging;
     const uptimeH = d.uptime ? Math.floor(d.uptime / 3600) : 0;
     const uptimeM = d.uptime ? Math.floor((d.uptime % 3600) / 60) : 0;
-    el.innerHTML = `<div class="panel-stat-grid"><div class="panel-stat-box">${makeCircularGauge(cpu, 'CPU')}</div><div class="panel-stat-box">${makeCircularGauge(ram, 'RAM')}</div><div class="panel-stat-box">${makeCircularGauge(disk, 'DISK')}</div><div class="panel-stat-box">${makeCircularGauge(Math.round(bat), 'BATTERY')}</div></div><div class="panel-row"><span class="lbl">UPTIME</span><span class="val">${uptimeH}h ${uptimeM}m</span></div><div class="panel-row"><span class="lbl">HOST</span><span class="val">${d.hostname || '---'}</span></div><div class="panel-row"><span class="lbl">RAM</span><span class="val">${d.ram?.usedMB || 0} / ${d.ram?.totalMB || 0} MB</span></div><div class="panel-row"><span class="lbl">DISK FREE</span><span class="val">${d.disk?.free || '--'}</span></div><div class="panel-row"><span class="lbl">CPU</span><span class="val" style="font-size:8px">${d.cpu?.model || '---'}</span></div>`;
+    const cores = d.cpu?.cores || 0;
+
+    el.innerHTML =
+      Viz.hero([
+        Viz.ring(cpu, { label: 'CPU', sub: cores ? cores + 'C' : '' }),
+        Viz.ring(ram, { label: 'RAM' }),
+        Viz.ring(disk, { label: 'DISK' }),
+        Viz.ring(Math.round(bat), {
+          label: 'POWER',
+          labelText: charging ? 'CHG' : Math.round(bat) + '%',
+          color: charging ? '#4ade80' : undefined
+        })
+      ], { sub: d.hostname || '' }) +
+      Viz.section('LIVE TELEMETRY', '<div id="panel-act-sparks"></div>', 'fa-wave-square') +
+      Viz.section('MACHINE', [
+        Viz.bar(cpu, { label: 'CPU load', valueText: cpu + '%' }),
+        Viz.bar(ram, { label: 'Memory', valueText: `${d.ram?.usedMB || 0} / ${d.ram?.totalMB || 0} MB` }),
+        Viz.bar(disk, { label: 'Disk used', valueText: d.disk?.free ? d.disk.free + ' free' : disk + '%' }),
+      ].join(''), 'fa-microchip') +
+      `<div class="panel-row"><span class="lbl">UPTIME</span><span class="val">${uptimeH}h ${uptimeM}m</span></div>
+       <div class="panel-row"><span class="lbl">HOST</span><span class="val">${Viz.esc(d.hostname || '---')}</span></div>
+       <div class="panel-row"><span class="lbl">PLATFORM</span><span class="val">${Viz.esc(d.platform || '---')}</span></div>
+       <div class="panel-row"><span class="lbl">CPU MODEL</span><span class="val" style="font-size:8px">${Viz.esc(d.cpu?.model || '---')}</span></div>`;
+
+    // Roll a short in-panel history so the sparklines have something to show on
+    // the first visit instead of a single lonely point.
+    const hist = panelHistory('activity', { cpu: [], ram: [], disk: [], net: [] }, 40);
+    pushActivitySample(hist, { cpu, ram, disk, net: d.net?.usage || 0 });
+    const host = document.getElementById('panel-act-sparks');
+    if (host) {
+      host.innerHTML =
+        sparkBlock('CPU', cpu + '%', hist.cpu, { icon: 'fa-microchip' }) +
+        sparkBlock('RAM', ram + '%', hist.ram, { icon: 'fa-memory' }) +
+        sparkBlock('DISK', disk + '%', hist.disk, { icon: 'fa-hard-drive' }) +
+        sparkBlock('NETWORK', (d.net?.speed || '--'), hist.net, { icon: 'fa-wifi' });
+      paintSparks(host, {
+        cpu: { id: host.querySelector('.viz-spark').id, data: hist.cpu },
+        ram: { id: host.querySelectorAll('.viz-spark')[1].id, data: hist.ram },
+        disk: { id: host.querySelectorAll('.viz-spark')[2].id, data: hist.disk },
+        net: { id: host.querySelectorAll('.viz-spark')[3].id, data: hist.net }
+      });
+    }
+    // Keep the history moving while the panel stays open.
+    startPanelTimer('activity', async () => {
+      if (!document.getElementById('panel-body-activity')) { stopPanelTimer('activity'); return; }
+      await loadActivityPanel(el);
+    }, 5000);
   } catch { el.innerHTML = '<div class="panel-empty">Error.</div>'; }
 }
 
+// Tiny per-panel scratch store. The activity panel's sparklines need a rolling
+// history, but there is nowhere sensible to keep it between renders except the
+// page, and leaking one key per panel would outlive the panel itself.
+const panelState = {};
+function panelHistory(name, seed, limit) {
+  if (!panelState[name]) panelState[name] = seed;
+  return panelState[name];
+}
+function pushActivitySample(h, s) {
+  ['cpu', 'ram', 'disk', 'net'].forEach(k => {
+    h[k].push(Viz.num(s[k], 0));
+    while (h[k].length > 40) h[k].shift();
+  });
+}
+
+// One named interval per panel, so re-opening a panel cannot leave a second
+// poller running against the same DOM node.
+const panelTimers = {};
+function startPanelTimer(name, fn, ms) {
+  stopPanelTimer(name);
+  panelTimers[name] = setInterval(fn, ms);
+}
+function stopPanelTimer(name) {
+  if (panelTimers[name]) { clearInterval(panelTimers[name]); delete panelTimers[name]; }
+}
+function stopPanelTimerFor(el) {
+  // Best-effort sweep: any panel whose body node has gone away stops polling.
+  Object.keys(panelTimers).forEach(name => {
+    if (!document.getElementById('panel-body-' + name)) stopPanelTimer(name);
+  });
+}
+
 async function loadSystemPanel(el) {
+  el.innerHTML = '<div class="panel-empty">Reading hardware...</div>';
   try {
     const res = await fetch('/api/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'system-info' }) });
     const data = await res.json();
     if (!data.success) { el.innerHTML = '<div class="panel-empty">Failed.</div>'; return; }
     const i = data.info || {};
-    el.innerHTML = `<div class="panel-row"><span class="lbl">MODEL</span><span class="val">${i.model_name || '---'}</span></div><div class="panel-row"><span class="lbl">ID</span><span class="val">${i.model_identifier || '---'}</span></div><div class="panel-row"><span class="lbl">CPU</span><span class="val">${i.processor_name || '---'}</span></div><div class="panel-row"><span class="lbl">SPEED</span><span class="val">${i.processor_speed || '---'}</span></div><div class="panel-row"><span class="lbl">RAM</span><span class="val">${i.memory || '---'}</span></div><div class="panel-row"><span class="lbl">SERIAL</span><span class="val">${i.serial_number || '---'}</span></div><div class="panel-row"><span class="lbl">OS</span><span class="val">${i.productname || 'macOS'} ${i.productversion || ''}</span></div><div class="panel-row"><span class="lbl">BUILD</span><span class="val">${i.buildversion || '---'}</span></div>`;
-    if (typeof speakTrigger === 'function') { const d = data; speakTrigger(`System info loaded, Boss. Powering ${i.processor_name || 'your PC'}.`); }
+    // Processor and memory are the two numbers worth a dial; everything else is
+    // an identifier, which a gauge cannot improve on.
+    const memGb = Viz.num(String(i.memory || '').match(/([\d.]+)\s*GB/i)?.[1], 0);
+    el.innerHTML =
+      Viz.hero([
+        Viz.ring(Viz.num(data.load, 0), { label: 'LOAD', sub: 'avg' }),
+        Viz.ring(memGb, { max: 64, label: 'MEMORY', sub: memGb ? memGb + ' GB' : '' }),
+      ], { title: 'HARDWARE', sub: Viz.esc(i.model_name || '') }) +
+      Viz.section('PROCESSOR', [
+        Viz.bar(100, { label: 'Speed', valueText: String(i.processor_speed || '---'), color: 'var(--accent, #6d8bff)' }),
+      ].join(''), 'fa-microchip') +
+      `<div class="panel-row"><span class="lbl">MODEL</span><span class="val">${Viz.esc(i.model_name || '---')}</span></div>
+       <div class="panel-row"><span class="lbl">ID</span><span class="val" style="font-size:8px">${Viz.esc(i.model_identifier || '---')}</span></div>
+       <div class="panel-row"><span class="lbl">CPU</span><span class="val" style="font-size:8px">${Viz.esc(i.processor_name || '---')}</span></div>
+       <div class="panel-row"><span class="lbl">SPEED</span><span class="val">${Viz.esc(i.processor_speed || '---')}</span></div>
+       <div class="panel-row"><span class="lbl">RAM</span><span class="val">${Viz.esc(i.memory || '---')}</span></div>
+       <div class="panel-row"><span class="lbl">SERIAL</span><span class="val" style="font-size:8px">${Viz.esc(i.serial_number || '---')}</span></div>
+       <div class="panel-row"><span class="lbl">OS</span><span class="val">${Viz.esc(i.productname || 'macOS')} ${Viz.esc(i.productversion || '')}</span></div>
+       <div class="panel-row"><span class="lbl">BUILD</span><span class="val">${Viz.esc(i.buildversion || '---')}</span></div>`;
+    if (typeof speakTrigger === 'function') { speakTrigger(`System info loaded, Boss. Powering ${i.processor_name || 'your PC'}.`); }
   } catch { el.innerHTML = '<div class="panel-empty">Error.</div>'; }
 }
 
+// Weather icon per condition code, so the panel leads with a picture rather
+// than a temperature the user has to interpret.
+function weatherIcon(condition, isDay) {
+  const c = String(condition || '').toLowerCase();
+  if (c.includes('thunder')) return 'fa-cloud-bolt';
+  if (c.includes('drizzle') || c.includes('rain') || c.includes('shower')) return 'fa-cloud-rain';
+  if (c.includes('snow') || c.includes('sleet') || c.includes('blizzard')) return 'fa-snowflake';
+  if (c.includes('mist') || c.includes('fog') || c.includes('haze')) return 'fa-smog';
+  if (c.includes('cloud')) return isDay ? 'fa-cloud-sun' : 'fa-cloud-moon';
+  return isDay ? 'fa-sun' : 'fa-moon';
+}
+
 async function loadWeatherPanel(el) {
+  el.innerHTML = '<div class="panel-empty">Reading the sky...</div>';
   try {
     const res = await fetch('/api/weather');
     const d = await res.json();
     if (!d.success) { el.innerHTML = '<div class="panel-empty">Unavailable.</div>'; return; }
-    el.innerHTML = `<div class="panel-row"><span class="lbl">CITY</span><span class="val">${d.city}</span></div><div class="panel-row"><span class="lbl">TEMP</span><span class="val">${d.tempC}°C</span></div><div class="panel-row"><span class="lbl">CONDITION</span><span class="val">${d.condition}</span></div><div class="panel-row"><span class="lbl">HUMIDITY</span><span class="val">${d.humidity}%</span></div><div class="panel-row"><span class="lbl">WIND</span><span class="val">${d.windKmH} km/h</span></div><div class="panel-row"><span class="lbl">DAYLIGHT</span><span class="val">${d.isDay ? 'Yes' : 'No'}</span></div>${d.forecast ? d.forecast.map(f => `<div class="panel-row"><span class="lbl">${f.day}</span><span class="val">${f.min}° / ${f.max}°</span></div>`).join('') : ''}`;
+    const temp = Viz.num(d.tempC, 0);
+    // Feel-like matters more than raw temperature once you are past 30 or
+    // below 10, so it earns a spot on the dial as the sub-label.
+    const feels = Viz.num(d.feelsLikeC ?? d.feelsLike, NaN);
+    const hum = Viz.num(d.humidity, 0);
+    const wind = Viz.num(d.windKmH, 0);
+    const forecast = d.forecast || [];
+
+    el.innerHTML =
+      '<div class="viz-hero glass-soft" style="text-align:center">' +
+        '<div style="position:relative;z-index:1">' +
+          '<div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:rgba(255,255,255,0.5);text-transform:uppercase">' +
+            Viz.esc(d.city || 'Unknown') + '</div>' +
+          '<div style="display:flex;align-items:center;justify-content:center;gap:14px;margin:6px 0 2px">' +
+            '<i class="fa-solid ' + weatherIcon(d.condition, d.isDay) + '" style="font-size:38px;color:var(--accent,var(--gold));filter:drop-shadow(0 0 16px rgba(var(--accent-rgb,109,139,255),0.65))"></i>' +
+            Viz.arc(temp, { min: -20, max: 50, size: 138, labelText: Math.round(temp) + '°', sub: d.condition ? String(d.condition).slice(0, 18) : '' }) +
+          '</div>' +
+          '<div style="font-family:var(--mono);font-size:9px;color:rgba(255,255,255,0.55);letter-spacing:1px">' +
+            (isFinite(feels) ? 'FEELS ' + Math.round(feels) + '° · ' : '') +
+            (d.isDay ? 'DAYLIGHT' : 'NIGHT') + '</div>' +
+        '</div>' +
+      '</div>' +
+      Viz.section('CONDITIONS', [
+        Viz.bar(hum, { label: 'Humidity', valueText: hum + '%', warn: 75, crit: 92 }),
+        Viz.bar(wind, { max: 60, label: 'Wind', valueText: Math.round(wind) + ' km/h', warn: 40, crit: 55 }),
+        Viz.bar(d.isDay ? 100 : 0, { label: 'Daylight', valueText: d.isDay ? 'Yes' : 'No', color: d.isDay ? '#fbbf24' : '#6366f1' })
+      ].join(''), 'fa-temperature-half') +
+      (forecast.length ? Viz.section(
+        (forecast.length > 1 ? '7' : '') + '-DAY OUTLOOK',
+        // Each day is a band from its own low to its high with the midpoint
+        // marked, so a warming or cooling trend is visible across the row
+        // instead of being seven separate numbers to compare.
+        forecast.map(f => {
+          const lo = Viz.num(f.min, 0), hi = Viz.num(f.max, 0);
+          return '<div style="margin-bottom:7px">' +
+            '<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:rgba(255,255,255,0.6);margin-bottom:1px">' +
+              '<span>' + Viz.esc(f.day || '') + '</span>' +
+              '<span style="color:#fff"><i class="fa-solid ' + weatherIcon(f.condition, true) + '" style="font-size:8px;opacity:0.7"></i> ' +
+              Math.round(lo) + '° / ' + Math.round(hi) + '°</span>' +
+            '</div>' +
+            Viz.range((lo + hi) / 2, lo, hi) +
+          '</div>';
+        }).join(''),
+        'fa-calendar-days'
+      ) : '') +
+      `<div class="panel-row"><span class="lbl">CITY</span><span class="val">${Viz.esc(d.city)}</span></div>
+       <div class="panel-row"><span class="lbl">CONDITION</span><span class="val">${Viz.esc(d.condition)}</span></div>`;
+
     if (typeof speakTrigger === 'function' && d.tempC !== '--') speakTrigger(`Weather in ${d.city}, ${d.condition}, ${d.tempC} degrees Celsius, wind ${d.windKmH} kilometers per hour, Boss.`);
   } catch { el.innerHTML = '<div class="panel-empty">Error.</div>'; }
 }
@@ -1748,8 +2028,51 @@ async function loadEmailPanel(el) {
   try {
     const res = await fetch('/api/emails');
     const d = await res.json();
-    if (!d.success || !d.emails?.length) { el.innerHTML = `<div class="panel-empty">${d.message || 'No emails found.'}</div>`; return; }
-    el.innerHTML = d.emails.map(e => `<div class="email-item"><div class="email-from">${escHtml(e.from || 'Unknown')}</div><div class="email-subject">${escHtml(e.subject || '(no subject)')}</div><div class="email-date">${escHtml(e.date || '')}</div></div>`).join('');
+    if (!d.success || !d.emails?.length) { el.innerHTML = `<div class="panel-empty">${Viz.esc(d.message || 'No emails found.')}</div>`; return; }
+    const emails = d.emails;
+    // Bucket by rough age so the header dials say something about recency
+    // rather than just restating the count.
+    const now = Date.now();
+    const ageDays = (m) => {
+      const t = Date.parse(m || '');
+      return isFinite(t) ? Math.floor((now - t) / 86400000) : null;
+    };
+    const today = emails.filter(e => (ageDays(e.date) === 0)).length;
+    const week = emails.filter(e => { const a = ageDays(e.date); return a !== null && a >= 1 && a < 7; }).length;
+    const older = emails.filter(e => { const a = ageDays(e.date); return a !== null && a >= 7; }).length;
+    const unparsed = emails.filter(e => ageDays(e.date) === null).length;
+
+    el.innerHTML =
+      Viz.hero([
+        // These two are already percentages of the inbox, so they must NOT also
+        // pass max — that would divide by the message count a second time and
+        // collapse a healthy inbox to a sliver. The count is shown as the label.
+        Viz.ring(emails.length ? (today / emails.length) * 100 : 0, {
+          label: 'TODAY', labelText: String(today)
+        }),
+        Viz.ring(emails.length ? ((today + week) / emails.length) * 100 : 0, {
+          label: 'THIS WEEK', labelText: String(today + week)
+        })
+      ], { title: 'INBOX', sub: emails.length + ' message' + (emails.length === 1 ? '' : 's') }) +
+      Viz.section('BY AGE', Viz.stack([
+        { label: 'Today', value: today, color: 'var(--accent, #6d8bff)' },
+        { label: 'This week', value: week, color: '#22d3ee' },
+        { label: 'Older', value: older, color: 'rgba(255,255,255,0.28)' },
+        { label: 'No date', value: unparsed, color: 'rgba(255,255,255,0.14)' }
+      ]), 'fa-envelope-open-text') +
+      Viz.section('MESSAGES', emails.map((e, idx) => {
+        const a = ageDays(e.date);
+        // Heat strip encodes how recent each message is - the top of the list
+        // is the freshest, so recency is readable without reading the dates.
+        const fresh = a === null ? 30 : a === 0 ? 100 : a < 7 ? 70 : a < 30 ? 40 : 18;
+        return '<div class="email-item">' +
+          '<div class="email-from"><span class="viz-pip' + (a === 0 ? '' : a === null ? ' off' : ' warn') + '"></span> ' +
+            Viz.esc(e.from || 'Unknown') + '</div>' +
+          '<div class="email-subject">' + Viz.esc(e.subject || '(no subject)') + '</div>' +
+          '<div class="email-date">' + Viz.esc(e.date || '') + '</div>' +
+          '<span class="viz-heat"><i style="width:' + fresh + '%;background:linear-gradient(90deg,var(--accent,#6d8bff),var(--accent-2,#a855f7));box-shadow:0 0 8px rgba(var(--accent-rgb,109,139,255),0.5)"></i></span>' +
+        '</div>';
+      }).join(''), 'fa-inbox');
   } catch { el.innerHTML = '<div class="panel-empty">Error reading emails.</div>'; }
 }
 
@@ -1759,7 +2082,32 @@ async function loadProcessPanel(el) {
     const res = await fetch('/api/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'processes' }) });
     const d = await res.json();
     if (!d.success || !d.processes?.length) { el.innerHTML = '<div class="panel-empty">None found.</div>'; return; }
-    el.innerHTML = d.processes.map(p => `<div class="proc-item"><span class="pcpu">${p.cpu}%</span><span style="color:rgba(255,255,255,0.4)">${p.pid}</span><span class="pcmd">${escHtml(p.command)}</span><button class="pk" onclick="killProc('${p.pid}')" title="Kill"><i class="fa-solid fa-xmark"></i></button></div>`).join('');
+    const procs = d.processes.slice();
+    const top = procs[0];
+    const totalCpu = procs.reduce((a, p) => a + Viz.num(p.cpu, 0), 0) || 1;
+    const avg = totalCpu / procs.length;
+    const hottest = Math.max(...procs.map(p => Viz.num(p.cpu, 0)));
+
+    el.innerHTML =
+      Viz.hero([
+        Viz.ring(hottest, { label: 'PEAK', sub: 'single proc' }),
+        Viz.ring(Math.min(100, avg * 4), { label: 'AVERAGE', sub: 'scaled' })
+      ], { title: 'PROCESS MANAGER', sub: procs.length + ' tracked' }) +
+      Viz.section('TOP CONSUMERS', procs.slice(0, 12).map(p => {
+        const cpu = Viz.num(p.cpu, 0);
+        return '<div class="proc-item" style="display:grid;grid-template-columns:44px 54px 1fr auto;align-items:center;gap:8px">' +
+          '<span class="pcpu" style="color:' + (cpu > 25 ? '#ff5f56' : cpu > 10 ? '#fbbf24' : '#fff') + '">' + cpu + '%</span>' +
+          '<span style="color:rgba(255,255,255,0.4);font-family:var(--mono);font-size:9px">' + Viz.esc(p.pid) + '</span>' +
+          '<span class="pcmd" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + Viz.esc(p.command) + '</span>' +
+          '<button class="pk" onclick="killProc(' + JSON.stringify(String(p.pid)) + ')" title="Kill process"><i class="fa-solid fa-xmark"></i></button>' +
+        '</div>' +
+        '<div style="margin:-2px 0 6px">' + Viz.bar(cpu, { max: Math.max(hottest, 10), color: cpu > 25 ? '#ff5f56' : cpu > 10 ? '#fbbf24' : undefined, valueText: '' }) + '</div>';
+      }).join(''), 'fa-fire') +
+      Viz.section('LOAD SHARING', Viz.stack(procs.slice(0, 6).map((p, i) => ({
+        label: String(p.command || 'proc').slice(0, 18),
+        value: Viz.num(p.cpu, 0),
+        color: `hsl(${Math.round((i / 6) * 300)},72%,62%)`
+      }))), 'fa-chart-pie');
   } catch { el.innerHTML = '<div class="panel-empty">Error.</div>'; }
 }
 
@@ -1771,12 +2119,55 @@ async function killProc(pid) {
 }
 
 async function loadVaultPanel(el) {
+  el.innerHTML = '<div class="panel-empty">Opening the vault...</div>';
   try {
     const res = await fetch('/api/vault');
     const d = await res.json();
     const items = d.data || [];
-    el.innerHTML = items.length ? items.map(v => `<div class="vault-item"><span class="vt">${escHtml(v.text)}</span><span class="vd">${v.date || ''}</span><button class="vx" onclick="deleteVault('${v.id}')"><i class="fa-solid fa-xmark"></i></button></div>`).join('') : '<div class="panel-empty">No memories yet.</div>';
-    el.innerHTML += `<div class="panel-input"><input type="text" id="vault-input" placeholder="Save a memory..." onkeydown="if(event.key==='Enter')addVault()"><button onclick="addVault()"><i class="fa-solid fa-plus"></i></button></div>`;
+    if (!items.length) {
+      el.innerHTML = Viz.hero([Viz.ring(0, { label: 'STORED', labelText: '0' })], { title: 'MEMORY VAULT', sub: 'nothing saved yet' }) +
+        '<div class="panel-empty">No memories yet.</div>' +
+        `<div class="panel-input"><input type="text" id="vault-input" placeholder="Save a memory..." onkeydown="if(event.key==='Enter')addVault()"><button onclick="addVault()"><i class="fa-solid fa-plus"></i></button></div>`;
+      return;
+    }
+    // Age the memories into buckets. A vault is mostly useful when you can see
+    // what is recent versus what has been sitting there for months.
+    const now = Date.now();
+    const ageDays = (dt) => {
+      const t = Date.parse(dt || '');
+      return isFinite(t) ? Math.floor((now - t) / 86400000) : null;
+    };
+    const buckets = { today: 0, week: 0, month: 0, older: 0, undated: 0 };
+    items.forEach(v => {
+      const a = ageDays(v.date);
+      if (a === null) buckets.undated++;
+      else if (a === 0) buckets.today++;
+      else if (a < 7) buckets.week++;
+      else if (a < 30) buckets.month++;
+      else buckets.older++;
+    });
+    const words = items.reduce((a, v) => a + String(v.text || '').trim().split(/\s+/).filter(Boolean).length, 0);
+    const recent = (today + week) || 0;
+
+    el.innerHTML =
+      Viz.hero([
+        Viz.ring(items.length, { max: Math.max(items.length, 10), label: 'STORED', labelText: String(items.length) }),
+        Viz.ring((recent / items.length) * 100, { label: 'FRESH', sub: '≤ 7 days' })
+      ], { title: 'MEMORY VAULT', sub: words.toLocaleString() + ' words on file' }) +
+      Viz.section('BY AGE', Viz.stack([
+        { label: 'Today', value: buckets.today, color: 'var(--accent, #6d8bff)' },
+        { label: 'This week', value: buckets.week, color: '#22d3ee' },
+        { label: 'This month', value: buckets.month, color: '#a855f7' },
+        { label: 'Older', value: buckets.older, color: 'rgba(255,255,255,0.24)' },
+        { label: 'No date', value: buckets.undated, color: 'rgba(255,255,255,0.12)' }
+      ]), 'fa-hourglass-half') +
+      Viz.section('MEMORIES', items.map(v => {
+        const a = ageDays(v.date);
+        const fresh = a === null ? 25 : a === 0 ? 100 : a < 7 ? 72 : a < 30 ? 45 : 18;
+        return `<div class="vault-item"><span class="vt">${escHtml(v.text)}</span><span class="vd">${escHtml(v.date || '')}</span><button class="vx" onclick="deleteVault(${JSON.stringify(String(v.id))})"><i class="fa-solid fa-xmark"></i></button></div>` +
+          `<span class="viz-heat" style="margin:-4px 6px 6px"><i style="width:${fresh}%;background:linear-gradient(90deg,var(--accent,#6d8bff),var(--accent-2,#a855f7));box-shadow:0 0 8px rgba(var(--accent-rgb,109,139,255),0.5)"></i></span>`;
+      }).join(''), 'fa-database') +
+      `<div class="panel-input"><input type="text" id="vault-input" placeholder="Save a memory..." onkeydown="if(event.key==='Enter')addVault()"><button onclick="addVault()"><i class="fa-solid fa-plus"></i></button></div>`;
   } catch { el.innerHTML = '<div class="panel-empty">Error.</div>'; }
 }
 
@@ -1796,10 +2187,39 @@ async function deleteVault(id) {
 }
 
 async function loadClipboardPanel(el) {
+  el.innerHTML = '<div class="panel-empty">Reading clipboard...</div>';
   try {
     const res = await fetch('/api/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'clipboard-read' }) });
     const d = await res.json();
-    el.innerHTML = `<div class="panel-row"><span class="lbl">CLIPBOARD</span></div><div style="margin-top:6px;padding:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;font-family:var(--mono);font-size:9px;color:var(--txt);max-height:160px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;">${escHtml(d.content || '(empty)')}</div><div class="panel-input" style="margin-top:6px;"><input type="text" id="clip-input" placeholder="Write to clipboard..." onkeydown="if(event.key==='Enter')writeClip()"><button onclick="writeClip()"><i class="fa-solid fa-copy"></i></button></div>`;
+    const content = String(d.content || '');
+    // Character / word / line counts are the numbers people actually want from a
+    // clipboard grab, and they cost nothing to compute.
+    const chars = content.length;
+    const words = content.trim() ? content.trim().split(/\s+/).length : 0;
+    const lines = content ? content.split('\n').length : 0;
+    // Rough read time at 200 words per minute, floored at 1s so a short snippet
+    // never claims "0s".
+    const readSec = words ? Math.max(1, Math.round(words / 200 * 60)) : 0;
+    const kind = /^(https?:\/\/|www\.)\S+$/i.test(content.trim()) ? ['LINK', 'fa-link']
+      : /^-?\d+(\.\d+)?$/.test(content.trim()) ? ['NUMBER', 'fa-hashtag']
+      : /[\n]/.test(content) ? ['TEXT', 'fa-align-left']
+      : words > 12 ? ['PARAGRAPH', 'fa-paragraph'] : ['SNIPPET', 'fa-scissors'];
+
+    el.innerHTML =
+      Viz.hero([
+        Viz.ring(Math.min(100, words * 100 / 500), { label: 'WORDS', labelText: String(words) }),
+        Viz.ring(Math.min(100, chars * 100 / 2000), { label: 'CHARS', labelText: chars > 999 ? (chars / 1000).toFixed(1) + 'k' : String(chars) })
+      ], { title: 'CLIPBOARD', sub: '<i class="fa-solid ' + kind[1] + '"></i> ' + kind[0] }) +
+      Viz.section('SIZE', [
+        Viz.bar(Math.min(100, chars * 100 / 2000), { label: 'Characters', valueText: chars.toLocaleString() }),
+        Viz.bar(Math.min(100, words * 100 / 500), { label: 'Words', valueText: words.toLocaleString() }),
+        Viz.bar(Math.min(100, lines * 100 / 50), { label: 'Lines', valueText: String(lines) })
+      ].join(''), 'fa-ruler-horizontal') +
+      `<div class="panel-row"><span class="lbl">READ TIME</span><span class="val">${readSec ? readSec + 's' : '--'}</span></div>
+       <div class="panel-row"><span class="lbl">DETECTED</span><span class="val">${kind[0]}</span></div>` +
+      Viz.section('CONTENT', '<div style="padding:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;font-family:var(--mono);font-size:9px;color:var(--txt);max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;">' +
+        (escHtml(content || '(empty)')) + '</div>', 'fa-clipboard') +
+      `<div class="panel-input"><input type="text" id="clip-input" placeholder="Write to clipboard..." onkeydown="if(event.key==='Enter')writeClip()"><button onclick="writeClip()"><i class="fa-solid fa-copy"></i></button></div>`;
   } catch { el.innerHTML = '<div class="panel-empty">Error.</div>'; }
 }
 
@@ -1815,38 +2235,106 @@ async function writeClip() {
 
 function loadSettingsPanel(el) {
   const mem = loadOfflineMemory();
-  
+
+  // ---- setup gauges ------------------------------------------------------
+  // Settings used to open as a wall of dropdowns with no indication of what was
+  // actually configured, so the first thing you learned was from a toast after
+  // something failed. These rings repaint as the async key/location/service
+  // loads below resolve, and start as "unknown" rather than claiming a state we
+  // have not fetched yet.
+  const SETUP_SLOTS = 6; // keys, location, email, discord, whatsapp, agency
+  const setupState = { keys: 0, location: false, email: false, discord: false, whatsapp: false, agency: false };
+  const paintSetup = () => {
+    const host = document.getElementById('setup-gauges');
+    if (!host) return;
+    const done = (setupState.keys > 0 ? 1 : 0) + (setupState.location ? 1 : 0) +
+      ['email', 'discord', 'whatsapp', 'agency'].filter(k => setupState[k]).length;
+    const pct = Math.round((done / SETUP_SLOTS) * 100);
+    const sub = document.getElementById('setup-sub');
+    if (sub) {
+      sub.textContent = pct === 100 ? 'everything is configured, BOSS'
+        : (SETUP_SLOTS - done) + ' item' + (SETUP_SLOTS - done === 1 ? '' : 's') + ' still to configure';
+    }
+    host.innerHTML =
+      // A setup meter is progress, not danger: amber/red here would read as a
+      // fault when it just means "not done yet".
+      Viz.ring(pct, { label: 'SETUP', labelText: pct + '%', warn: false, crit: false }) +
+      Viz.ring(setupState.keys, { max: Math.max(setupState.keys, 4), label: 'API KEYS', labelText: String(setupState.keys), warn: false, crit: false }) +
+      Viz.ring(mem.continuousListen ? 100 : 0, {
+        label: 'LISTEN', labelText: mem.continuousListen ? 'ON' : 'OFF',
+        color: mem.continuousListen ? 'var(--accent, #6d8bff)' : 'rgba(255,255,255,0.22)',
+        warn: false, crit: false
+      });
+  };
+
+  const hero =
+    '<div class="viz-hero glass-soft">' +
+      '<div class="viz-hero-rings" id="setup-gauges"></div>' +
+      '<div class="viz-hero-title">CONFIGURATION</div>' +
+      '<div class="viz-hero-sub" id="setup-sub">checking what is configured...</div>' +
+    '</div>';
+
+  // ---- voice preview -----------------------------------------------------
+  // Rate and pitch were two bare sliders whose effect you could only judge by
+  // speaking afterwards. The waveform plus the two meters give an immediate
+  // visual of which of them you just moved.
+  const preview = `
+    <div class="viz-section">
+      <div class="viz-section-h"><i class="fa-solid fa-wave-square"></i> VOICE PREVIEW</div>
+      <div class="viz-section-b">
+        <div id="voice-wave">${Viz.waveform(34, 11)}</div>
+        <div style="margin-top:10px" id="voice-meters"></div>
+        <div style="margin-top:8px;font-family:var(--mono);font-size:8px;letter-spacing:1px;color:var(--txt3)" id="voice-hint">
+          Move rate or pitch, then press TEST VOICE.
+        </div>
+      </div>
+    </div>
+  `;
+
+  const paintVoiceMeters = () => {
+    const host = document.getElementById('voice-meters');
+    if (!host) return;
+    const r = parseFloat((document.getElementById('speech-rate') || {}).value || 1);
+    const p = parseFloat((document.getElementById('speech-pitch') || {}).value || 1);
+    // Both sliders run 0.5-2.0; show them as a position in that window rather
+    // than as a percentage of 100, which would make every value look tiny.
+    host.innerHTML =
+      Viz.bar(r, { min: 0.5, max: 2, label: 'Rate', valueText: r.toFixed(1) + '×', warn: false, crit: false }) +
+      Viz.bar(p, { min: 0.5, max: 2, label: 'Pitch', valueText: p.toFixed(1) + '×', warn: false, crit: false });
+    const hint = document.getElementById('voice-hint');
+    if (hint) {
+      const slow = r < 0.9, fast = r > 1.3, deep = p < 0.9, high = p > 1.2;
+      const words = [slow ? 'slow' : fast ? 'fast' : '', deep ? 'deeper' : high ? 'higher' : ''].filter(Boolean);
+      hint.textContent = words.length ? 'Currently set ' + words.join(' and ') + '.' : 'Currently set to natural pace and pitch.';
+    }
+  };
+
   // Build settings HTML
-  let html = `
+  let html = hero + preview + Viz.section('VOICE', `
     <div class="setting-row"><label>VOICE</label><select id="voice-select" style="width:140px"><optgroup label="ElevenLabs"><option value="21m00Tcm4TlvDq8ikWAM">Rachel</option><option value="EXAVITQu4vr4xnSDxMaL">Bella</option><option value="MF3mGyEYCl7XYWbV9V6O">Elli</option><option value="pFZP5JQG7iQjIQuC4Bku">Lily</option><option value="AZnzlk1XvdvUeBnXmlld">Domi</option><option value="TxGEqnHWrfWFTfGW9XjX">Josh</option><option value="VR6AewLTigWG4xSOukaG">Arnold</option><option value="yoZ06aMxZJJ28mfd3POQ">Sam</option></optgroup><optgroup label="Web Speech (Free)"><option value="web-samantha">Samantha (macOS)</option><option value="web-karen">Karen (macOS)</option><option value="web-moira">Moira (macOS)</option><option value="web-tessa">Tessa (macOS)</option></optgroup></select></div>
     <div class="setting-row"><label>TTS ENGINE</label><select id="engine-select" style="width:140px"><option value="auto">Auto (best available)</option><option value="bark">Bark (neural, needs torch)</option><option value="edge-tts">Edge-TTS (neural)</option><option value="sapi">Windows SAPI (offline)</option></select></div>
-    <div class="setting-row"><label>SPEECH RATE</label><input type="range" id="speech-rate" min="0.5" max="2" step="0.1" value="1.0" style="width:100px"></div>
-    <div class="setting-row"><label>SPEECH PITCH</label><input type="range" id="speech-pitch" min="0.5" max="2" step="0.1" value="1.0" style="width:100px"></div>
+    <div class="setting-row"><label>SPEECH RATE</label><input type="range" id="speech-rate" min="0.5" max="2" step="0.1" value="${(typeof mem.speechRate === 'number' ? mem.speechRate : 1.0)}" style="width:100px"></div>
+    <div class="setting-row"><label>SPEECH PITCH</label><input type="range" id="speech-pitch" min="0.5" max="2" step="0.1" value="${(typeof mem.speechPitch === 'number' ? mem.speechPitch : 1.0)}" style="width:100px"></div>
     <div class="setting-row"><label></label><button id="test-voice-btn" style="padding:4px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--txt2);font-family:var(--mono);font-size:9px;cursor:pointer;"><i class="fa-solid fa-volume-high"></i> TEST VOICE</button></div>
     <div class="setting-row"><label>CONTINUOUS LISTEN</label><input type="checkbox" id="cont-listen" ${mem.continuousListen ? 'checked' : ''}></div>
     <div class="setting-row"><label>YOUR NAME</label><input type="text" id="name-input" value="${mem.name || ''}" placeholder="Tell me your name" style="width:130px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:var(--txt);border-radius:6px;padding:3px 7px;font-family:var(--mono);font-size:9px;"></div>
-  `;
+  `, 'fa-microphone-lines');
   
   // Dark mode toggle
   const isDark = mem.darkMode !== false; // default dark
   html += `<div class="setting-row"><label>DARK MODE</label><input type="checkbox" id="dark-mode-toggle" ${isDark ? 'checked' : ''}></div>`;
   
   // Location settings
-  html += `
-    <div style="border-top:1px solid rgba(255,255,255,0.06); margin:8px 0; padding-top:8px;">
-      <div style="font-family:var(--mono); font-size:8px; color:var(--txt3); letter-spacing:1px; margin-bottom:8px;">LOCATION</div>
+  html += Viz.section('LOCATION', `
       <div class="setting-row"><label>CITY NAME</label><input type="text" id="city-name-input" placeholder="New Delhi, IN" style="width:130px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:var(--txt);border-radius:6px;padding:3px 7px;font-family:var(--mono);font-size:9px;"></div>
       <div class="setting-row"><label>LATITUDE</label><input type="number" id="lat-input" step="0.0001" style="width:80px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:var(--txt);border-radius:6px;padding:3px 7px;font-family:var(--mono);font-size:9px;"></div>
       <div class="setting-row"><label>LONGITUDE</label><input type="number" id="lon-input" step="0.0001" style="width:80px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:var(--txt);border-radius:6px;padding:3px 7px;font-family:var(--mono);font-size:9px;"></div>
       <div class="setting-row"><label></label><button id="save-location-btn" style="padding:4px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--txt2);font-family:var(--mono);font-size:9px;cursor:pointer;">Save Location</button></div>
       <div class="setting-row"><label></label><button id="detect-location-btn" style="padding:4px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:var(--txt3);font-family:var(--mono);font-size:9px;cursor:pointer;">Auto-detect</button></div>
-    </div>
-  `;
+  `, 'fa-location-dot');
   
   // API Keys section
-  html += `
-    <div style="border-top:1px solid rgba(255,255,255,0.06); margin:8px 0; padding-top:8px;">
-      <div style="font-family:var(--mono); font-size:8px; color:var(--txt3); letter-spacing:1px; margin-bottom:8px;">API KEYS</div>
+  html += Viz.section('API KEYS', `
       <div id="api-keys-list" style="font-family:var(--mono); font-size:9px; color:var(--txt2);">Loading...</div>
       <div class="setting-row"><label></label><button id="show-keys-btn" style="padding:4px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:var(--txt3);font-family:var(--mono);font-size:9px;cursor:pointer;">Show Key Details</button></div>
       <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
@@ -1859,13 +2347,10 @@ function loadSettingsPanel(el) {
         </div>
         <button id="save-keys-btn" style="width:100%; padding:7px; border-radius:6px; border:1px solid rgba(168,85,247,0.3); background:rgba(168,85,247,0.1); color:var(--accent); font-family:var(--mono); font-size:10px; letter-spacing:1px; cursor:pointer;">SAVE KEYS</button>
       </div>
-    </div>
-  `;
+  `, 'fa-key');
   
   // Connected services & permissions (permanent-app control center)
-  html += `
-    <div style="border-top:1px solid rgba(255,255,255,0.06); margin:8px 0; padding-top:8px;">
-      <div style="font-family:var(--mono); font-size:8px; color:var(--txt3); letter-spacing:1px; margin-bottom:8px;">CONNECTED SERVICES & PERMISSIONS</div>
+  html += Viz.section('CONNECTED SERVICES & PERMISSIONS', `
       <div id="services-status" style="font-family:var(--mono); font-size:9px; color:var(--txt2); margin-bottom:8px;">Loading...</div>
       <div class="setting-row"><label></label><button id="services-refresh-btn" style="padding:4px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:var(--txt3);font-family:var(--mono);font-size:9px;cursor:pointer;">REFRESH STATUS</button></div>
       <div class="setting-row"><label>DISCORD WEBHOOK URL</label><input type="text" id="discord-webhook-input" placeholder="https://discord.com/api/webhooks/..." style="flex:1;min-width:0;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);color:var(--txt);border-radius:6px;padding:3px 7px;font-family:var(--mono);font-size:9px;"></div>
@@ -1875,18 +2360,16 @@ function loadSettingsPanel(el) {
       <div class="setting-row"><label>START WITH WINDOWS</label><input type="checkbox" id="autostart-toggle"></div>
       <div class="setting-row"><label>MIC AIM</label><button id="wake-restart-btn" style="padding:4px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:var(--txt3);font-family:var(--mono);font-size:9px;cursor:pointer;">Restart Wake Listener</button></div>
       <div class="setting-row"><label></label><button id="save-services-btn" style="padding:5px 12px;background:rgba(139,104,255,0.1);border:1px solid rgba(139,104,255,0.35);border-radius:6px;color:var(--gold);font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;">SAVE SERVICES</button></div>
-    </div>
-  `;
+  `, 'fa-plug');
 
   // Permissions section
-  html += `
-    <div style="border-top:1px solid rgba(255,255,255,0.06); margin:8px 0; padding-top:8px;">
-      <div style="font-family:var(--mono); font-size:8px; color:var(--txt3); letter-spacing:1px; margin-bottom:8px;">SYSTEM</div>
+  html += Viz.section('SYSTEM', `
       <div class="setting-row"><label></label><button id="check-perms-btn" style="padding:4px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:var(--txt3);font-family:var(--mono);font-size:9px;cursor:pointer;">Check Permissions</button></div>
-    </div>
-  `;
+  `, 'fa-shield-halved');
   
   el.innerHTML = html;
+  paintSetup();
+  paintVoiceMeters();
   
   // Event listeners
   document.getElementById('voice-select').addEventListener('change', (e) => { mem.voiceId = e.target.value; saveOfflineMemory(mem); const vv = e.target.value; if (/^web-/i.test(vv)) { _cachedVoice = null; _cachedMode = null; } toast('Voice updated, BOSS.', 'ok'); });
@@ -1917,9 +2400,9 @@ function loadSettingsPanel(el) {
   }
   const testVoiceBtn = document.getElementById('test-voice-btn');
   if (testVoiceBtn) testVoiceBtn.addEventListener('click', () => { _cachedVoice = null; _cachedMode = null; speak('Hello Boss. This is how I sound now. Does this work for you?'); });
-  document.getElementById('speech-rate').addEventListener('input', (e) => { mem.speechRate = parseFloat(e.target.value); saveOfflineMemory(mem); });
-  document.getElementById('speech-pitch').addEventListener('input', (e) => { mem.speechPitch = parseFloat(e.target.value); saveOfflineMemory(mem); });
-  document.getElementById('cont-listen').addEventListener('change', (e) => { mem.continuousListen = e.target.checked; saveOfflineMemory(mem); });
+  document.getElementById('speech-rate').addEventListener('input', (e) => { mem.speechRate = parseFloat(e.target.value); saveOfflineMemory(mem); paintVoiceMeters(); });
+  document.getElementById('speech-pitch').addEventListener('input', (e) => { mem.speechPitch = parseFloat(e.target.value); saveOfflineMemory(mem); paintVoiceMeters(); });
+  document.getElementById('cont-listen').addEventListener('change', (e) => { mem.continuousListen = e.target.checked; saveOfflineMemory(mem); paintSetup(); });
   document.getElementById('name-input').addEventListener('change', (e) => { mem.name = e.target.value.trim(); saveOfflineMemory(mem); toast(`Name set to ${mem.name}, BOSS.`, 'ok'); });
   
   // Dark mode toggle
@@ -1937,6 +2420,9 @@ function loadSettingsPanel(el) {
       document.getElementById('lat-input').value = d.settings.latitude || '';
       document.getElementById('lon-input').value = d.settings.longitude || '';
     }
+    // Feed the location slot of the setup ring from the same response.
+    setupState.location = !!(d.success && d.settings && (d.settings.cityName || d.settings.latitude));
+    paintSetup();
   }).catch(() => {});
   
   // Save location button
@@ -2022,6 +2508,13 @@ function loadSettingsPanel(el) {
       const au = document.getElementById('agency-url-input');
       if (au) { au.value = (s.agency && s.agency.url) || 'http://localhost:3200'; if (!au.closest('.setting-row')) {} }
       if (s.agency && !s.agency.online && s.agency.error && el) el.innerHTML += `<div style="margin-top:6px;color:var(--pink);font-size:9px;word-break:break-word;">${String(s.agency.error).slice(0,180)}</div>`;
+      // Feed the service slots of the setup ring from the same response, so the
+      // ring and the status list can never disagree about what is configured.
+      setupState.email = !!(s.email && s.email.configured);
+      setupState.discord = !!(s.discord && s.discord.configured);
+      setupState.whatsapp = !!(s.whatsapp && s.whatsapp.configured);
+      setupState.agency = !!(s.agency && s.agency.online);
+      paintSetup();
     } catch(e) { el.innerHTML = `<span style="color:var(--pink)">services unavailable</span>`; }
   }
   refreshServicesStatus();
@@ -2078,6 +2571,8 @@ function loadSettingsPanel(el) {
   fetch('/api/gemini-keys').then(r => r.json()).then(d => {
     const listEl = document.getElementById('api-keys-list');
     if (!listEl) return;
+    setupState.keys = d.totalKeys || 0;
+    paintSetup();
     if (d.totalKeys === 0) {
       listEl.innerHTML = '<span style="color:var(--txt3)">No keys configured in .env</span>';
       return;
@@ -2155,13 +2650,46 @@ async function loadFilesPanel(el) {
 
 function renderFilesList(el, files, path) {
   currentFilePath = path;
-  const items = files.map(f => {
-    const isDir = !f.includes('.');
-    const icon = isDir ? 'fa-folder' : 'fa-file';
-    return `<div class="vault-item" style="cursor:pointer;" onclick="${isDir ? `navigateDir('${path ? path + '/' : ''}${f}')` : `openFile('${path ? path + '/' : ''}${f}')`}"><i class="fa-solid ${icon}" style="color:var(--txt3);font-size:10px;margin-right:6px;"></i><span class="vt">${escHtml(f)}</span></div>`;
-  }).join('');
-  const backBtn = path ? `<div class="vault-item" style="cursor:pointer;color:var(--txt3);" onclick="navigateDir('${path.split('/').slice(0, -1).join('/')}')"><i class="fa-solid fa-arrow-left" style="font-size:10px;margin-right:6px;"></i><span class="vt">Back</span></div>` : '';
-  el.innerHTML = `<div style="font-family:var(--mono);font-size:8px;color:var(--txt3);padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.03);margin-bottom:4px;">${escHtml(path || '~/Desktop')}</div>${backBtn}${items || '<div class="panel-empty">Empty folder</div>'}`;
+  const dirs = files.filter(f => !f.includes('.'));
+  const plain = files.filter(f => f.includes('.'));
+  // Group the plain files by extension. In a mixed folder the extension split
+  // is the fastest way to see what is actually in there, and it costs one pass.
+  const byExt = {};
+  plain.forEach(f => {
+    const m = f.match(/\.([A-Za-z0-9]{1,6})$/);
+    const key = (m ? m[1] : 'other').toLowerCase();
+    byExt[key] = (byExt[key] || 0) + 1;
+  });
+  const extSegs = Object.keys(byExt)
+    .sort((a, b) => byExt[b] - byExt[a])
+    .slice(0, 8)
+    .map((k, i) => ({ label: '.' + k, value: byExt[k], color: `hsl(${Math.round((i / 8) * 300)},70%,62%)` }));
+
+  const item = (f, isDir) => {
+    const full = (path ? path + '/' : '') + f;
+    // Call the handler with a JSON literal so spaces and apostrophes in a
+    // filename cannot break out of the inline onclick.
+    const arg = JSON.stringify(full);
+    const icon = isDir ? 'fa-folder' : 'fa-file-lines';
+    const iconColor = isDir ? 'var(--accent, #a855f7)' : 'rgba(255,255,255,0.35)';
+    return `<div class="vault-item" style="cursor:pointer;" onclick="${isDir ? 'navigateDir(' + arg + ')' : 'openFile(' + arg + ')'}">` +
+      `<i class="fa-solid ${icon}" style="color:${iconColor};font-size:10px;margin-right:6px;${isDir ? 'filter:drop-shadow(0 0 6px rgba(var(--accent-rgb,109,139,255),0.5));' : ''}"></i>` +
+      `<span class="vt">${escHtml(f)}</span>` +
+      (isDir ? '<i class="fa-solid fa-chevron-right" style="margin-left:auto;font-size:8px;opacity:0.3"></i>' : '') +
+      '</div>';
+  };
+
+  el.innerHTML =
+    '<div style="font-family:var(--mono);font-size:8px;color:var(--txt3);padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.03);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">' +
+      '<span><i class="fa-solid fa-folder-open" style="margin-right:5px;opacity:0.6"></i>' + escHtml(path || '~/Desktop') + '</span>' +
+      '<span>' + dirs.length + ' folders · ' + plain.length + ' files</span>' +
+    '</div>' +
+    (dirs.length ? Viz.section('FOLDERS (' + dirs.length + ')', dirs.map(f => item(f, true)).join(''), 'fa-folder') : '') +
+    (plain.length ? Viz.section('FILES (' + plain.length + ')',
+        (extSegs.length > 1 ? '<div style="margin-bottom:9px">' + Viz.stack(extSegs, { legendValues: false }) + '</div>' : '') +
+        plain.map(f => item(f, false)).join(''), 'fa-file-lines') : '') +
+    (!files.length ? '<div class="panel-empty">Empty folder</div>' : '') +
+    (path ? `<div class="vault-item" style="cursor:pointer;color:var(--txt3);margin-top:6px;" onclick="navigateDir(${JSON.stringify(path.split('/').slice(0, -1).join('/'))})"><i class="fa-solid fa-arrow-left" style="font-size:10px;margin-right:6px;"></i><span class="vt">Back</span></div>` : '');
 }
 
 async function navigateDir(path) {
@@ -2188,13 +2716,28 @@ const NOTES_KEY = 'jenny_notes';
 
 function loadNotesPanel(el) {
   const notes = loadNotes();
-  el.innerHTML = `
-    <div class="panel-input" style="border-top:none;border-bottom:1px solid rgba(255,255,255,0.03);padding-bottom:8px;">
-      <input type="text" id="note-input" placeholder="Add a note or TODO..." onkeydown="if(event.key==='Enter')addNote()">
-      <button onclick="addNote()"><i class="fa-solid fa-plus"></i></button>
-    </div>
-    <div id="notes-list">${renderNotes(notes)}</div>
-  `;
+  const done = notes.filter(n => n.done).length;
+  const open = notes.length - done;
+  el.innerHTML =
+    Viz.hero([
+      Viz.ring(notes.length ? (done / notes.length) * 100 : 0, {
+        // A completion ring is not a danger gauge: half-done tasks turning red
+        // would be noise, so severity is explicitly disabled here.
+        label: 'DONE', labelText: done + '/' + notes.length, warn: false, crit: false
+      })
+    ], {
+      title: 'NOTES & TASKS',
+      sub: open ? open + ' still open' : (notes.length ? 'all clear' : 'nothing on the list')
+    }) +
+    (notes.length ? Viz.section('PROGRESS', [
+      Viz.bar((done / notes.length) * 100, { label: 'Completed', valueText: done + ' of ' + notes.length, warn: false, crit: false }),
+      Viz.bar((open / notes.length) * 100, { label: 'Remaining', valueText: String(open), color: '#fbbf24', warn: false, crit: false })
+    ].join(''), 'fa-list-check') : '') +
+    `<div class="panel-input" style="border-top:none;border-bottom:1px solid rgba(255,255,255,0.03);padding-bottom:8px;">
+       <input type="text" id="note-input" placeholder="Add a note or TODO..." onkeydown="if(event.key==='Enter')addNote()">
+       <button onclick="addNote()"><i class="fa-solid fa-plus"></i></button>
+     </div>
+     <div id="notes-list">${renderNotes(notes)}</div>`;
 }
 
 function loadNotes() {
@@ -2207,12 +2750,18 @@ function saveNotes(notes) {
 
 function renderNotes(notes) {
   if (!notes.length) return '<div class="panel-empty">No notes yet.</div>';
-  return notes.map((n, i) => `
+  // Open items first: a checklist you are working through is read top-down,
+  // and buried completed items under new ones is what made this list feel
+  // like an archive rather than a to-do list.
+  const ordered = notes.map((n, i) => ({ n: n, i: i }))
+    .sort((a, b) => (a.n.done === b.n.done ? 0 : (a.n.done ? 1 : -1)));
+  return ordered.map(({ n, i }) => `
     <div class="vault-item">
       <span class="vt" style="display:flex;align-items:center;gap:6px;">
-        <input type="checkbox" ${n.done ? 'checked' : ''} onchange="toggleNote(${i})" style="width:12px;height:12px;accent-color:var(--txt2);">
+        <input type="checkbox" ${n.done ? 'checked' : ''} onchange="toggleNote(${i})" style="width:12px;height:12px;accent-color:var(--accent,#a78bfa);">
         <span style="${n.done ? 'text-decoration:line-through;color:var(--txt3);' : ''}">${escHtml(n.text)}</span>
       </span>
+      ${n.date ? `<span class="vd" style="font-size:8px;color:var(--txt3);">${escHtml(n.date)}</span>` : ''}
       <button class="vx" onclick="deleteNote(${i})"><i class="fa-solid fa-xmark"></i></button>
     </div>
   `).join('');
@@ -2225,80 +2774,156 @@ function addNote() {
   notes.unshift({ text: input.value.trim(), done: false, date: new Date().toLocaleDateString() });
   saveNotes(notes);
   input.value = '';
-  const list = document.getElementById('notes-list');
-  if (list) list.innerHTML = renderNotes(notes);
+  // Re-render the whole panel, not just the list: the progress ring in the hero
+  // counts open items, so patching only the list would leave it stale.
+  const body = document.getElementById('panel-body-notes');
+  if (body) loadNotesPanel(body);
   toast('Note added, BOSS.', 'ok');
 }
 
 function toggleNote(idx) {
   const notes = loadNotes();
   if (notes[idx]) { notes[idx].done = !notes[idx].done; saveNotes(notes); }
-  const list = document.getElementById('notes-list');
-  if (list) list.innerHTML = renderNotes(notes);
+  const body = document.getElementById('panel-body-notes');
+  if (body) loadNotesPanel(body);
 }
 
 function deleteNote(idx) {
   const notes = loadNotes();
   notes.splice(idx, 1);
   saveNotes(notes);
-  const list = document.getElementById('notes-list');
-  if (list) list.innerHTML = renderNotes(notes);
+  const body = document.getElementById('panel-body-notes');
+  if (body) loadNotesPanel(body);
   toast('Note deleted.', 'ok');
 }
 
-function loadCommandsPanel(el) {
-  el.innerHTML = `
-<h3 style="font-family:var(--orbitron);font-size:12px;color:var(--gold);letter-spacing:2px;margin:0 0 12px 0;text-transform:uppercase;">System Control</h3>
-<div class="cmd-ref-item"><div class="cc">open notepad / calculator / paint / chrome / edge / vscode / discord / spotify / word / excel / powerpoint</div><div class="cd">Launch any app</div></div>
-<div class="cmd-ref-item"><div class="cc">close notepad / chrome / any app</div><div class="cd">Kill any running app</div></div>
-<div class="cmd-ref-item"><div class="cc">lock pc / lock screen</div><div class="cd">Lock Windows screen</div></div>
-<div class="cmd-ref-item"><div class="cc">take screenshot / screenshot</div><div class="cd">Save screenshot to Desktop</div></div>
-<div class="cmd-ref-item"><div class="cc">volume 50 / volume up / volume down / mute / unmute</div><div class="cd">Audio volume controls</div></div>
-<div class="cmd-ref-item"><div class="cc">shutdown / restart / sleep</div><div class="cd">Power controls</div></div>
-<div class="cmd-ref-item"><div class="cc">empty trash / empty recycle bin</div><div class="cd">Clear recycle bin</div></div>
-<div class="cmd-ref-item"><div class="cc">minimize all / show desktop</div><div class="cd">Minimize all windows</div></div>
-<div class="cmd-ref-item"><div class="cc">open terminal / open cmd</div><div class="cd">Open terminal or command prompt</div></div>
+// ================================================
+// COMMAND REFERENCE
+// ================================================
+// Held as data rather than as a pre-baked HTML string: the panel renders a
+// category breakdown and a live filter from this, so the summary can never
+// drift out of sync with the list it is summarising.
+const COMMAND_REF = [
+  {
+    title: 'System Control', icon: 'fa-sliders',
+    items: [
+      ['open notepad / calculator / paint / chrome / edge / vscode / discord / spotify / word / excel / powerpoint', 'Launch any app'],
+      ['close notepad / chrome / any app', 'Kill any running app'],
+      ['lock pc / lock screen', 'Lock Windows screen'],
+      ['take screenshot / screenshot', 'Save screenshot to Desktop'],
+      ['volume 50 / volume up / volume down / mute / unmute', 'Audio volume controls'],
+      ['shutdown / restart / sleep', 'Power controls'],
+      ['empty trash / empty recycle bin', 'Clear recycle bin'],
+      ['minimize all / show desktop', 'Minimize all windows'],
+      ['open terminal / open cmd', 'Open terminal or command prompt'],
+    ]
+  },
+  {
+    title: 'File & Folder Access', icon: 'fa-folder-tree',
+    items: [
+      ['open desktop / downloads / documents / pictures / music / videos', 'Open common folders'],
+      ['browse C:\\path\\to\\folder / open folder [path]', 'Open any folder by path'],
+      ['open chrome bookmarks / show bookmarks', 'Access Chrome bookmarks'],
+    ]
+  },
+  {
+    title: 'Web & Browser', icon: 'fa-globe',
+    items: [
+      ['open google.com / open youtube.com / open [any website]', 'Open website in Chrome'],
+      ['news / headlines / top news', 'Latest news headlines'],
+      ['bitcoin price / crypto prices', 'Live crypto prices'],
+    ]
+  },
+  {
+    title: 'System Info', icon: 'fa-microchip',
+    items: [
+      ['cpu usage / cpu info', 'Processor usage & model'],
+      ['ram usage / memory info', 'RAM usage & total'],
+      ['battery level / battery', 'Battery percentage & charging'],
+      ['disk usage / storage / free space', 'Disk space info'],
+      ['system info / about my pc / my system', 'Full system information'],
+      ['uptime / how long has pc been on', 'System uptime'],
+      ['wifi / network / internet status', 'Network & WiFi info'],
+      ['hostname / computer name', 'PC name'],
+      ['running processes / task manager', 'List running processes'],
+    ]
+  },
+  {
+    title: 'Knowledge & Chat', icon: 'fa-book',
+    items: [
+      ['what is AI / python / CPU / RAM / WiFi / encryption / blockchain', '50+ offline tech topics'],
+      ['what time / todays date / what day / what month / what year', 'Date & time queries'],
+      ['what is 42 * 7 / calculate 100 + 200 / math', 'Quick math calculator'],
+      ['convert 100 F to C / convert 50 C to F', 'Temperature conversion'],
+      ['25% of 200 / what is 30 percent of 150', 'Percentage calculator'],
+      ['weather / temperature / forecast', 'Live weather info'],
+      ['tell me a joke / something funny', 'Random jokes'],
+      ['give me a quote / inspire me / motivational quote', 'Inspirational quotes'],
+      ['tell me a fact / fun fact / random fact', 'Interesting facts'],
+    ]
+  },
+  {
+    title: 'Utility', icon: 'fa-toolbox',
+    items: [
+      ['set a timer for 5 minutes / remind me in 30 seconds', 'Timer with alert'],
+      ['remember [fact] / save to vault [note]', 'Save to memory vault'],
+      ['briefing / daily briefing', 'Full system overview'],
+      ['who are you / your name / what can you do / capabilities', 'About JENNY'],
+      ['who made you / your creator', 'Meet the creator'],
+      ['hello / hi / hey / how are you', 'Greetings & small talk'],
+      ['Keyboard: Esc = restore/close panel, Alt+M = maximize, Cmd+K = focus input', 'Keyboard shortcuts'],
+    ]
+  },
+];
 
-<h3 style="font-family:var(--orbitron);font-size:12px;color:var(--gold);letter-spacing:2px;margin:16px 0 12px 0;text-transform:uppercase;">File & Folder Access</h3>
-<div class="cmd-ref-item"><div class="cc">open desktop / downloads / documents / pictures / music / videos</div><div class="cd">Open common folders</div></div>
-<div class="cmd-ref-item"><div class="cc">browse C:\path\to\folder / open folder [path]</div><div class="cd">Open any folder by path</div></div>
-<div class="cmd-ref-item"><div class="cc">open chrome bookmarks / show bookmarks</div><div class="cd">Access Chrome bookmarks</div></div>
+function loadCommandsPanel(el, filter) {
+  const q = String(filter == null ? ((document.getElementById('cmd-search') || {}).value || '') : filter).trim().toLowerCase();
+  // Match the phrase OR the plain-English description, so searching "joke" and
+  // "random jokes" both land on the same entry.
+  const match = (pair) => !q || pair[0].toLowerCase().indexOf(q) !== -1 || pair[1].toLowerCase().indexOf(q) !== -1;
+  const shown = COMMAND_REF
+    .map(s => ({ title: s.title, icon: s.icon, items: s.items.filter(match) }))
+    .filter(s => s.items.length);
+  const totalCommands = COMMAND_REF.reduce((a, s) => a + s.items.length, 0);
+  const matched = shown.reduce((a, s) => a + s.items.length, 0);
 
-<h3 style="font-family:var(--orbitron);font-size:12px;color:var(--gold);letter-spacing:2px;margin:16px 0 12px 0;text-transform:uppercase;">Web & Browser</h3>
-<div class="cmd-ref-item"><div class="cc">open google.com / open youtube.com / open [any website]</div><div class="cd">Open website in Chrome</div></div>
-<div class="cmd-ref-item"><div class="cc">news / headlines / top news</div><div class="cd">Latest news headlines</div></div>
-<div class="cmd-ref-item"><div class="cc">bitcoin price / crypto prices</div><div class="cd">Live crypto prices</div></div>
+  const hero = Viz.hero(
+    [Viz.ring(totalCommands, {
+      max: Math.max(totalCommands, 10),
+      label: q ? 'MATCHED' : 'COMMANDS',
+      labelText: q ? (matched + '/' + totalCommands) : String(totalCommands)
+    })],
+    { title: 'EVERYTHING I CAN DO', sub: COMMAND_REF.length + ' categories · say one in plain English' }
+  );
 
-<h3 style="font-family:var(--orbitron);font-size:12px;color:var(--gold);letter-spacing:2px;margin:16px 0 12px 0;text-transform:uppercase;">System Info</h3>
-<div class="cmd-ref-item"><div class="cc">cpu usage / cpu info</div><div class="cd">Processor usage & model</div></div>
-<div class="cmd-ref-item"><div class="cc">ram usage / memory info</div><div class="cd">RAM usage & total</div></div>
-<div class="cmd-ref-item"><div class="cc">battery level / battery</div><div class="cd">Battery percentage & charging</div></div>
-<div class="cmd-ref-item"><div class="cc">disk usage / storage / free space</div><div class="cd">Disk space info</div></div>
-<div class="cmd-ref-item"><div class="cc">system info / about my pc / my system</div><div class="cd">Full system information</div></div>
-<div class="cmd-ref-item"><div class="cc">uptime / how long has pc been on</div><div class="cd">System uptime</div></div>
-<div class="cmd-ref-item"><div class="cc">wifi / network / internet status</div><div class="cd">Network & WiFi info</div></div>
-<div class="cmd-ref-item"><div class="cc">hostname / computer name</div><div class="cd">PC name</div></div>
-<div class="cmd-ref-item"><div class="cc">running processes / task manager</div><div class="cd">List running processes</div></div>
+  // The filter box is rebuilt without its own value on purpose: innerHTML does
+  // not reset an input's live value, so keeping it out avoids the caret jumping
+  // to the end on every keystroke.
+  const search = q ? '' :
+    '<div class="panel-input" style="border-top:none;padding:0 0 12px 0;">' +
+      '<input type="text" id="cmd-search" placeholder="Filter commands..." oninput="loadCommandsPanel(document.getElementById(\'panel-body-commands\'), this.value)">' +
+      '<button title="Clear filter" onclick="loadCommandsPanel(document.getElementById(\'panel-body-commands\'), \'\')"><i class="fa-solid fa-xmark"></i></button>' +
+    '</div>';
 
-<h3 style="font-family:var(--orbitron);font-size:12px;color:var(--gold);letter-spacing:2px;margin:16px 0 12px 0;text-transform:uppercase;">Knowledge & Chat</h3>
-<div class="cmd-ref-item"><div class="cc">what is AI / python / CPU / RAM / WiFi / encryption / blockchain</div><div class="cd">50+ offline tech topics</div></div>
-<div class="cmd-ref-item"><div class="cc">what time / today's date / what day / what month / what year</div><div class="cd">Date & time queries</div></div>
-<div class="cmd-ref-item"><div class="cc">what is 42 * 7 / calculate 100 + 200 / math</div><div class="cd">Quick math calculator</div></div>
-<div class="cmd-ref-item"><div class="cc">convert 100 F to C / convert 50 C to F</div><div class="cd">Temperature conversion</div></div>
-<div class="cmd-ref-item"><div class="cc">25% of 200 / what is 30 percent of 150</div><div class="cd">Percentage calculator</div></div>
-<div class="cmd-ref-item"><div class="cc">weather / temperature / forecast</div><div class="cd">Live weather info</div></div>
-<div class="cmd-ref-item"><div class="cc">tell me a joke / something funny</div><div class="cd">Random jokes</div></div>
-<div class="cmd-ref-item"><div class="cc">give me a quote / inspire me / motivational quote</div><div class="cd">Inspirational quotes</div></div>
-<div class="cmd-ref-item"><div class="cc">tell me a fact / fun fact / random fact</div><div class="cd">Interesting facts</div></div>
+  const breakdown = q ? '' : Viz.section('BY CATEGORY', Viz.stack(
+    COMMAND_REF.map((s, i) => ({
+      label: s.title,
+      value: s.items.length,
+      color: 'hsl(' + Math.round((i / COMMAND_REF.length) * 300) + ',70%,62%)'
+    }))
+  ), 'fa-chart-simple');
 
-<h3 style="font-family:var(--orbitron);font-size:12px;color:var(--gold);letter-spacing:2px;margin:16px 0 12px 0;text-transform:uppercase;">Utility</h3>
-<div class="cmd-ref-item"><div class="cc">set a timer for 5 minutes / remind me in 30 seconds</div><div class="cd">Timer with alert</div></div>
-<div class="cmd-ref-item"><div class="cc">remember [fact] / save to vault [note]</div><div class="cd">Save to memory vault</div></div>
-<div class="cmd-ref-item"><div class="cc">briefing / daily briefing</div><div class="cd">Full system overview</div></div>
-<div class="cmd-ref-item"><div class="cc">who are you / your name / what can you do / capabilities</div><div class="cd">About JENNY</div></div>
-<div class="cmd-ref-item"><div class="cc">who made you / your creator</div><div class="cd">Meet the creator</div></div>
-<div class="cmd-ref-item"><div class="cc">hello / hi / hey / how are you</div><div class="cd">Greetings & small talk</div></div>
-<div class="cmd-ref-item"><div class="cc">Keyboard: Esc = close panels, Cmd+K = focus input</div><div class="cd">Keyboard shortcuts</div></div>`;
+  const body = shown.length
+    ? shown.map(s => Viz.section(
+        s.title.toUpperCase() + ' (' + s.items.length + ')',
+        s.items.map(pair =>
+          '<div class="cmd-ref-item"><div class="cc">' + escHtml(pair[0]) + '</div><div class="cd">' + escHtml(pair[1]) + '</div></div>'
+        ).join(''),
+        s.icon
+      )).join('')
+    : '<div class="panel-empty">No command matches &ldquo;' + escHtml(q) + '&rdquo;.</div>';
+
+  el.innerHTML = hero + search + breakdown + body;
 }
 
 // ================================================
@@ -3002,12 +3627,27 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     const permModal = document.getElementById('permissions-modal');
     if (permModal) { permModal.remove(); return; }
+    // A maximized panel is restored before anything else happens. Closing it
+    // outright would throw away the wide layout the user just asked for, and
+    // one Escape should mean "back one step", not "all the way out".
+    const maxPanel = typeof PanelWin !== 'undefined' ? PanelWin.current() : null;
+    if (maxPanel) { PanelWin.restore(maxPanel); return; }
     if (openPanels.size > 0) {
       const last = [...openPanels].pop();
       closePanel(last);
     } else {
       chatInput.blur();
     }
+    return;
+  }
+
+  // Alt+M: maximize / restore the focused panel. Same affordance as the button
+  // in the header, for people who drive JENNY from the keyboard.
+  if (e.altKey && (e.key === 'm' || e.key === 'M')) {
+    e.preventDefault();
+    const maxPanel = typeof PanelWin !== 'undefined' ? PanelWin.current() : null;
+    const target = maxPanel || document.querySelector('.panel:last-of-type');
+    if (target && target.dataset && target.dataset.panel) PanelWin.toggle(target.dataset.panel);
     return;
   }
 
@@ -3853,8 +4493,33 @@ function applyMode(mode) {
   renderModeWelcome(mode);
   toggleAgencyPanel(mode === 'jarvis');
   loadVoiceBadge();
+  // Tear down whichever dashboard we are leaving. Without this the outgoing
+  // dashboard keeps polling /api/system-status forever in the background, and
+  // its canvas handle keeps pointing at a hidden element.
+  if (mode !== 'friday') stopFridayDashboard();
+  if (mode !== 'jarvis') stopJarvisDashboard();
+  // The load history is shared by both dashboards; a stale series from the
+  // previous session would be drawn as if it were current.
+  loadHistory.cpu.length = 0;
+  loadHistory.ram.length = 0;
+  loadHistory.disk.length = 0;
   if (mode === 'jarvis') initJarvisDashboard();
   if (mode === 'friday') initFridayDashboard();
+}
+
+// Stops every timer a dashboard owns. Paired with each init function so a mode
+// switch cannot leave a poll loop running against a hidden panel.
+function stopFridayDashboard() {
+  if (fdClockTimer) { clearInterval(fdClockTimer); fdClockTimer = null; }
+  if (fdRefreshTimer) { clearInterval(fdRefreshTimer); fdRefreshTimer = null; }
+  if (fdLoadTimer) { clearInterval(fdLoadTimer); fdLoadTimer = null; }
+  fdTrend = null;
+}
+
+function stopJarvisDashboard() {
+  if (jdClockTimer) { clearInterval(jdClockTimer); jdClockTimer = null; }
+  if (jdTelemetryTimer) { clearInterval(jdTelemetryTimer); jdTelemetryTimer = null; }
+  jdTrend = null;
 }
 
 // ================================================
@@ -3904,7 +4569,12 @@ function initFridayDashboard() {
 
   refreshFridayCards();
   if (fdRefreshTimer) clearInterval(fdRefreshTimer);
-  fdRefreshTimer = setInterval(refreshFridayCards, 60000);
+  fdRefreshTimer = setInterval(refreshFridayCards, 6000);
+  // FRIDAY polls more often than the old 60s because the load strip and trend
+  // line are now on screen; a once-a-minute refresh made them look frozen.
+  if (fdLoadTimer) clearInterval(fdLoadTimer);
+  fdLoadTimer = setInterval(refreshFridayLoad, 4000);
+  refreshFridayLoad();
 
   // Casual greeting flavored by time of day.
   const greetEl = document.getElementById('fd-greet');
@@ -3926,6 +4596,32 @@ function initFridayDashboard() {
 }
 
 let fdMuted = false;
+let fdLoadTimer = null;
+
+// Feeds the shared load history and repaints FRIDAY's strip + trend. Separate
+// from refreshFridayCards because that one also does slow weather/vault calls.
+async function refreshFridayLoad() {
+  // Skip when FRIDAY is not the visible dashboard; JARVIS is already polling
+  // the same endpoint and the canvas will not be on screen anyway.
+  if (!document.body.classList.contains('mode-friday')) return;
+  try {
+    const res = await fetch('/api/system-status', { cache: 'no-store' });
+    if (!res.ok) return;
+    const d = await res.json();
+    pushLoadSample(d);
+    const setLoad = (id, pct, val) => {
+      const f = document.getElementById(id + '-fill');
+      const v = document.getElementById(id + '-val');
+      if (f) f.style.width = Math.min(100, Math.max(0, pct)) + '%';
+      if (v) v.textContent = val;
+    };
+    if (d.cpu) setLoad('fd-cpu', d.cpu.usage, Math.round(d.cpu.usage) + '%');
+    if (d.ram) setLoad('fd-ram', d.ram.usage, Math.round(d.ram.usage) + '%');
+    if (d.disk) setLoad('fd-disk', d.disk.usage, Math.round(d.disk.usage) + '%');
+    if (!fdTrend) fdTrend = drawLoadTrend('fd-trend-canvas', 'fd');
+    else fdTrend.draw();
+  } catch(e) {}
+}
 
 function refreshMuteBtn() {
   const btn = document.getElementById('fd-ctrl-mute');
@@ -3974,27 +4670,66 @@ async function refreshFridayCards() {
       fetch('/api/briefing', { cache: 'no-store' }).catch(() => null),
     ]);
     const sys = sysRes.ok ? await sysRes.json() : {};
-    const brief = briefRes && briefRes.ok ? await briefRes.json() : {};
     const b = brief.briefing || {};
 
+    // ---- gauges ----------------------------------------------------------
+    // The four QUICK LOOK cards used to hold one bare number each. A ring says
+    // the same number plus how full it is, which is the part you actually read
+    // a dial for.
+    const gauge = (id, html) => {
+      const host = document.getElementById(id);
+      if (host) host.innerHTML = html;
+    };
+
+    const lvl = sys.battery?.level ?? b.battery?.replace('%', '');
+    const batteryPct = lvl != null && lvl !== '' && isFinite(+lvl) ? +lvl : null;
+    if (batteryPct != null) {
+      // Inverted thresholds: a battery at 20% is the urgent case, so the
+      // severity ramp has to run the other way.
+      gauge('fd-gauge-battery', Viz.ring(batteryPct, {
+        label: batteryPct <= 20 ? 'LOW' : batteryPct <= 40 ? 'FAIR' : 'GOOD',
+        labelText: Math.round(batteryPct) + '%',
+        color: batteryPct <= 20 ? '#ff5f56' : batteryPct <= 40 ? '#fbbf24' : '#4ade80',
+        warn: false, crit: false
+      }));
+    } else {
+      gauge('fd-gauge-battery', Viz.ring(0, { label: 'NO DATA', labelText: '--', color: 'rgba(255,255,255,0.22)', warn: false, crit: false }));
+    }
+    const batLbl = document.getElementById('fd-battery-lbl');
+    if (batLbl) batLbl.textContent = sys.battery?.charging ? 'Battery — charging' : 'Battery';
+
+    const up = sys.uptime || 0;
+    gauge('fd-gauge-uptime', Viz.ring(up ? Math.min(100, (up / 86400) * 100) : 0, {
+      label: up ? (up >= 86400 ? 'OVER A DAY' : 'TODAY') : 'UNKNOWN',
+      labelText: up ? `${Math.floor(up / 3600)}h ${Math.floor((up % 3600) / 60)}m` : '--',
+      warn: false, crit: false
+    }));
+
+    const vaultCount = b.vaultCount;
+    gauge('fd-gauge-memory', Viz.ring(vaultCount != null ? Math.min(100, vaultCount) : 0, {
+      label: vaultCount ? 'STORED' : 'EMPTY',
+      labelText: vaultCount != null ? String(vaultCount) : '--',
+      warn: false, crit: false
+    }));
+
+    // System load strip under the gauges.
+    const setLoad = (id, pct, val) => {
+      const f = document.getElementById(id + '-fill');
+      const v = document.getElementById(id + '-val');
+      if (f) f.style.width = Math.min(100, Math.max(0, pct)) + '%';
+      if (v) v.textContent = val;
+    };
+    if (sys.cpu) setLoad('fd-cpu', sys.cpu.usage, Math.round(sys.cpu.usage) + '%');
+    if (sys.ram) setLoad('fd-ram', sys.ram.usage, Math.round(sys.ram.usage) + '%');
+    if (sys.disk) setLoad('fd-disk', sys.disk.usage, Math.round(sys.disk.usage) + '%');
+
+    // Keep the plain text nodes in sync for anything still reading them.
     const batteryEl = document.getElementById('fd-battery-val');
-    if (batteryEl) {
-      const lvl = sys.battery?.level ?? b.battery?.replace('%', '');
-      batteryEl.textContent = lvl != null && lvl !== '' ? `${Math.round(+lvl)}%` : '--';
-      const card = document.getElementById('fd-card-battery');
-      if (card && sys.battery) {
-        card.querySelector('.fd-card-icon i').className = `fa-solid ${sys.battery.charging ? 'fa-bolt' : 'fa-battery-three-quarters'}`;
-      }
-    }
-
+    if (batteryEl) batteryEl.textContent = batteryPct != null ? Math.round(batteryPct) + '%' : '--';
     const upEl = document.getElementById('fd-uptime-val');
-    if (upEl) {
-      const up = sys.uptime || 0;
-      upEl.textContent = up ? `${Math.floor(up / 3600)}h ${Math.floor((up % 3600) / 60)}m` : '--';
-    }
-
+    if (upEl) upEl.textContent = up ? `${Math.floor(up / 3600)}h ${Math.floor((up % 3600) / 60)}m` : '--';
     const memEl = document.getElementById('fd-memory-val');
-    if (memEl) memEl.textContent = b.vaultCount != null ? b.vaultCount : '--';
+    if (memEl) memEl.textContent = vaultCount != null ? vaultCount : '--';
   } catch(e) {}
 
   try {
@@ -4005,10 +4740,15 @@ async function refreshFridayCards() {
     if (valEl && d.tempC != null) {
       valEl.textContent = `${d.tempC}\u00b0`;
       if (lblEl) lblEl.textContent = `${d.condition || 'Weather'}${d.city ? ' \u00b7 ' + d.city : ''}`;
-      const icon = document.querySelector('#fd-card-weather .fd-card-icon i');
-      if (icon) {
-        const glyph = d.type === 'rain' ? 'fa-cloud-rain' : d.type === 'cloudy' ? 'fa-cloud-sun' : d.isDay ? 'fa-sun' : 'fa-moon';
-        icon.className = `fa-solid ${glyph}`;
+      // A temperature arc reads faster than a number, and the -20..50 window
+      // means 5 degrees and 35 degrees both sit recognisably off-centre.
+      const whost = document.getElementById('fd-gauge-weather');
+      if (whost) {
+        whost.innerHTML = Viz.arc(+d.tempC, {
+          min: -20, max: 50, size: 132,
+          labelText: Math.round(+d.tempC) + '\u00b0',
+          sub: d.city ? String(d.city).slice(0, 14) : ''
+        });
       }
     }
   } catch(e) {}
@@ -4200,6 +4940,132 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// Rolling load samples for the JARVIS/FRIDAY trend canvases. Kept at module
+// scope so the 4s poll extends the line instead of redrawing a single point.
+const loadHistory = { cpu: [], ram: [], disk: [] };
+const LOAD_HISTORY_MAX = 60;
+let jdTrend = null;
+let fdTrend = null;
+
+function pushLoadSample(d) {
+  const cpu = Viz.num(d.cpu && d.cpu.usage, 0);
+  const ram = Viz.num(d.ram && d.ram.usage, 0);
+  const disk = Viz.num(d.disk && d.disk.usage, 0);
+  loadHistory.cpu.push(cpu);
+  loadHistory.ram.push(ram);
+  loadHistory.disk.push(disk);
+  for (const k of ['cpu', 'ram', 'disk']) {
+    while (loadHistory[k].length > LOAD_HISTORY_MAX) loadHistory[k].shift();
+  }
+}
+
+// Multi-series trend plot. Viz only draws one series per canvas, and drawing
+// CPU/RAM/disk into three stacked sparklines would triple the vertical space
+// for a comparison the eye is better at making on one plot.
+function drawLoadTrend(canvasId, handleName) {
+  const cv = document.getElementById(canvasId);
+  if (!cv) return null;
+  const ctx = cv.getContext('2d');
+  if (!ctx) return null;
+  const W = cv.width, H = cv.height;
+  const pad = 6;
+  const usable = H - pad * 2;
+  const series = [
+    { key: 'cpu', color: '#00d4ff' },
+    { key: 'ram', color: '#a855f7' },
+    { key: 'disk', color: '#fbbf24' }
+  ];
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    // Horizontal guides at 25/50/75% so the lines have something to be read
+    // against; without them a trend is just a shape with no scale.
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    for (let g = 1; g < 4; g++) {
+      const y = pad + usable - (g / 4) * usable;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    }
+    const n = Math.max(loadHistory.cpu.length, loadHistory.ram.length, loadHistory.disk.length);
+    if (n < 2) {
+      ctx.fillStyle = 'rgba(255,255,255,0.28)';
+      ctx.font = '11px monospace';
+      ctx.fillText('collecting samples...', 8, H / 2);
+      return;
+    }
+    series.forEach(s => {
+      const vals = loadHistory[s.key];
+      if (vals.length < 2) return;
+      const step = W / (vals.length - 1);
+      ctx.beginPath();
+      vals.forEach((v, i) => {
+        const x = i * step;
+        const y = pad + usable - Viz.clamp(v / 100, 0, 1) * usable;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 1.8;
+      ctx.lineJoin = 'round';
+      ctx.shadowColor = s.color;
+      ctx.shadowBlur = 7;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      // Head dot marks "now" on each line.
+      const lx = (vals.length - 1) * step;
+      const ly = pad + usable - Viz.clamp(vals[vals.length - 1] / 100, 0, 1) * usable;
+      ctx.beginPath();
+      ctx.arc(lx - 2, ly, 2.6, 0, Math.PI * 2);
+      ctx.fillStyle = s.color;
+      ctx.fill();
+    });
+  }
+  draw();
+  return { draw: draw };
+}
+
+function jarvisStatusWord(cpu, ram, disk) {
+  const worst = Math.max(cpu, ram, disk);
+  if (worst >= 90) return { word: 'CRITICAL', color: '#ff5f56' };
+  if (worst >= 75) return { word: 'STRAINED', color: '#fbbf24' };
+  if (worst >= 50) return { word: 'NOMINAL', color: '#00d4ff' };
+  return { word: 'OPTIMAL', color: '#4ade80' };
+}
+
+function paintJarvisGauges(d) {
+  const host = document.getElementById('jd-gauges');
+  if (!host) return;
+  const cpu = Viz.num(d.cpu && d.cpu.usage, 0);
+  const ram = Viz.num(d.ram && d.ram.usage, 0);
+  const disk = Viz.num(d.disk && d.disk.usage, 0);
+  const bytes = Viz.num(d.net && d.net.bytes, 0);
+  const mbs = bytes / (1024 * 1024);
+  // Disk gets a higher warn threshold than CPU: a disk at 85% is a normal
+  // full-ish disk, whereas CPU at 85% is a machine that is struggling.
+  host.innerHTML =
+    Viz.ring(cpu, { label: 'CPU', sub: d.cpu && d.cpu.cores ? d.cpu.cores + 'C' : '', warn: 75, crit: 90 }) +
+    Viz.ring(ram, {
+      label: 'RAM',
+      sub: d.ram && d.ram.usedMB != null && d.ram.totalMB ? Math.round(d.ram.usedMB / 1024) + '/' + Math.round(d.ram.totalMB / 1024) + 'G' : '',
+      warn: 80, crit: 92
+    }) +
+    Viz.ring(disk, {
+      label: 'DISK',
+      sub: d.disk && d.disk.free ? d.disk.free + ' free' : '',
+      warn: false, crit: false
+    }) +
+    Viz.arc(mbs, { min: 0, max: 12, label: 'NET', labelText: mbs.toFixed(1), sub: 'MB/s' });
+
+  // Reflect the worst reading in the header badge so the state of the machine
+  // is visible without reading any of the four gauges.
+  const st = jarvisStatusWord(cpu, ram, disk);
+  const badge = document.getElementById('jd-status');
+  if (badge) {
+    badge.textContent = st.word;
+    badge.style.color = st.color;
+    badge.style.borderColor = st.color + '66';
+    badge.style.boxShadow = '0 0 18px ' + st.color + '44';
+  }
+}
+
 async function refreshJarvisTelemetry() {
   try {
     const res = await fetch('/api/system-status', { cache: 'no-store' });
@@ -4218,6 +5084,10 @@ async function refreshJarvisTelemetry() {
       const mbs = (bytes / (1024 * 1024)).toFixed(2);
       set('jd-net', Math.min(100, mbs * 8), mbs + ' MB/s');
     }
+    pushLoadSample(d);
+    paintJarvisGauges(d);
+    if (!jdTrend) jdTrend = drawLoadTrend('jd-trend-canvas', 'jd');
+    else jdTrend.draw();
   } catch(e) {}
 }
 
