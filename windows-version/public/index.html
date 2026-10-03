@@ -118,6 +118,19 @@
         <div class="jd-ops" id="jd-ops"></div>
 
         <div class="jd-section-label"><i class="fa-solid fa-gauge-high"></i> LIVE SYSTEMS</div>
+        <!-- Gauge row + trend line. The old layout was four thin bars whose
+             only information was "how full", with no history and no sense of
+             proportion between CPU, RAM and disk. -->
+        <div class="jd-gauges glass-soft" id="jd-gauges"></div>
+        <div class="jd-trend glass-soft">
+          <div class="jd-trend-h">
+            <span>LOAD TREND &mdash; last 60 samples</span>
+            <div class="jd-trend-keys">
+              <b class="k-cpu">CPU</b><b class="k-ram">RAM</b><b class="k-disk">DISK</b>
+            </div>
+          </div>
+          <canvas id="jd-trend-canvas" width="720" height="150"></canvas>
+        </div>
         <div class="jd-sys">
           <div class="jd-bar"><span>CPU</span><div class="jd-track"><div class="jd-fill" id="jd-cpu-fill"></div></div><b id="jd-cpu-val">--%</b></div>
           <div class="jd-bar"><span>RAM</span><div class="jd-track"><div class="jd-fill" id="jd-ram-fill"></div></div><b id="jd-ram-val">--%</b></div>
@@ -152,35 +165,53 @@
         <div class="fd-greet" id="fd-greet">What are we doing today, Boss?</div>
 
         <div class="fd-section-label"><i class="fa-solid fa-bolt"></i> QUICK LOOK</div>
-        <div class="fd-cards">
-          <div class="fd-card" id="fd-card-weather">
-            <div class="fd-card-icon"><i class="fa-solid fa-cloud-sun"></i></div>
-            <div class="fd-card-body">
-              <div class="fd-card-val" id="fd-weather-val">--</div>
-              <div class="fd-card-lbl" id="fd-weather-lbl">Weather</div>
-            </div>
+        <!-- Gauges instead of four flat numbers. Each card answers "how much of
+             what" rather than just restating a figure. -->
+        <div class="fd-gauges" id="fd-gauges">
+          <div class="fd-gauge glass-soft">
+            <div class="fd-gauge-slot" id="fd-gauge-weather"></div>
+            <div class="fd-gauge-lbl" id="fd-weather-lbl">Weather</div>
           </div>
-          <div class="fd-card" id="fd-card-memory">
-            <div class="fd-card-icon"><i class="fa-solid fa-database"></i></div>
-            <div class="fd-card-body">
-              <div class="fd-card-val" id="fd-memory-val">--</div>
-              <div class="fd-card-lbl">Memories</div>
-            </div>
+          <div class="fd-gauge glass-soft">
+            <div class="fd-gauge-slot" id="fd-gauge-memory"></div>
+            <div class="fd-gauge-lbl">Memories</div>
           </div>
-          <div class="fd-card" id="fd-card-uptime">
-            <div class="fd-card-icon"><i class="fa-solid fa-clock"></i></div>
-            <div class="fd-card-body">
-              <div class="fd-card-val" id="fd-uptime-val">--</div>
-              <div class="fd-card-lbl">Uptime</div>
-            </div>
+          <div class="fd-gauge glass-soft">
+            <div class="fd-gauge-slot" id="fd-gauge-uptime"></div>
+            <div class="fd-gauge-lbl">Uptime</div>
           </div>
-          <div class="fd-card" id="fd-card-battery">
-            <div class="fd-card-icon"><i class="fa-solid fa-battery-three-quarters"></i></div>
-            <div class="fd-card-body">
-              <div class="fd-card-val" id="fd-battery-val">--</div>
-              <div class="fd-card-lbl">Battery</div>
-            </div>
+          <div class="fd-gauge glass-soft">
+            <div class="fd-gauge-slot" id="fd-gauge-battery"></div>
+            <div class="fd-gauge-lbl" id="fd-battery-lbl">Battery</div>
           </div>
+        </div>
+        <!-- Kept as text nodes so the existing refresh code and any assistive
+             tech still get a plain readable value, hidden from sight. -->
+        <div class="sr-only" aria-live="polite">
+          <span id="fd-weather-val">--</span>
+          <span id="fd-memory-val">--</span>
+          <span id="fd-uptime-val">--</span>
+          <span id="fd-battery-val">--</span>
+        </div>
+
+        <div class="fd-section-label"><i class="fa-solid fa-wave-square"></i> SYSTEM AT A GLANCE</div>
+        <div class="fd-load glass-soft">
+          <div class="fd-load-row">
+            <span>CPU</span>
+            <div class="fd-load-track"><div class="fd-load-fill" id="fd-cpu-fill"></div></div>
+            <b id="fd-cpu-val">--%</b>
+          </div>
+          <div class="fd-load-row">
+            <span>RAM</span>
+            <div class="fd-load-track"><div class="fd-load-fill" id="fd-ram-fill"></div></div>
+            <b id="fd-ram-val">--%</b>
+          </div>
+          <div class="fd-load-row">
+            <span>DISK</span>
+            <div class="fd-load-track"><div class="fd-load-fill" id="fd-disk-fill"></div></div>
+            <b id="fd-disk-val">--%</b>
+          </div>
+          <canvas id="fd-trend-canvas" width="640" height="90"></canvas>
         </div>
 
         <div class="fd-section-label"><i class="fa-solid fa-sliders"></i> ONE-TOUCH CONTROLS</div>
