@@ -2636,3 +2636,470 @@ body.mode-friday textarea:focus-visible {
   }
 }
 
+/* =====================================================================
+   VIZ KIT
+   Styling for the shared readouts in viz.js. Everything takes its colour
+   from --accent-rgb, so switching persona restyles every gauge, bar and
+   meter on screen at once without re-rendering anything.
+   ===================================================================== */
+
+/* ---- Panel hero: the strip of dials every panel opens with ---- */
+.viz-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius:16px;
+  padding:16px 14px 14px;
+  margin-bottom:14px;
+  text-align:center;
+  border:1px solid var(--accent-edge, rgba(139,104,255,0.25)) !important;
+  background:linear-gradient(165deg, rgba(var(--accent-rgb, 109,139,255), 0.13), rgba(255,255,255,0.02)) !important;
+  backdrop-filter:var(--glass-blur-sm);
+  -webkit-backdrop-filter:var(--glass-blur-sm);
+  box-shadow:var(--glass-shadow-sm), var(--glass-inset);
+}
+.viz-hero::before {
+  content:''; position:absolute; inset:0; border-radius:inherit;
+  background:var(--glass-sheen); opacity:0.55; pointer-events:none; mix-blend-mode:screen;
+}
+.viz-hero-rings {
+  position:relative; z-index:1;
+  display:flex; flex-wrap:wrap; align-items:flex-start;
+  justify-content:center; gap:14px;
+}
+.viz-hero-title {
+  position:relative; z-index:1;
+  font-family:var(--orbitron); font-size:11px; font-weight:800;
+  letter-spacing:2.5px; text-transform:uppercase;
+  color:var(--accent, var(--gold)); margin-top:12px;
+  text-shadow:0 0 14px rgba(var(--accent-rgb, 109,139,255), 0.5);
+}
+.viz-hero-sub {
+  position:relative; z-index:1;
+  font-family:var(--mono); font-size:9px; letter-spacing:1px;
+  color:rgba(255,255,255,0.45); margin-top:5px;
+}
+
+/* ---- Ring gauge ---- */
+.viz-ring { position:relative; width:var(--viz-size,96px); height:var(--viz-size,96px); flex:0 0 auto; }
+.viz-ring svg { display:block; width:100%; height:100%; overflow:visible; }
+.viz-ring-core {
+  position:absolute; inset:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  pointer-events:none;
+}
+.viz-ring-val {
+  font-family:var(--orbitron); font-weight:800;
+  font-size:calc(var(--viz-size,96px) * 0.21);
+  line-height:1; color:#fff;
+  text-shadow:0 0 16px rgba(var(--accent-rgb, 109,139,255), 0.55), 0 1px 3px rgba(0,0,0,0.9);
+}
+.viz-ring-sub {
+  font-family:var(--mono); font-size:8px; letter-spacing:0.5px;
+  color:rgba(255,255,255,0.5); margin-top:3px;
+}
+.viz-ring-lbl {
+  position:absolute; left:50%; bottom:-15px; transform:translateX(-50%);
+  font-family:var(--mono); font-size:8px; font-weight:700;
+  letter-spacing:1.5px; text-transform:uppercase; white-space:nowrap;
+  color:rgba(255,255,255,0.55);
+}
+/* Reserve room for the label that hangs below the dial. */
+.viz-hero-rings .viz-ring { margin-bottom:16px; }
+
+/* ---- Arc gauge ---- */
+.viz-arc { position:relative; width:var(--viz-size,150px); height:var(--viz-size,150px); }
+.viz-arc svg { display:block; width:100%; height:100%; overflow:visible; }
+.viz-arc-core {
+  position:absolute; inset:0; display:flex;
+  flex-direction:column; align-items:center; justify-content:center;
+  /* Nudge up: the sweep's gap is at the bottom, so dead-centre looks low. */
+  transform:translateY(-6%);
+  pointer-events:none;
+}
+.viz-arc-val {
+  font-family:var(--orbitron); font-weight:900;
+  font-size:calc(var(--viz-size,150px) * 0.24); line-height:1; color:#fff;
+  text-shadow:0 0 20px rgba(var(--accent-rgb, 109,139,255), 0.6), 0 2px 4px rgba(0,0,0,0.9);
+}
+.viz-arc-sub {
+  font-family:var(--mono); font-size:9px; letter-spacing:1.5px;
+  text-transform:uppercase; color:rgba(255,255,255,0.55); margin-top:4px;
+}
+
+/* ---- Horizontal bar ---- */
+.viz-bar-row {
+  display:grid; grid-template-columns:minmax(56px,auto) 1fr auto;
+  align-items:center; gap:9px; padding:5px 0;
+}
+.viz-bar-lbl {
+  font-family:var(--mono); font-size:8px; font-weight:700;
+  letter-spacing:1px; text-transform:uppercase;
+  color:rgba(255,255,255,0.55); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis;
+}
+.viz-bar-track {
+  position:relative; height:7px; border-radius:4px;
+  background:rgba(255,255,255,0.06);
+  border:1px solid rgba(255,255,255,0.08);
+  box-shadow:inset 0 1px 3px rgba(0,0,0,0.5);
+  overflow:hidden;
+}
+.viz-bar-fill {
+  position:absolute; left:0; top:0; bottom:0; border-radius:4px;
+  transition:width 0.5s cubic-bezier(0.16,1,0.3,1);
+}
+.viz-bar-marker {
+  position:absolute; top:-2px; bottom:-2px; width:2px;
+  background:rgba(255,255,255,0.55);
+  box-shadow:0 0 6px rgba(255,255,255,0.5);
+}
+.viz-bar-val {
+  font-family:var(--mono); font-size:10px; font-weight:700;
+  color:#fff; min-width:44px; text-align:right;
+  text-shadow:0 1px 3px rgba(0,0,0,0.9);
+}
+
+/* ---- 100% stacked bar ---- */
+.viz-stack {
+  display:flex; height:14px; border-radius:7px; overflow:hidden;
+  background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.09);
+  box-shadow:inset 0 1px 3px rgba(0,0,0,0.5);
+}
+.viz-stack-seg {
+  display:block; height:100%;
+  transition:width 0.5s cubic-bezier(0.16,1,0.3,1);
+  /* Hairline separators so adjacent segments stay distinguishable even when
+     their colours are close. */
+  box-shadow:inset -1px 0 0 rgba(0,0,0,0.45);
+}
+.viz-legend {
+  display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:9px;
+}
+.viz-legend-item {
+  display:inline-flex; align-items:center; gap:5px;
+  font-family:var(--mono); font-size:8px; letter-spacing:0.5px;
+  color:rgba(255,255,255,0.6);
+}
+.viz-legend-item i {
+  width:8px; height:8px; border-radius:2px; flex:0 0 auto;
+  box-shadow:0 0 7px currentColor;
+}
+.viz-legend-item b { color:#fff; font-weight:700; }
+.viz-stack-empty {
+  font-family:var(--mono); font-size:9px; color:rgba(255,255,255,0.32);
+  padding:12px 0; text-align:center;
+}
+
+/* ---- Sparkline ---- */
+.viz-spark {
+  width:100%; height:46px; display:block; border-radius:8px;
+  background:linear-gradient(180deg, rgba(255,255,255,0.035), rgba(0,0,0,0.18));
+  border:1px solid rgba(255,255,255,0.07);
+}
+.viz-spark-wrap { margin:6px 0 10px; }
+.viz-spark-cap {
+  display:flex; justify-content:space-between; align-items:baseline;
+  font-family:var(--mono); font-size:8px; letter-spacing:1px;
+  color:rgba(255,255,255,0.45); margin-bottom:4px; text-transform:uppercase;
+}
+.viz-spark-cap b { color:#fff; font-size:11px; }
+
+/* ---- Equaliser ---- */
+.viz-eq {
+  display:flex; align-items:flex-end; gap:3px;
+  height:34px; padding:0 2px;
+}
+.viz-eq i {
+  flex:1 1 0; min-width:2px; height:30%;
+  border-radius:2px;
+  background:linear-gradient(180deg, var(--accent, #6d8bff), rgba(var(--accent-rgb, 109,139,255), 0.35));
+  box-shadow:0 0 8px rgba(var(--accent-rgb, 109,139,255), 0.45);
+  transition:height 0.09s linear;
+}
+
+/* ---- Range band ---- */
+.viz-range {
+  display:grid; grid-template-columns:auto 1fr auto;
+  align-items:center; gap:8px; padding:4px 0;
+}
+.viz-range-lo, .viz-range-hi {
+  font-family:var(--mono); font-size:9px; color:rgba(255,255,255,0.5);
+  min-width:30px;
+}
+.viz-range-hi { text-align:right; }
+.viz-range-track {
+  position:relative; height:6px; border-radius:3px;
+  background:rgba(255,255,255,0.06);
+  border:1px solid rgba(255,255,255,0.08);
+}
+/* The band is drawn from the day's own minimum to its maximum, so the knob's
+   position inside it is directly comparable day to day. */
+.viz-range-band { position:absolute; top:0; bottom:0; border-radius:3px; }
+.viz-range-knob {
+  position:absolute; top:50%; width:9px; height:9px; border-radius:50%;
+  transform:translate(-50%,-50%);
+  border:1.5px solid rgba(255,255,255,0.85);
+}
+
+/* ---- Decorative waveform ---- */
+.viz-wave {
+  display:flex; align-items:center; justify-content:center;
+  gap:3px; height:40px; margin:6px 0 10px;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);
+  mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);
+}
+.viz-wave i {
+  display:block; flex:1 1 0; max-width:5px; border-radius:3px;
+  background:linear-gradient(180deg, var(--accent, #6d8bff), rgba(var(--accent-rgb, 109,139,255), 0.3));
+  opacity:0.55;
+  animation:viz-wave-pulse 1.6s ease-in-out infinite;
+}
+@keyframes viz-wave-pulse { 0%,100% { transform:scaleY(0.55); } 50% { transform:scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .viz-wave i { animation:none; } }
+
+/* ---- Section wrapper ---- */
+.viz-section { margin-bottom:14px; }
+.viz-section-h {
+  display:flex; align-items:center; gap:7px;
+  font-family:var(--mono); font-size:9px; font-weight:700;
+  letter-spacing:1.5px; text-transform:uppercase;
+  color:var(--accent, var(--gold));
+  margin-bottom:8px; padding-bottom:5px;
+  border-bottom:1px solid var(--accent-edge, rgba(139,104,255,0.22));
+}
+.viz-section-h i { font-size:10px; }
+.viz-section-b { position:relative; }
+
+/* ---- Status pip: a tiny live dot for "connected / working" rows ---- */
+.viz-pip {
+  display:inline-block; width:7px; height:7px; border-radius:50%;
+  background:var(--accent, #6d8bff);
+  box-shadow:0 0 9px var(--accent, #6d8bff);
+  animation:viz-pip 1.9s ease-in-out infinite;
+}
+.viz-pip.warn { background:#fbbf24; box-shadow:0 0 9px #fbbf24; }
+.viz-pip.bad { background:#ff5f56; box-shadow:0 0 9px #ff5f56; }
+.viz-pip.off { background:rgba(255,255,255,0.25); box-shadow:none; animation:none; }
+@keyframes viz-pip { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
+@media (prefers-reduced-motion: reduce) { .viz-pip { animation:none; } }
+
+/* ---- Heat strip: per-row intensity, for lists of many similar things ---- */
+.viz-heat {
+  display:block; height:4px; border-radius:2px; margin-top:4px;
+  background:rgba(255,255,255,0.05); overflow:hidden;
+}
+.viz-heat i {
+  display:block; height:100%; border-radius:2px;
+  transition:width 0.4s ease;
+}
+
+/* ---- No-blur / reduced-transparency fallbacks for the new widgets ---- */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .viz-hero { background:rgba(14,18,30,0.94) !important; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .viz-hero {
+    backdrop-filter:none !important; -webkit-backdrop-filter:none !important;
+    background:rgba(14,18,30,0.96) !important;
+  }
+}
+
+/* =======================================================================
+   DASHBOARD TELEMETRY ΓÇö JARVIS gauges + trend, FRIDAY gauges + load strip
+
+   Both dashboards previously showed either a bare number or a 6px-tall bar.
+   These rules give the new ring/arc/canvas readouts a surface that matches the
+   glass system instead of sitting on it as an opaque box, and keep them
+   legible when the left rail is narrow.
+   ===================================================================== */
+
+/* Visually hidden but still announced. Backs the plain-text values behind the
+   FRIDAY gauges so the numbers survive for screen readers and for any script
+   still reading the old element ids. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- JARVIS ---- */
+.jd-gauges {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-around;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 14px 12px 10px;
+  margin-bottom: 10px;
+  border-radius: 14px;
+  position: relative;
+  overflow: hidden;
+}
+/* Accent rim along the top edge: makes the gauge tray read as one lit slab
+   rather than four dials floating on a background. */
+.jd-gauges::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 12%; right: 12%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent, #00d4ff), transparent);
+  opacity: 0.75;
+}
+.jd-gauges .viz-ring,
+.jd-gauges .viz-arc { margin-bottom: 18px; }
+
+.jd-trend {
+  border-radius: 14px;
+  padding: 10px 12px 8px;
+  margin-bottom: 10px;
+  position: relative;
+  overflow: hidden;
+}
+.jd-trend-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 1.2px;
+  color: var(--txt3);
+  margin-bottom: 6px;
+}
+.jd-trend-keys { display: flex; gap: 10px; }
+.jd-trend-keys b { font-weight: 700; font-size: 8px; }
+/* Legend colours must match the series colours in drawLoadTrend exactly,
+   otherwise the key lies about which line is which. */
+.jd-trend-keys .k-cpu  { color: #00d4ff; }
+.jd-trend-keys .k-ram  { color: #a855f7; }
+.jd-trend-keys .k-disk { color: #fbbf24; }
+#jd-trend-canvas {
+  display: block;
+  width: 100%;
+  height: 75px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+/* ---- FRIDAY ---- */
+.fd-gauges {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+/* Two-up on a narrow rail: 4-across squeezed the ring labels into unreadable
+   ellipses below roughly 300px of column width. */
+@media (max-width: 900px) {
+  .fd-gauges { grid-template-columns: repeat(2, 1fr); }
+}
+.fd-gauge {
+  border-radius: 14px;
+  padding: 12px 6px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  position: relative;
+  overflow: hidden;
+}
+.fd-gauge::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 20%; right: 20%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent, #a855f7), transparent);
+  opacity: 0.7;
+}
+.fd-gauge-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 92px;
+}
+.fd-gauge-lbl {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--txt3);
+  text-align: center;
+  margin-top: 6px;
+  max-width: 100%;
+  /* Long city names were pushing the label wider than its own card. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fd-load {
+  border-radius: 14px;
+  padding: 12px 12px 8px;
+  margin-bottom: 12px;
+  position: relative;
+  overflow: hidden;
+}
+.fd-load-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--txt2);
+}
+.fd-load-row > span { width: 34px; flex: 0 0 auto; letter-spacing: 1px; }
+.fd-load-track {
+  flex: 1 1 auto;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+  min-width: 0;
+}
+.fd-load-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 3px;
+  background: linear-gradient(90deg, rgba(var(--accent-rgb, 168, 85, 247), 0.55), var(--accent, #a855f7));
+  box-shadow: 0 0 10px rgba(var(--accent-rgb, 168, 85, 247), 0.55);
+  transition: width 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.fd-load-row b {
+  width: 40px;
+  flex: 0 0 auto;
+  text-align: right;
+  color: var(--txt);
+  font-weight: 600;
+}
+#fd-trend-canvas {
+  display: block;
+  width: 100%;
+  height: 45px;
+  margin-top: 4px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+/* No-blur / reduced-transparency: swap the new translucent surfaces for opaque
+   ones so the telemetry stays readable instead of grey-on-grey. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .jd-gauges, .jd-trend, .fd-gauge, .fd-load {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(14, 18, 30, 0.96) !important;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .jd-gauges, .jd-trend, .fd-gauge, .fd-load {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(14, 18, 30, 0.96) !important;
+  }
+}
+
