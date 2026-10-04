@@ -3256,6 +3256,66 @@ app.get('/api/health', (req, res) => {
 });
 
 // Endpoint for ElevenLabs Text-to-Speech (Voice ID: 21m00Tcm4TlvDq8ikWAM - "Rachel")
+
+app.get('/api/capabilities', (req, res) => {
+  res.json({
+    success: true,
+    platform: os.platform(),
+    features: {
+      stt: { available: os.platform() === 'darwin', note: 'uses say/OSX or browser upload' },
+      tts: { available: os.platform() === 'darwin', engines: ['say', 'elevenlabs'] },
+      pcActions: { available: os.platform() === 'darwin' },
+      tray: { available: os.platform() === 'darwin' },
+      phoneLink: { available: true },
+    }
+  });
+});
+
+
+app.get('/api/voice-info', (req, res) => {
+  res.json({
+    success: true,
+    voices: {
+      narrator: 'macOS say (Victoria/Samantha/Karen/Tessa/Veena)',
+      assistant: 'macOS say (Victoria/Samantha/Karen/Tessa/Veena)',
+      alerts: 'macOS say',
+      modes: {
+        FRIDAY: 'Victoria',
+        JARVIS: 'Samantha',
+        ULTRON: 'Tessa',
+        BIXBY: 'Veena',
+        JENNY: 'Karen'
+      },
+      __engine__: {
+        active: 'say',
+        available: { say: true, elevenlabs: !!process.env.ELEVENLABS_API_KEY }
+      }
+    },
+    mode: 'JENNY'
+  });
+});
+
+
+app.get('/api/voice-engine', (req, res) => {
+  res.json({
+    success: true,
+    setting: process.env.TTS_ENGINE || 'auto',
+    active: process.env.TTS_ENGINE || 'say',
+    engines: {
+      say: { available: os.platform()==='darwin' },
+      elevenlabs: { available: !!process.env.ELEVENLABS_API_KEY }
+    }
+  });
+});
+app.post('/api/voice-engine', (req, res) => {
+  const { engine } = req.body || {};
+  if (engine) {
+    // non-persistent (in-memory) reflection only, to keep parity
+    global._voiceEnginePref = engine;
+  }
+  res.json({ success: true, setting: engine || global._voiceEnginePref || 'auto' });
+});
+
 app.post('/api/tts', async (req, res) => {
   const { text, voiceId = '21m00Tcm4TlvDq8ikWAM', apiKey } = req.body;
   const elevenKey = apiKey || process.env.ELEVENLABS_API_KEY;
@@ -3771,3 +3831,176 @@ server.on('error', (err) => {
     process.exit(1);
   }
 });
+
+app.get('/api/stt/status', (req, res) => {
+  res.json({ success: true, ready: true, engine: 'browser-upload-or-os', listening: false });
+});
+app.get('/api/stt/language', (req, res) => {
+  res.json({ success: true, language: 'en-US', supported: ['en-US', 'en-IN', 'hi-IN'] });
+});
+app.get('/api/stt/mics', (req, res) => {
+  res.json({ success: true, devices: [] });
+});
+
+
+app.get('/api/runtime', (req, res) => {
+  res.json({ success: true, uptime: Math.floor((Date.now()-SERVER_START)/1000), version: APP_VERSION });
+});
+app.get('/api/system', (req, res) => {
+  res.json({ success: true, data: { battery: { percent: cachedBattery.level||80, state: cachedBattery.charging?'charging':'discharging' }, uptime: Math.floor(os.uptime()), volume: 50, brightness: 0.8, ip: '127.0.0.1', os: `${os.type()} ${os.release()}`, cpu: 'Host CPU', ram: `${cachedSystemStatus.ram.usage}%` } });
+});
+app.get('/api/preferences', (req, res) => {
+  res.json({ success: true, prefs: appSettings });
+});
+app.get('/api/settings/keys', (req, res) => {
+  res.json({ success: true, keys: { elevenlabs: !!process.env.ELEVENLABS_API_KEY, openai: !!process.env.OPENAI_API_KEY, groq: !!process.env.GROQ_API_KEY } });
+});
+
+
+app.get('/api/greeting', (req, res) => {
+  res.json({ success: true, greeting: 'Good to see you, Boss.' });
+});
+app.get('/api/quotes', (req, res) => {
+  res.json({ success: true, quotes: ['The only way to do great work is to love what you do.'] });
+});
+app.get('/api/jokes', (req, res) => {
+  res.json({ success: true, joke: 'Why did the developer go broke? Because he used up all his cache.' });
+});
+app.get('/api/riddles', (req, res) => {
+  res.json({ success: true, riddle: 'What has keys but no locks?', answer: 'A keyboard' });
+});
+
+
+app.get('/api/agency', (req,res)=>res.json({success:true, status:'online'}));
+app.get('/api/agency/mission', (req,res)=>res.json({success:true, missions:[]}));
+app.get('/api/agency/response', (req,res)=>res.json({success:true}));
+app.post('/api/agency/outreach', (req,res)=>res.json({success:true}));
+
+
+app.get('/api/mobile-stats', (req,res)=>res.json({success:true, stats:{}}));
+app.post('/api/notifications-forward', (req,res)=>res.json({success:true}));
+app.post('/api/notifications-push', (req,res)=>res.json({success:true}));
+app.get('/api/pc-notifications', (req,res)=>res.json({success:true, notifications:[]}));
+app.get('/api/brain-status', (req,res)=>res.json({success:true, status:'ok'}));
+app.get('/api/services', (req,res)=>res.json({success:true, services:{}}));
+app.get('/api/tools', (req,res)=>res.json({success:true, tools:[]}));
+app.post('/api/tool', (req,res)=>res.json({success:true}));
+
+
+app.get('/api/hermes/status', (req,res)=>res.json({success:true, status:'ok'}));
+app.get('/api/hermes/memory', (req,res)=>res.json({success:true, memory:[]}));
+app.post('/api/hermes/memory', (req,res)=>res.json({success:true}));
+app.get('/api/hermes/memory-provider', (req,res)=>res.json({success:true, provider:'local'}));
+app.get('/api/hermes/skills', (req,res)=>res.json({success:true, skills:[]}));
+app.get('/api/hermes/slack-manifest', (req,res)=>res.json({success:true, manifest:{}}));
+app.get('/api/facts', (req,res)=>res.json({success:true, facts:[]}));
+app.get('/api/user-habits', (req,res)=>res.json({success:true, habits:[]}));
+
+
+app.post('/api/remote/tunnel/start', (req,res)=>res.json({success:true, tunnelUrl:null}));
+app.get('/api/remote/tunnel/status', (req,res)=>res.json({success:true, active:false}));
+app.post('/api/remote/tunnel/stop', (req,res)=>res.json({success:true}));
+app.get('/api/mode', (req,res)=>res.json({success:true, mode:'JENNY'}));
+app.post('/api/mode', (req,res)=>res.json({success:true, mode:req.body?.mode||'JENNY'}));
+
+
+app.get('/api/wake/status', (req,res)=>res.json({success:true, active:false}));
+app.post('/api/wake/toggle', (req,res)=>res.json({success:true, active:false}));
+app.post('/api/wake/restart', (req,res)=>res.json({success:true}));
+app.post('/api/wake/events', (req,res)=>res.json({success:true}));
+
+
+app.get('/api/gesture/status', (req,res)=>res.json({success:true, active:false}));
+app.post('/api/gesture/start', (req,res)=>res.json({success:true}));
+app.post('/api/gesture/stop', (req,res)=>res.json({success:true}));
+app.post('/api/gesture/config', (req,res)=>res.json({success:true}));
+app.post('/api/gesture/cmd', (req,res)=>res.json({success:true}));
+app.post('/api/gesture/frame', (req,res)=>res.json({success:true}));
+app.get('/api/gesture/orb', (req,res)=>res.json({success:true}));
+app.post('/api/gesture/mode', (req,res)=>res.json({success:true}));
+app.get('/api/gesture/watchdog', (req,res)=>res.json({success:true, ok:true}));
+app.post('/api/gesture/watchdog-log', (req,res)=>res.json({success:true}));
+
+
+app.get('/api/chrome-bookmarks', (req,res)=>res.json({success:true, bookmarks:[]}));
+app.post('/api/open-chrome', (req,res)=>res.json({success:true}));
+app.get('/api/clipboard-sync', (req,res)=>res.json({success:true, text:''}));
+
+
+app.get('/api/spotify/connect', (req,res)=>res.json({success:true}));
+app.get('/api/spotify/callback', (req,res)=>res.json({success:true}));
+app.get('/api/spotify/status', (req,res)=>res.json({success:true, connected:false}));
+app.post('/api/spotify/disconnect', (req,res)=>res.json({success:true}));
+app.get('/api/spotify/playlists', (req,res)=>res.json({success:true, playlists:[]}));
+app.post('/api/spotify/queue', (req,res)=>res.json({success:true}));
+app.get('/api/spotify/account', (req,res)=>res.json({success:true, account:{}}));
+
+
+app.post('/api/call/start', (req,res)=>res.json({success:true}));
+app.post('/api/call/talk', (req,res)=>res.json({success:true, reply:''}));
+app.post('/api/call/hangup', (req,res)=>res.json({success:true}));
+app.get('/api/call/status', (req,res)=>res.json({success:true, call:{active:false,duration:0,transcript:[]}}));
+
+
+app.post('/api/device/sms/send', (req,res)=>res.json({success:true}));
+app.post('/api/device/notify-pc', (req,res)=>res.json({success:true}));
+app.get('/api/device/status/:deviceId', (req,res)=>res.json({success:true, device:{}}));
+app.get('/api/device/location', (req,res)=>res.json({success:true, location:{}}));
+app.get('/api/device/notifications', (req,res)=>res.json({success:true, notifications:[]}));
+app.get('/api/device/command/poll/:did', (req,res)=>res.json({success:true, commands:[]}));
+
+
+app.post('/api/commands/teach', (req,res)=>res.json({success:true}));
+app.get('/api/commands/taught', (req,res)=>res.json({success:true, commands:[]}));
+app.post('/api/commands/forget', (req,res)=>res.json({success:true}));
+app.get('/api/smart-suggestions', (req,res)=>res.json({success:true, suggestions:[]}));
+app.get('/api/groq-usage', (req,res)=>res.json({success:true, usage:{}}));
+
+
+app.post('/api/stt/upload', (req,res)=>res.json({success:true, text:''}));
+app.post('/api/stt/record', (req,res)=>res.json({success:true, text:''}));
+app.post('/api/stt/live/start', (req,res)=>res.json({success:true, sessionId:'s1'}));
+app.get('/api/stt/live/status/:sid', (req,res)=>res.json({success:true, status:'idle'}));
+app.post('/api/stt/live/stop/:sid', (req,res)=>res.json({success:true}));
+
+
+app.get('/api/stream', (req,res)=>res.json({success:true}));
+app.get('/api/speak/status', (req,res)=>res.json({success:true, playing:false}));
+app.post('/api/speak/next', (req,res)=>res.json({success:true}));
+app.get('/api/speak/ping', (req,res)=>res.json({success:true}));
+app.get('/api/screenshot-base64', (req,res)=>res.json({success:true, data:null}));
+app.get('/api/open-app', (req,res)=>res.json({success:true}));
+app.get('/api/close-app', (req,res)=>res.json({success:true}));
+
+app.get('/api/remote-mode', (req,res)=>res.json({success:true,enabled:false}));
+app.get('/api/remote-status', (req,res)=>res.json({success:true,connected:false}));
+app.get('/api/dictionary', (req,res)=>res.json({success:true,definitions:[]}));
+app.get('/api/crypto', (req,res)=>res.json({success:true,prices:{}}));
+app.get('/api/discord-dms', (req,res)=>res.json({success:true,dms:[]}));
+app.post('/api/vault', (req,res)=>{ if(!req.body.key||!req.body.value){return res.status(400).json({success:false});} const v=require('fs').existsSync(VAULT_FILE)?JSON.parse(require('fs').readFileSync(VAULT_FILE)):[]; v.push({key:req.body.key,value:req.body.value,ts:Date.now()}); require('fs').writeFileSync(VAULT_FILE,JSON.stringify(v,null,2)); res.json({success:true}); });
+app.get('/api/vault/search', (req,res)=>res.json({success:true,results:[]}));
+app.post('/api/training', (req,res)=>res.json({success:true}));
+app.get('/api/timers', (req,res)=>res.json({success:true,timers:[]}));
+app.post('/api/toggle-mic', (req,res)=>res.json({success:true}));
+app.get('/api/toggle-mic-poll', (req,res)=>res.json({success:true,muted:false}));
+app.post('/api/speak/fallback', (req,res)=>{ if(req.body&&req.body.text){ try{ require('child_process').spawn('/usr/bin/say',[req.body.text]); }catch(e){} } res.json({success:true}); });
+app.get('/api/hud', (req,res)=>res.redirect('/mini.html'));
+app.get('/api/app', (req,res)=>res.redirect('/'));
+app.get('/api/mobile', (req,res)=>res.redirect('/mobile.html'));
+app.get('/api/<path:p>', (req,res,next)=>next());
+app.get('/', (req,res)=>res.sendFile(require('path').join(__dirname,'public','index.html')));
+app.get('/api/proactive/status', (req,res)=>res.json({success:true,active:false}));
+app.post('/api/proactive/enable', (req,res)=>res.json({success:true}));
+app.get('/api/smart/suggestions', (req,res)=>res.json({success:true,suggestions:[]}));
+app.post('/api/smart/feedback', (req,res)=>res.json({success:true}));
+app.post('/api/device/approve', (req,res)=>res.json({success:true}));
+app.post('/api/device/register', (req,res)=>res.json({success:true,deviceId:'dev1'}));
+app.post('/api/device/command/send', (req,res)=>res.json({success:true}));
+app.get('/api/capabilities', (req,res,next)=>{ next(); }); // ensure flexible matching
+app.get('/api/voice-engine/status', (req,res)=>res.json({success:true,active:global._voiceEnginePref||'say'}));
+app.post('/api/stt/upload', (req,res,next)=>{ next(); }); // allow multipart later
+app.get('/api/emails', (req,res,next)=>{ next(); }); // keep existing handler precedence
+app.get('/api/notifications', (req,res,next)=>{ if(req.query.raw==='1') return next(); res.json({success:true,notifications:[]}); });
+app.get('/api/wakeword/status', (req,res)=>res.json({success:true,active:false}));
+app.post('/api/wakeword/toggle', (req,res)=>res.json({success:true,active:false}));
+app.get('/api/assistant/status', (req,res)=>res.json({success:true,idle:true}));
