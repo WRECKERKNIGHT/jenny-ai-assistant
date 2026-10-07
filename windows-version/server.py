@@ -636,6 +636,22 @@ def set_mode(mode):
         save_json(DATA_DIR / "mode.json", mode)
     return mode
 
+
+def mode_style_rules(mode):
+    """Extra tone rules layered on top of MODE_PROFILES['personality'] so
+    FRIDAY never drifts into stiff assistant-speak while JARVIS stays formal."""
+    if mode == "friday":
+        return ("Tone: talk like a close friend texting you back - contractions "
+                "always, 1-3 short sentences, zero corporate padding. Never say "
+                "'Sir', 'Certainly', 'Very well', 'As you wish', 'How may I "
+                "assist you' or any other formal assistant line. Light humor or "
+                "one quick follow-up question is welcome. No bullet lists, no "
+                "headers, no essays unless asked for.")
+    if mode == "jarvis":
+        return ("Tone: polished and formal - address the user as 'Sir', complete "
+                "sentences, measured and precise, never slang.")
+    return ("Tone: clipped and tactical - zero fluff, no small talk.")
+
 def get_gemini_key():
     k = os.environ.get("GEMINI_API_KEY", "")
     if k: return k
@@ -697,6 +713,7 @@ def gemini_chat(message, history=None):
         vault_data = load_json(DATA_DIR / "vault.json", {"entries": []})
         vault_text = "\n".join(e.get("text","") for e in vault_data.get("entries", [])[-5:])
         prompt = f"You are {mp['name']}, AI assistant for {OWNER} (referred to as '{mp['boss']}'). Mode: {mode}. Personality: {mp['personality']}. Clock: {now}. Vault: {vault_text}. Reply naturally. Return JSON: {{\"text\": \"response\", \"speech\": \"tts version\", \"command\": {{\"action\": \"...\", \"value\": \"...\"}}}} where command is OPTIONAL (only add it for a PC/system/app action). {EXECUTOR_CATALOG}"
+        prompt += " " + mode_style_rules(mode)
         pref = _preferences_context()
         if pref:
             prompt += f" {pref} Acknowledge and honor these where natural — auto-suggest them when relevant, without reciting the list."
@@ -762,6 +779,7 @@ def grok_chat(message, history=None):
             f"You may ALSO include an optional \"command\" key ONLY when the user wants a PC/system/app action taken. "
             f"To emit a command, use this catalog (exact action names only): {EXECUTOR_CATALOG} "
             f"Do not wrap the JSON in markdown code fences — return raw JSON only."
+            f" {mode_style_rules(mode)}"
         )
         mem = _conversation_memory()
         if mem.get("topics"):
@@ -846,6 +864,7 @@ def ollama_chat(message, history=None):
             f"Reply naturally and helpfully. "
             f"You MUST return valid JSON with keys \"text\" (the response) and \"speech\" (a TTS-friendly version without markdown). "
             f"Return raw JSON only, no markdown fences."
+            f" {mode_style_rules(mode)}"
         )
         messages = [{"role": "system", "content": system_msg}]
         if history:
