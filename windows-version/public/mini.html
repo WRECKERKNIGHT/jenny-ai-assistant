@@ -731,6 +731,65 @@
       .hud-outer-frame::after { display: none; }
       .live-dot { animation: none; }
     }
+
+    /* SCREEN VISION PANE — "talk about my screen" */
+    .hud-btn-active, .hdr-btn.hud-btn-active {
+      border-color: var(--cyan) !important;
+      color: #fff !important;
+      box-shadow: 0 0 12px var(--cyan-glow);
+      background: rgba(109, 139, 255, 0.16);
+    }
+    .hud-vision {
+      position: absolute;
+      top: 56px; left: 7px; right: 7px; bottom: 7px;
+      background: rgba(5, 7, 14, 0.97);
+      border: 1px solid rgba(109, 139, 255, 0.3);
+      border-radius: 18px;
+      box-shadow: 0 14px 34px rgba(0,0,0,0.65), 0 0 22px rgba(109,139,255,0.2);
+      z-index: 6;
+      display: none;
+      flex-direction: column;
+      padding: 10px;
+      gap: 8px;
+    }
+    .hud-vision.open { display: flex; }
+    .vision-hdr {
+      display: flex; align-items: center; justify-content: space-between;
+      font-family: var(--orbitron); font-size: 10px; font-weight: 700;
+      letter-spacing: 2px; color: var(--cyan);
+    }
+    .vision-hdr .hdr-btn { width: 24px; height: 24px; border-radius: 8px; }
+    .vision-frame {
+      position: relative; flex: 1; min-height: 0;
+      border-radius: 12px; overflow: hidden;
+      border: 1px solid rgba(109, 139, 255, 0.28);
+      background: #04060c;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .vision-frame img { width: 100%; height: 100%; object-fit: contain; }
+    .vision-hint {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; letter-spacing: 1px; text-align: center;
+      padding: 8px; color: var(--txt3);
+      background: rgba(4, 6, 12, 0.72);
+    }
+    .vision-ask { display: flex; align-items: center; gap: 6px; }
+    .vision-ask .hud-input {
+      flex: 1; background: rgba(109, 139, 255, 0.07);
+      border: 1px solid rgba(109, 139, 255, 0.24);
+      border-radius: 10px;
+    }
+    .vision-answer {
+      display: none; max-height: 110px; overflow-y: auto;
+      font-size: 10px; line-height: 1.5; color: var(--txt2);
+      background: rgba(109, 139, 255, 0.08);
+      border: 1px solid rgba(109, 139, 255, 0.22);
+      border-radius: 10px; padding: 8px 9px;
+    }
+    .vision-answer.show { display: block; }
+    .vision-answer::-webkit-scrollbar { width: 4px; }
+    .vision-answer::-webkit-scrollbar-thumb { background: rgba(109,139,255,0.3); border-radius: 2px; }
   </style>
 </head>
 <body>
@@ -750,6 +809,7 @@
       <div class="hdr-controls">
         <span class="hdr-live" id="hdr-live" title="Core link status"><span class="live-dot"></span>LINK</span>
         <button class="hdr-btn" id="hud-mic-btn" title="Voice input — tap to talk"><i class="fa-solid fa-microphone"></i></button>
+        <button class="hdr-btn" id="hud-vision-btn" title="Look at my screen — vision chat"><i class="fa-solid fa-eye"></i></button>
         <button class="hdr-btn" id="hud-voice-btn" title="Test JENNY's voice"><i class="fa-solid fa-volume-high"></i></button>
         <button class="hdr-btn" id="training-btn" title="AI Memory & Training"><i class="fa-solid fa-brain"></i></button>
         <button class="hdr-btn" id="fullscreen-btn" title="Expand Interface"><i class="fa-solid fa-expand"></i></button>
@@ -822,6 +882,23 @@
       </div>
 
     </main>
+
+    <!-- SCREEN VISION PANE — fresh screenshot + ask anything about it -->
+    <section class="hud-vision" id="hud-vision" aria-label="Screen vision">
+      <div class="vision-hdr">
+        <span><i class="fa-solid fa-eye"></i> SCREEN VISION</span>
+        <button class="hdr-btn" id="vision-close-btn" title="Close vision pane"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="vision-frame">
+        <img id="vision-img" alt="Your screen" />
+        <span class="vision-hint" id="vision-hint">Looking at your screen…</span>
+      </div>
+      <div class="vision-ask">
+        <input type="text" id="vision-input" class="hud-input" placeholder="Ask about what you see…">
+        <button class="hud-send-btn" id="vision-ask-btn" title="Ask about the screen"><i class="fa-solid fa-comment-dots"></i></button>
+      </div>
+      <div class="vision-answer" id="vision-answer"></div>
+    </section>
 
     <!-- DYNAMIC ROLL-OUT PANEL DRAWER -->
     <div class="hud-drawer" id="drawer-deck">
@@ -1186,6 +1263,75 @@
         window.open('/modes.html', '_blank');
       }
     });
+
+    // SCREEN VISION — eye button opens a live screenshot pane; ask anything
+    // about it and JENNY answers (and speaks) from a fresh capture.
+    const visionPane = document.getElementById('hud-vision');
+    const visionBtn = document.getElementById('hud-vision-btn');
+    const visionImg = document.getElementById('vision-img');
+    const visionHint = document.getElementById('vision-hint');
+    const visionAnswer = document.getElementById('vision-answer');
+    const visionInput = document.getElementById('vision-input');
+    const visionAskBtn = document.getElementById('vision-ask-btn');
+    let visionOpen = false;
+    let visionTimer = null;
+
+    function refreshVisionFrame() {
+      if (!visionOpen) return;
+      visionImg.src = '/api/agent/frame?ts=' + Date.now();
+    }
+
+    function setVisionOpen(on) {
+      visionOpen = on;
+      visionPane.classList.toggle('open', on);
+      visionBtn.classList.toggle('hud-btn-active', on);
+      if (on) {
+        visionHint.style.display = 'flex';
+        visionHint.textContent = 'Looking at your screen…';
+        refreshVisionFrame();
+        clearInterval(visionTimer);
+        visionTimer = setInterval(refreshVisionFrame, 2500);
+        playBeep(760, 'sine', 0.1);
+        visionInput.focus();
+      } else {
+        clearInterval(visionTimer);
+        visionTimer = null;
+      }
+    }
+
+    visionBtn.addEventListener('click', () => setVisionOpen(!visionOpen));
+    document.getElementById('vision-close-btn').addEventListener('click', () => setVisionOpen(false));
+    visionImg.addEventListener('load', () => { visionHint.style.display = 'none'; });
+    visionImg.addEventListener('error', () => {
+      visionHint.textContent = 'No screen capture yet.';
+      visionHint.style.display = 'flex';
+    });
+
+    async function askVision() {
+      const q = visionInput.value.trim();
+      if (!q) return;
+      visionInput.value = '';
+      visionAnswer.classList.add('show');
+      visionAnswer.textContent = 'Looking at your screen…';
+      playBeep(540, 'triangle', 0.08);
+      try {
+        const res = await fetch('/api/vision/describe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ q: q })
+        });
+        const d = await res.json();
+        const txt = (d.ok && d.text) ? d.text : (d.error || 'I could not see the screen.');
+        visionAnswer.textContent = txt;
+        queueServerSpeech(txt);
+        refreshVisionFrame();
+      } catch (e) {
+        visionAnswer.textContent = 'Vision link failed — is the server up?';
+      }
+    }
+
+    visionAskBtn.addEventListener('click', askVision);
+    visionInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') askVision(); });
 
     // TELEMETRY LIVE UPDATES
     async function updateTelemetry() {
