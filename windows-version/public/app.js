@@ -1314,7 +1314,8 @@ function openPanel(name) {
     'commands': 'fa-terminal COMMANDS',
     'files': 'fa-folder-tree FILE EXPLORER',
     'notes': 'fa-note-sticky NOTES',
-    'agency': 'fa-building AGENCY OS'
+    'agency': 'fa-building AGENCY OS',
+    'agent': 'fa-robot VISION AGENT'
   };
   const titleStr = titles[name] || `fa-circle ${name.toUpperCase()}`;
   const parts = titleStr.split(' ');
@@ -1330,7 +1331,7 @@ function openPanel(name) {
   loadPanelContent(name);
   sfx.confirm();
   initDraggable(panel);
-  const panelSpeak = { weather: 'Opening the weather panel, Boss.', system: 'Opening the system info panel, Boss.', processes: 'Opening the process monitor, Boss.', emails: 'Opening your emails, Boss.', vault: 'Opening the memory vault, Boss.', clipboard: 'Opening the clipboard panel, Boss.', settings: 'Opening settings, Boss.', commands: 'Here is everything I can do, Boss.', activity: 'Opening PC activity monitor, Boss.', files: 'Opening the file explorer, Boss.', notes: 'Opening your notes, Boss.', agency: 'Opening Agency OS, Boss.' };
+  const panelSpeak = { weather: 'Opening the weather panel, Boss.', system: 'Opening the system info panel, Boss.', processes: 'Opening the process monitor, Boss.', emails: 'Opening your emails, Boss.', vault: 'Opening the memory vault, Boss.', clipboard: 'Opening the clipboard panel, Boss.', settings: 'Opening settings, Boss.', commands: 'Here is everything I can do, Boss.', activity: 'Opening PC activity monitor, Boss.', files: 'Opening the file explorer, Boss.', notes: 'Opening your notes, Boss.', agency: 'Opening Agency OS, Boss.', agent: 'Vision agent on standby. Give me a goal, Boss.' };
   if (panelSpeak[name] && typeof speakTrigger === 'function') speakTrigger(panelSpeak[name]);
 }
 
@@ -1442,6 +1443,7 @@ async function loadPanelContent(name) {
     case 'files': return loadFilesPanel(body);
     case 'notes': return loadNotesPanel(body);
     case 'agency': return loadAgencyPanel(body);
+    case 'agent': return loadAgentPanel(body);
   }
 }
 
@@ -1784,6 +1786,143 @@ async function deleteTrainingItem(type, trigger) {
     const body = document.getElementById('panel-body-training');
     if (body) loadTrainingPanel(body);
   } catch { toast('Failed to delete item', 'err'); }
+}
+
+// ================================================
+// VISION AGENT PANEL — drive the PC by sight
+// ================================================
+// The panel is a monitor, not a controller: start/stop/kill are the only
+// controls, and everything else it shows is what the agent actually did.
+// Static chrome is built once and the poll updates fields in place, so the
+// goal input never loses focus or its text while the agent is running.
+let agentPendingGoal = '';
+let agentFrameSeen = '';
+
+async function loadAgentPanel(el) {
+  el.innerHTML = `
+    <div class="agent-shell">
+      <div class="agent-head">
+        <span class="agent-badge" id="agent-badge">IDLE</span>
+        <span class="agent-meta" id="agent-meta">give it a goal</span>
+      </div>
+      <div class="agent-goal-row">
+        <input type="text" id="agent-goal" class="agent-goal" autocomplete="off"
+               placeholder="open my downloads folder and open the newest PDF"
+               onkeydown="if(event.key==='Enter')agentStart()">
+        <button class="agent-btn primary" onclick="agentStart()" title="Start the agent">
+          <i class="fa-solid fa-play"></i> START</button>
+      </div>
+      <div class="agent-btns">
+        <button class="agent-btn" onclick="agentStep()" title="Run exactly one see-think-act step">
+          <i class="fa-solid fa-shoe-prints"></i> STEP</button>
+        <button class="agent-btn stop" onclick="agentStop()" title="Stop after the current action">
+          <i class="fa-solid fa-stop"></i> STOP</button>
+        <button class="agent-btn kill" onclick="agentKill()" title="Kill switch — halts everything until re-armed">
+          <i class="fa-solid fa-burst"></i> KILL</button>
+        <button class="agent-btn" onclick="agentReset()" title="Clear the kill switch and re-arm">
+          <i class="fa-solid fa-rotate-left"></i> ARM</button>
+      </div>
+      <div class="agent-screen">
+        <img id="agent-frame" alt="what the agent sees" src="/api/agent/frame">
+        <span class="agent-live hidden" id="agent-live"><span class="agent-live-dot"></span>SEEING</span>
+      </div>
+      <div class="agent-stats" id="agent-stats">step 0/0 &middot; ok 0 &middot; failed 0</div>
+      <div class="agent-log" id="agent-log"><div class="panel-empty">No steps yet.</div></div>
+    </div>`;
+  if (agentPendingGoal) {
+    const g = document.getElementById('agent-goal');
+    if (g) g.value = agentPendingGoal;
+    agentPendingGoal = '';
+  }
+  await pollAgent();
+  startPanelTimer('agent', pollAgent, 1400);
+}
+
+async function pollAgent() {
+  const badge = document.getElementById('agent-badge');
+  if (!badge) { stopPanelTimer('agent'); return; }
+  let s;
+  try {
+    const r = await fetch('/api/agent/status', { cache: 'no-store' });
+    s = await r.json();
+  } catch (e) { return; }
+  if (!s || !document.getElementById('agent-badge')) return;
+
+  const st = (s.status || 'idle').toLowerCase();
+  badge.textContent = st.toUpperCase();
+  badge.className = 'agent-badge agent-' + st;
+  const meta = document.getElementById('agent-meta');
+  if (meta) meta.textContent = s.goal
+    ? `${s.goal}` + (s.killed ? '  ·  KILLED' : '')
+    : (s.hotkey ? `kill switch: ${s.hotkey}` : 'give it a goal');
+
+  const live = document.getElementById('agent-live');
+  if (live) live.classList.toggle('hidden', st !== 'running');
+
+  const stats = document.getElementById('agent-stats');
+  if (stats) {
+    const c = s.counts || {};
+    stats.innerHTML = `step <b>${(s.steps && s.steps.done) || 0}/${(s.steps && s.steps.of) || 0}</b>`
+      + ` &middot; ok <b>${c.ok || 0}</b> &middot; failed <b>${c.failed || 0}</b>`
+      + (s.model ? ` &middot; <span class="agent-model">${Viz.esc(s.model)}</span>` : '')
+      + (s.last_error ? ` &middot; <span class="agent-err">${Viz.esc(s.last_error)}</span>` : '');
+  }
+
+  const img = document.getElementById('agent-frame');
+  if (img && s.frame_ts && s.frame_ts !== agentFrameSeen) {
+    agentFrameSeen = s.frame_ts;
+    img.src = '/api/agent/frame?t=' + encodeURIComponent(s.frame_ts);
+  }
+
+  const log = document.getElementById('agent-log');
+  if (log) {
+    const rows = (s.log || []).slice().reverse();
+    log.innerHTML = rows.length
+      ? rows.map(e => `<div class="agent-log-row${e.ok ? '' : ' bad'}">
+            <span class="n">#${e.n | 0}</span><span class="tm">${Viz.esc(e.t || '')}</span>
+            <span class="ac">${Viz.esc(e.action || '')}</span>
+            <span class="nt">${Viz.esc(e.note || '')}</span></div>`).join('')
+      : '<div class="panel-empty">No steps yet.</div>';
+  }
+}
+
+async function agentPost(path, body) {
+  try {
+    const r = await fetch('/api/agent/' + path, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {})
+    });
+    const d = await r.json();
+    if (d && d.ok === false) toast(d.error || 'Agent refused that.', 'err');
+    else toast(d.message || ('Agent ' + path + ' ok'), 'ok');
+    pollAgent();
+    return d;
+  } catch (e) { toast('Agent command failed', 'err'); return null; }
+}
+
+function agentStart() {
+  const g = document.getElementById('agent-goal')?.value.trim();
+  if (!g) { toast('Give the agent a goal first', 'err'); return; }
+  agentPost('start', { goal: g });
+}
+
+function agentStop() { agentPost('stop', { reason: 'panel' }); }
+function agentKill() { agentPost('kill', { reason: 'panel' }); }
+function agentReset() { agentPost('reset', {}); }
+
+async function agentStep() {
+  const g = document.getElementById('agent-goal')?.value.trim();
+  if (!g) { toast('Give the agent a goal first', 'err'); return; }
+  try {
+    const r = await fetch('/api/agent/step', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ goal: g })
+    });
+    const d = await r.json();
+    if (d && d.ok === false) toast(d.error || 'Step failed', 'err');
+    agentFrameSeen = '';
+    pollAgent();
+  } catch (e) { toast('Step failed', 'err'); }
 }
 
 // ================================================
@@ -5488,6 +5627,21 @@ async function executeCommandAction(cmd) {
       const mt = (cmd.value || '').toLowerCase();
       if (mt === 'ultron') window.location.href = '/ultron.html';
       else if (mt) applyMode(mt);
+    }
+    else if (cmd.action === 'agent-start') {
+      const goal = typeof cmd.value === 'string' ? cmd.value : (cmd.value && cmd.value.goal) || '';
+      agentPendingGoal = goal;
+      if (!openPanels.has('agent')) openPanel('agent');
+      const gi = document.getElementById('agent-goal');
+      if (gi && goal) gi.value = goal;
+      await agentPost('start', { goal });
+    }
+    else if (cmd.action === 'agent-stop') { await agentPost('stop', { reason: 'voice' }); }
+    else if (cmd.action === 'agent-kill') { await agentPost('kill', { reason: 'voice' }); }
+    else if (cmd.action === 'agent-reset') { await agentPost('reset', {}); }
+    else if (cmd.action === 'agent-status') {
+      if (!openPanels.has('agent')) openPanel('agent');
+      else pollAgent();
     }
     else if (cmd.action === 'open-chrome-bookmarks') {
       const bmr = await fetch('/api/chrome-bookmarks'); const bmd = await bmr.json();
