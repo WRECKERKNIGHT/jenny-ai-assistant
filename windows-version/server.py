@@ -2454,11 +2454,11 @@ def local_command_router(msg):
     """Fast, case-insensitive local intent routing that runs BEFORE the LLM so
     todo / system actions / mode switches always work instantly and deterministically.
     Returns a reply dict, or None if the message should go to the LLM."""
-    lo = _normalize_utterance(msg)
+    raw_lo = _normalize_utterance(msg)
     mode = get_mode()
     mp = MODE_PROFILES[mode]
     boss = mp["boss"]
-    lo = _expand_synonyms(lo)
+    lo = _expand_synonyms(raw_lo)
 
     # Mutli-step decomposition — runs first so "then / after that / and" chains
     # are executed server-side as an ordered, fully-automatic sequence.
@@ -2492,6 +2492,52 @@ def local_command_router(msg):
     learned = _match_learned_alias(lo)
     if learned:
         return learned
+
+    # VISION AGENT — full PC automation. Matched against BOTH the raw
+    # utterance and the synonym-expanded one: the synonym engine rewrites
+    # "kill the agent" into the generic "close the agent" app intent, and that
+    # would eat the kill switch. Kill and stop are checked before the start
+    # patterns so a panicked "stop the agent" never falls through.
+    _qs = (raw_lo, lo)
+    if any(_ph in _q for _q in _qs for _ph in
+           ("kill the agent", "kill agent", "kill switch", "halt the agent",
+            "halt agent")):
+        return {"text": f"Kill switch engaged, {boss}. The agent is halted and "
+                        f"will not start again until you re-arm it.",
+                "speech": "Kill switch engaged. Agent halted.",
+                "command": {"action": "agent-kill", "value": "voice"}}
+    if any(_ph in _q for _q in _qs for _ph in
+           ("stop agent", "stop the agent", "stop automating", "stop computer use",
+            "stop the automation", "stop driving the pc", "stop the robot")):
+        return {"text": f"Stopping the agent now, {boss}.",
+                "speech": "Stopping the agent now.",
+                "command": {"action": "agent-stop", "value": "voice"}}
+    _agent_goal = ""
+    for _p in ("automate ", "agent ", "vision agent ", "on autopilot ",
+               "take control and ", "do this yourself ", "do this on your own "):
+        for _q in _qs:
+            if _q.startswith(_p):
+                _agent_goal = _q[len(_p):].strip(" ?!.:,-")
+                break
+        if _agent_goal:
+            break
+    if _agent_goal:
+        if _agent_goal in ("status", "stop", "kill", "reset", "start", "frame"):
+            _st = _agent().status()
+            return {"text": (f"Agent is **{_st.get('status')}** — step "
+                             f"{_st.get('step')}/{_st.get('max_steps')}, goal: "
+                             f"{_st.get('goal') or 'none'}."),
+                    "speech": f"The agent is {_st.get('status')}.",
+                    "command": {"action": "agent-status", "value": "voice"}}
+        if len(_agent_goal) < 4:
+            return {"text": f"What exactly should I automate, {boss}? Say e.g. "
+                            "\"automate open my downloads folder\".",
+                    "speech": "What exactly should I automate?"}
+        return {"text": f"Taking the wheel, {boss}. I'll look at the screen and work "
+                        f"through it: **{_agent_goal}**. Say \"stop agent\" or hit the "
+                        f"kill switch (Ctrl+Alt+X) and I stop dead.",
+                "speech": f"Taking the wheel. Working on: {_agent_goal}.",
+                "command": {"action": "agent-start", "value": _agent_goal}}
 
     # MODE SWITCH: "switch to jarvis", "go ultron", "activate friday", "be jarvis"
     m = re.search(r"(?:switch|change|go|activate|become|set|start|enter|use)\s+(?:to\s+|to\s+the\s+|into\s+)?(friday|jarvis|ultron)", lo)
@@ -3936,6 +3982,136 @@ def api_gesture_cmd():
         threading.Thread(target=tts_speak, args=(f"Executing {pretty}.",), daemon=True).start()
     return jsonify({"success": bool(ok), "action": action})
 
+
+# ============================================================
+# VISION AGENT — screen-reading computer use + kill switch
+# vision_agent owns the loop; the server only exposes it, in the same
+# start/stop/status shape the gesture controller uses so the frontend
+# has one pattern to talk to.
+# ============================================================
+_agent_module = None
+
+
+def _agent():
+    global _agent_module
+    if _agent_module is None:
+        import vision_agent
+        _agent_module = vision_agent
+    return _agent_module
+
+
+@app.route("/api/agent/status")
+def api_agent_status():
+    try:
+        return jsonify(_agent().status())
+    except Exception as e:
+        return jsonify({"success": False, "active": False, "status": "error",
+                        "error": f"{type(e).__name__}: {e}"})
+
+
+@app.route("/api/agent/available")
+def api_agent_available():
+    try:
+        return jsonify({"success": True, **_agent().available()})
+    except Exception as e:
+        return jsonify({"success": False, "error": f"{type(e).__name__}: {e}"})
+
+
+@app.route("/api/agent/start", methods=["POST"])
+def api_agent_start():
+    d = request.get_json(force=True, silent=True) or {}
+    goal = str(d.get("goal", "")).strip()
+    if not goal:
+        # Chat-driven start: the whole utterance minus the trigger word is the
+        # goal, so "automate open my downloads folder" needs no extra syntax.
+        goal = str(d.get("value", "") if not isinstance(d.get("value"), dict) else "").strip()
+    try:
+        res = _agent().start(goal, d.get("max_steps"))
+    except Exception as e:
+        res = {"success": False, "error": f"{type(e).__name__}: {e}"}
+    if res.get("ok"):
+        _ui_feed("cmd", f"AGENT START: {goal}")
+    return jsonify(res)
+
+
+@app.route("/api/agent/stop", methods=["POST"])
+def api_agent_stop():
+    d = request.get_json(force=True, silent=True) or {}
+    reason = str(d.get("reason", "user"))[:80] or "user"
+    try:
+        res = _agent().stop(reason)
+    except Exception as e:
+        res = {"success": False, "error": f"{type(e).__name__}: {e}"}
+    if res.get("ok"):
+        _ui_feed("cmd", "AGENT STOPPED")
+    return jsonify(res)
+
+
+@app.route("/api/agent/kill", methods=["POST"])
+def api_agent_kill():
+    d = request.get_json(force=True, silent=True) or {}
+    reason = str(d.get("reason", "kill switch"))[:80] or "kill switch"
+    try:
+        res = _agent().kill(reason)
+    except Exception as e:
+        res = {"success": False, "error": f"{type(e).__name__}: {e}"}
+    # The kill switch is the one action worth saying out loud: if the agent was
+    # mid-drive, the operator needs confirmation it actually halted.
+    threading.Thread(target=tts_speak, args=("Kill switch engaged. Agent halted.",),
+                     daemon=True).start()
+    _ui_feed("cmd", "AGENT KILL SWITCH ENGAGED")
+    return jsonify(res)
+
+
+@app.route("/api/agent/reset", methods=["POST"])
+def api_agent_reset():
+    try:
+        return jsonify(_agent().reset())
+    except Exception as e:
+        return jsonify({"success": False, "error": f"{type(e).__name__}: {e}"})
+
+
+@app.route("/api/agent/step", methods=["POST"])
+def api_agent_step():
+    """One synchronous see-think-act cycle, for step-by-step mode and for
+    anyone who wants to watch each decision before it runs."""
+    d = request.get_json(force=True, silent=True) or {}
+    goal = str(d.get("goal", "") or d.get("value", "") or "").strip()
+    va = _agent()
+    if not goal:
+        goal = va.status().get("goal") or ""
+    if not goal:
+        return jsonify({"success": False, "error": "No goal to step against."})
+    if va.status().get("killed"):
+        return jsonify({"success": False, "error": "Kill switch is engaged. Reset first."})
+    try:
+        st = va.status()
+        if st.get("active"):
+            return jsonify({"success": False,
+                            "error": "The agent is already running — STOP it before stepping."})
+        n = int(st.get("step", 0)) + 1
+        res = va.run_once(goal, n, int(st.get("max_steps") or 20))
+        # Manual mode leaves nothing running, so the badge must not claim a
+        # background loop that does not exist.
+        va._set(step=n, status="stopped", goal=goal, ended_at=va._stamp())
+        return jsonify({"success": True, "goal": goal, "step": res})
+    except Exception as e:
+        return jsonify({"success": False, "error": f"{type(e).__name__}: {e}"})
+
+
+@app.route("/api/agent/frame")
+def api_agent_frame():
+    try:
+        blob = _agent().frame()
+    except Exception:
+        blob = b""
+    if not blob:
+        return Response(b"", mimetype="image/jpeg",
+                        headers={"Cache-Control": "no-store, max-age=0"})
+    resp = Response(blob, mimetype="image/jpeg")
+    resp.headers["Cache-Control"] = "no-store, max-age=0"
+    return resp
+
 GESTURE_FREEZE_SECONDS = 60
 gesture_watchdog_log = []
 
@@ -4820,6 +4996,18 @@ def api_control():
             return jsonify({"success": r.get("success", False), "message": target})
         except Exception as e:
             return jsonify({"success": False, "error": str(e)})
+    if lo in ("agent-start", "start-agent", "run-agent"):
+        goal = value if isinstance(value, str) else (value or {}).get("goal", "")
+        steps = value.get("max_steps") if isinstance(value, dict) else None
+        return jsonify(_agent().start(goal, steps))
+    if lo in ("agent-stop", "stop-agent"):
+        return jsonify(_agent().stop("control"))
+    if lo in ("agent-kill", "kill-agent"):
+        return jsonify(_agent().kill("control"))
+    if lo in ("agent-reset", "reset-agent"):
+        return jsonify(_agent().reset())
+    if lo in ("agent-status", "agent-frame"):
+        return jsonify(_agent().status())
     return jsonify({"success": False, "error": f"Unknown action: {action}"})
 
 
@@ -5407,6 +5595,7 @@ _TOOL_MODULES = {
     "flows": "workflows",
     "memory": "knowledge_graph",
     "ocr": "ocr",
+    "agent": "vision_agent",
 }
 _TOOL_FUNCS = {
     "datascience": ["describe", "statistical_summary", "missing_values", "outliers",
@@ -5432,6 +5621,7 @@ _TOOL_FUNCS = {
               "tick", "available"],
     "memory": ["summarize", "lookup", "related", "build", "available"],
     "ocr": ["ocr_image", "available"],
+    "agent": ["status", "available", "start", "stop", "kill", "reset"],
 }
 
 
