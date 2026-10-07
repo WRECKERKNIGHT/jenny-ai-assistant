@@ -306,7 +306,7 @@ def _chat_vision(system_prompt, user_text, b64, max_tokens=400, temperature=0.1)
         "temperature": temperature,
     }).encode("utf-8")
     last = None
-    for attempt in range(2):
+    for attempt in range(3):
         req = urllib.request.Request(GROQ_URL, data=payload, headers={
             "Content-Type": "application/json",
             "Authorization": "Bearer " + _groq_key(),
@@ -326,7 +326,11 @@ def _chat_vision(system_prompt, user_text, b64, max_tokens=400, temperature=0.1)
                 _model_cache.update({"id": None, "ts": 0.0})   # pick another
                 if _working_model(force=True):
                     continue
-            if e.code in (429, 500, 502, 503):
+            if e.code == 429:
+                # per-minute token limits reset in seconds — wait one out
+                time.sleep(6.0 + 3.0 * attempt)
+                continue
+            if e.code in (500, 502, 503):
                 time.sleep(1.0 + attempt)
                 continue
             break
@@ -347,6 +351,21 @@ def _decide(goal, step, max_steps, capture, retry_note=""):
 
 
 # ------------------------------------------------------------------ describe
+
+def _friendly_vision_error(exc):
+    """One short spoken line instead of a raw HTTP blob."""
+    msg = str(exc)
+    low = msg.lower()
+    if "429" in msg or "rate limit" in low:
+        return "the vision API is rate-limited right now — ask me again in a few seconds."
+    if "401" in msg or "403" in msg or "unauthorized" in low:
+        return "the vision API rejected the key."
+    if "no vision model" in low or "no groq key" in low:
+        return "no vision model is configured."
+    if "capture failed" in low:
+        return "I could not take a screenshot."
+    return (msg[:160] + "…") if len(msg) > 160 else msg
+
 
 def ask(question):
     """Talk about the screen: one fresh screenshot, one plain-language answer.
@@ -372,7 +391,7 @@ def ask(question):
         text = _chat_vision(system, q, cap["b64"], max_tokens=520, temperature=0.3)
     except Exception as e:
         _audit("ask", q[:120], ok=False, error=e)
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": _friendly_vision_error(e)}
     text = (text or "").strip()
     if not text:
         _audit("ask", q[:120], ok=False, error="empty model reply")
