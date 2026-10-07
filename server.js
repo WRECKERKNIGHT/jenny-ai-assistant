@@ -3922,6 +3922,20 @@ app.get('/api/gesture/watchdog', (req,res)=>res.json({success:true, ok:true}));
 app.post('/api/gesture/watchdog-log', (req,res)=>res.json({success:true}));
 
 
+// Vision agent (screen-reading PC automation) lives in the Windows Python
+// build. Route names stay symmetric so a client written against either server
+// finds them, but the Node side answers honestly instead of faking a run.
+const AGENT_UNSUPPORTED = 'The vision agent drives a Windows desktop — start windows-version/server.py for it.';
+app.get('/api/agent/status', (req,res)=>res.json({success:true, active:false, status:'unavailable', platform:'node', error:AGENT_UNSUPPORTED}));
+app.get('/api/agent/available', (req,res)=>res.json({success:false, ok:false, error:AGENT_UNSUPPORTED}));
+app.post('/api/agent/start', (req,res)=>res.json({success:false, ok:false, error:AGENT_UNSUPPORTED}));
+app.post('/api/agent/stop', (req,res)=>res.json({success:true, ok:true, was_running:false, message:'No agent was running.'}));
+app.post('/api/agent/kill', (req,res)=>res.json({success:true, ok:true, message:'Kill switch set (no agent was running).'}));
+app.post('/api/agent/reset', (req,res)=>res.json({success:true, ok:true, message:'Agent armed.'}));
+app.post('/api/agent/step', (req,res)=>res.json({success:false, ok:false, error:AGENT_UNSUPPORTED}));
+app.get('/api/agent/frame', (req,res)=>res.status(204).end());
+
+
 app.get('/api/chrome-bookmarks', (req,res)=>res.json({success:true, bookmarks:[]}));
 app.post('/api/open-chrome', (req,res)=>res.json({success:true}));
 app.get('/api/clipboard-sync', (req,res)=>res.json({success:true, text:''}));
