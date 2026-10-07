@@ -15,7 +15,7 @@ import webview
 
 BASE_DIR = Path(__file__).parent
 DEFAULT_PORT = 3005
-DEFAULT_W, DEFAULT_H = 480, 720
+DEFAULT_W, DEFAULT_H = 372, 424
 DEFAULT_X, DEFAULT_Y = 50, 50
 
 

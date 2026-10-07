@@ -234,7 +234,7 @@ _hud_state = {"visible": True}
 _webview_window = None
 
 
-def _hud_geometry(width=460, height=680, margin=24):
+def _hud_geometry(width=372, height=424, margin=24):
     """Dock the HUD to the bottom-right, like a taskbar companion."""
     try:
         import ctypes

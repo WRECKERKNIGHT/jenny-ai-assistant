@@ -31,8 +31,8 @@
       background: transparent;
       color: var(--txt);
       font-family: var(--mono);
-      width: 460px;
-      height: 680px;
+      width: 372px;
+      height: 424px;
       overflow: hidden;
       display: flex;
       flex-direction: column;
@@ -747,12 +747,24 @@
       border-radius: 18px;
       box-shadow: 0 14px 34px rgba(0,0,0,0.65), 0 0 22px rgba(109,139,255,0.2);
       z-index: 6;
-      display: none;
+      display: flex;
       flex-direction: column;
       padding: 10px;
       gap: 8px;
+      opacity: 0;
+      transform: translateY(10px);
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+                  transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+                  visibility 0.32s;
     }
-    .hud-vision.open { display: flex; }
+    .hud-vision.open {
+      opacity: 1;
+      transform: translateY(0);
+      visibility: visible;
+      pointer-events: auto;
+    }
     .vision-hdr {
       display: flex; align-items: center; justify-content: space-between;
       font-family: var(--orbitron); font-size: 10px; font-weight: 700;
@@ -790,6 +802,25 @@
     .vision-answer.show { display: block; }
     .vision-answer::-webkit-scrollbar { width: 4px; }
     .vision-answer::-webkit-scrollbar-thumb { background: rgba(109,139,255,0.3); border-radius: 2px; }
+
+    /* COMPACT POCKET MODE — only the essentials: mic, vision, text box,
+       stop/mute, the quick tabs. Everything else steps out of the way. */
+    .radial-dashboard { display: none; }
+    #training-btn { display: none; }
+    .hud-hdr { padding: 12px 12px; }
+    .hdr-title { font-size: 11px; letter-spacing: 2px; }
+    .hdr-badge { display: none; }
+    .hdr-controls { gap: 6px; }
+    .central-orb-stage { padding: 12px 14px; }
+    .radar-orb-wrap { width: 118px; height: 118px; margin: 8px 0; }
+    #orb-canvas { width: 118px; height: 118px; }
+    .center-mic-icon { font-size: 20px; }
+    .hud-stream-panel { max-height: 96px; margin-bottom: 8px; padding: 10px 14px; }
+    .hud-input-dock { margin-bottom: 8px; }
+    .hud-tab-dock { padding: 8px 14px; gap: 5px; }
+    .tab-btn { padding: 6px 4px; }
+    .hud-drawer { height: 340px; }
+    .hud-vision { top: 60px; }
   </style>
 </head>
 <body>
@@ -797,7 +828,7 @@
   <!-- GLOWING HUD FRAME -->
   <div class="hud-outer-frame">
     <!-- Twinkling Starfield Background Canvas -->
-    <canvas id="star-canvas" width="460" height="680" style="position:absolute; inset:0; pointer-events:none; z-index:1; opacity:0.8;"></canvas>
+    <canvas id="star-canvas" width="372" height="424" style="position:absolute; inset:0; pointer-events:none; z-index:1; opacity:0.8;"></canvas>
     
     <!-- HEADER -->
     <header class="hud-hdr">
