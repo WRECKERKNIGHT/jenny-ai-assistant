@@ -487,7 +487,6 @@ async function greetAfterBoot() {
   const activation = modeName ? `Activating ${modeName} mode.` : '';
   if (typeof addAIMessage === 'function') {
     if (activation) addAIMessage(activation);
-    addAIMessage(text);
   }
   if (window.__bootGreeted) return;
   window.__bootGreeted = true;
