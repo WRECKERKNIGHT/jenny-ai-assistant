@@ -3488,6 +3488,17 @@ def offline_reply(text):
     m = re.search(r"(?:open|launch|start|run)\s+(.+)", lo)
     if m:
         app_name = m.group(1).strip()
+        # Domain in browser rule: "open X in browser", "open google in browser", etc.
+        if " in browser" in lo or " in chrome" in lo or " in edge" in lo:
+            name = app_name.replace(" in browser", "").replace(" in chrome", "").replace(" in edge", "")
+            name = name.strip().strip(",.?!")
+            if not name:
+                return {"text": f"Which site or search should I open in the browser, {boss}?", "speech": "Which site to open in the browser?"}
+            if "." in name or name.startswith("http"):
+                url = name if name.startswith("http") else f"https://{name}"
+            else:
+                url = f"https://{name}"
+            return {"text": f"Opening **{url}** in the browser, {boss}!", "speech": f"Opening that in the browser, {boss}.", "command": {"action": "open-chrome", "value": url}}
         if "chrome" in app_name and "bookmark" in lo:
             return {"text": "Loading Chrome bookmarks!", "speech": "Loading bookmarks.", "command": {"action": "open-chrome-bookmarks", "value": ""}}
         if any(w in app_name for w in ["website", "site", "url", "page"]) or "." in app_name:
