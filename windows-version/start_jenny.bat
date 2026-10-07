@@ -30,9 +30,16 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr :3005 ^| findstr LISTENING') 
 )
 timeout /t 1 /nobreak >nul
 
-rem --- start the server (hidden, logging to logs\) -----------------
+rem --- start the server windowless, logging to logs\ ----------------
 echo  [2/4] Booting neural core...
-start "JENNY-SERVER" /min "%PYTHON%" server.py
+set "PYW="
+if exist "%PYTHON:python.exe=pythonw.exe%" set "PYW=%PYTHON:python.exe=pythonw.exe%"
+if not defined PYW for /f "usebackq delims=" %%v in (`where pythonw.exe 2^>nul`) do if not defined PYW set "PYW=%%v"
+if defined PYW (
+  start "" "%PYW%" server.py >> logs\jenny_boot.log 2>&1
+) else (
+  start "JENNY-SERVER" /min "%PYTHON%" server.py
+)
 timeout /t 1 /nobreak >nul >nul
 
 rem --- wait for /api/health ----------------------------------------
@@ -51,12 +58,10 @@ timeout /t 1 /nobreak >nul
 goto waitloop
 
 :up
-echo  [4/4] Neural link established - launching console...
+echo  [4/4] Neural link established - launching dashboard...
 start "" "http://localhost:3005"
 
-echo.
+rem ---- no lingering console: the server is already detached ----
 echo  Done. Server logs: %~dp0logs\
-echo  Close this window anytime (server keeps running).
-echo.
-pause
+exit /b 0
 endlocal
