@@ -10,15 +10,21 @@ from pathlib import Path
 
 
 def install_startup():
-    base_dir = Path(__file__).parent
+    # scripts\ -> windows-version\ : server.py and logs\ live one level up.
+    base_dir = Path(__file__).resolve().parent.parent
     server_path = base_dir / "server.py"
     python_path = sys.executable
+    # Windowless: a console at every boot is what users complain about, so the
+    # startup entry runs pythonw.exe and parks stdout/stderr in logs\.
+    pythonw = Path(python_path).parent / "pythonw.exe"
+    runner = str(pythonw) if pythonw.exists() else python_path
+    logs_dir = base_dir / "logs"
 
     bat_content = f"""@echo off
 title J.E.N.N.Y - Starting...
-echo J.E.N.N.Y is starting...
 cd /d "{base_dir}"
-"{python_path}" "{server_path}"
+if not exist "{logs_dir}" mkdir "{logs_dir}"
+start "" "{runner}" "{server_path}" --startup >> "{logs_dir}\\jenny_startup.log" 2>&1
 """
 
     bat_path = base_dir / "jenny-startup.bat"
@@ -31,7 +37,7 @@ cd /d "{base_dir}"
 
     try:
         with open(shortcut_path, 'w') as f:
-            f.write(f'@echo off\ncd /d "{base_dir}"\n"{python_path}" "{server_path}" --startup')
+            f.write(bat_content)
         print(f"[+] Startup entry created at: {shortcut_path}")
         print("[+] J.E.N.N.Y will now start automatically with Windows!")
         return True
