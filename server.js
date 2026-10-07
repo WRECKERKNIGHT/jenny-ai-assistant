@@ -3934,6 +3934,7 @@ app.post('/api/agent/kill', (req,res)=>res.json({success:true, ok:true, message:
 app.post('/api/agent/reset', (req,res)=>res.json({success:true, ok:true, message:'Agent armed.'}));
 app.post('/api/agent/step', (req,res)=>res.json({success:false, ok:false, error:AGENT_UNSUPPORTED}));
 app.get('/api/agent/frame', (req,res)=>res.status(204).end());
+app.post('/api/vision/describe', (req,res)=>res.json({success:false, ok:false, error:AGENT_UNSUPPORTED}));
 
 
 app.get('/api/chrome-bookmarks', (req,res)=>res.json({success:true, bookmarks:[]}));
