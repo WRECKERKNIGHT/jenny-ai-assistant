@@ -46,6 +46,8 @@ def get_grok_key():
                 return pk[name]
     except: pass
     return ""
+conversations = load_json(DATA_DIR / "conversations.json", {"active_id": None, "conversations": []})
+activeConvId = conversations.get("active_id")
 chatHistory = []
 activeDevices = {}
 pendingDeviceCommands = {}
