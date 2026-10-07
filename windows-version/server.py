@@ -2539,6 +2539,36 @@ def local_command_router(msg):
                 "speech": f"Taking the wheel. Working on: {_agent_goal}.",
                 "command": {"action": "agent-start", "value": _agent_goal}}
 
+    # SCREEN VISION — "talk about my screen": fresh screenshot + one spoken
+    # answer, no actions taken. Matched on BOTH raw and expanded utterances so
+    # the synonym engine cannot eat it. Deliberately precise phrases: loose
+    # ones like "the screen" would swallow "lock the screen".
+    _screen_hit = None
+    for _ph in ("what's on my screen", "what is on my screen", "whats on my screen",
+                "on my screen right now", "about my screen", "tell me what's on my screen",
+                "describe my screen", "describe the screen", "look at my screen",
+                "read my screen", "read the screen", "what does the screen say",
+                "what's happening on my screen", "check my screen", "see my screen",
+                "what do you see", "what can you see"):
+        for _q in _qs:
+            if _ph in _q:
+                _screen_hit = _ph
+                break
+        if _screen_hit:
+            break
+    if _screen_hit:
+        try:
+            _res = _agent().ask(msg)
+        except Exception as e:
+            _res = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+        if _res.get("ok"):
+            _txt = str(_res.get("text") or "").strip()
+            if _txt:
+                return {"text": _txt, "speech": _txt}
+        return {"text": f"I couldn't see the screen, {boss}: "
+                        f"{_res.get('error') or 'the vision model said nothing'}.",
+                "speech": "I couldn't see the screen right now."}
+
     # MODE SWITCH: "switch to jarvis", "go ultron", "activate friday", "be jarvis"
     m = re.search(r"(?:switch|change|go|activate|become|set|start|enter|use)\s+(?:to\s+|to\s+the\s+|into\s+)?(friday|jarvis|ultron)", lo)
     if m:
@@ -4111,6 +4141,22 @@ def api_agent_frame():
     resp = Response(blob, mimetype="image/jpeg")
     resp.headers["Cache-Control"] = "no-store, max-age=0"
     return resp
+
+
+@app.route("/api/vision/describe", methods=["POST"])
+def api_vision_describe():
+    """Talk about the screen: fresh screenshot + one plain answer. Used by the
+    HUD vision pane, the chat 'vision' command and the voice intents."""
+    d = request.get_json(force=True, silent=True) or {}
+    q = str(d.get("q") or d.get("question") or d.get("text") or "").strip()
+    if not q:
+        return jsonify({"success": False, "ok": False,
+                        "error": "Ask something about the screen."})
+    try:
+        res = _agent().ask(q)
+    except Exception as e:
+        res = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    return jsonify({"success": bool(res.get("ok")), **res})
 
 GESTURE_FREEZE_SECONDS = 60
 gesture_watchdog_log = []

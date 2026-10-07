@@ -284,29 +284,26 @@ def _history_text(limit=10):
     return "\n".join(lines) if lines else "(no steps yet)"
 
 
-def _decide(goal, step, max_steps, capture, retry_note=""):
+def _chat_vision(system_prompt, user_text, b64, max_tokens=400, temperature=0.1):
+    """One Groq vision round-trip: system prompt + question + screenshot.
+    Shared by the automation loop and the plain 'talk about my screen' ask."""
     model = _working_model()
     if not model:
         raise RuntimeError("no vision model available on this key")
     with _LOCK:
         _state["model"] = model
-    prompt = _system_prompt(goal, step, max_steps, capture["sent_w"], capture["sent_h"])
-    prompt += "\n\nWHAT ALREADY HAPPENED\n" + _history_text()
-    if retry_note:
-        prompt += "\n\nYOUR LAST REPLY WAS INVALID: " + retry_note + \
-                  "\nReply with one JSON object only."
     payload = json.dumps({
         "model": model,
         "messages": [
-            {"role": "system", "content": prompt},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": [
-                {"type": "text", "text": "Screen attached. What is the next single action?"},
+                {"type": "text", "text": user_text},
                 {"type": "image_url", "image_url": {
-                    "url": "data:image/jpeg;base64," + capture["b64"]}},
+                    "url": "data:image/jpeg;base64," + b64}},
             ]},
         ],
-        "max_tokens": 400,
-        "temperature": 0.1,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
     }).encode("utf-8")
     last = None
     for attempt in range(2):
@@ -337,6 +334,55 @@ def _decide(goal, step, max_steps, capture, retry_note=""):
             last = f"{type(e).__name__}: {e}"
             time.sleep(1.0 + attempt)
     raise RuntimeError(f"vision call failed ({last})")
+
+
+def _decide(goal, step, max_steps, capture, retry_note=""):
+    prompt = _system_prompt(goal, step, max_steps, capture["sent_w"], capture["sent_h"])
+    prompt += "\n\nWHAT ALREADY HAPPENED\n" + _history_text()
+    if retry_note:
+        prompt += "\n\nYOUR LAST REPLY WAS INVALID: " + retry_note + \
+                  "\nReply with one JSON object only."
+    return _chat_vision(prompt, "Screen attached. What is the next single action?",
+                        capture["b64"], max_tokens=400, temperature=0.1)
+
+
+# ------------------------------------------------------------------ describe
+
+def ask(question):
+    """Talk about the screen: one fresh screenshot, one plain-language answer.
+    No actions are taken — this is pure vision Q&A for chat and voice."""
+    q = str(question or "").strip()
+    if not q:
+        return {"ok": False, "error": "Ask something about the screen."}
+    if not _groq_key():
+        return {"ok": False, "error": "no Groq key — I cannot see the screen."}
+    try:
+        cap = _capture()
+    except Exception as e:
+        return {"ok": False, "error": f"capture failed: {type(e).__name__}: {e}"}
+    system = (
+        "You are JENNY looking at a live screenshot of the user's Windows PC. "
+        "Answer the question about what is on screen right now. Be concrete: "
+        "name the apps, windows, visible text, numbers and colors you can "
+        "actually see. If the answer is not visible in the screenshot, say so "
+        "plainly instead of guessing. Short, conversational, spoken-style "
+        "answer. No markdown headers, no lists of keys, no code."
+    )
+    try:
+        text = _chat_vision(system, q, cap["b64"], max_tokens=520, temperature=0.3)
+    except Exception as e:
+        _audit("ask", q[:120], ok=False, error=e)
+        return {"ok": False, "error": str(e)}
+    text = (text or "").strip()
+    if not text:
+        _audit("ask", q[:120], ok=False, error="empty model reply")
+        return {"ok": False, "error": "the vision model returned nothing."}
+    _audit("ask", q[:120], ok=True)
+    with _LOCK:
+        _state["last_ask"] = {"q": q, "at": _stamp()}
+    return {"ok": True, "text": text, "model": _state.get("model"),
+            "w": cap["sent_w"], "h": cap["sent_h"],
+            "ts": _state.get("frame_ts")}
 
 
 def _extract_json(text):
