@@ -123,21 +123,21 @@ rem ==========================================================================
 call :confirm_free "Quick Start"
 if errorlevel 1 goto :menu
 echo %C_OK%[*] Starting JENNY - tray icon and Mini HUD...%C_OFF%
-start "" "%PYEXE%" tray.py
+call :windowless tray.py
 goto :done
 
 :launch_app
 call :confirm_free "Full Desktop App"
 if errorlevel 1 goto :menu
 echo %C_OK%[*] Starting the JENNY desktop window...%C_OFF%
-start "" "%PYEXE%" app.py
+call :windowless app.py
 goto :done
 
 :launch_debug
 call :confirm_free "Debug Launcher"
 if errorlevel 1 goto :menu
 echo %C_OK%[*] Starting with verbose logging...%C_OFF%
-start "" "%PYEXE%" launch_debug.py
+call :windowless launch_debug.py
 goto :done
 
 :launch_hud
