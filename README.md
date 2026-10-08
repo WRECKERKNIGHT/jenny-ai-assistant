@@ -95,6 +95,18 @@ python hud.py               # transparent always-on-top HUD overlay
 * `python hud.py --x 50 --y 50 --width 480 --height 720` — reposition the HUD overlay.
 * Runtime telemetry: `GET /api/runtime` (uptime, request counts, hot endpoints).
 
+### 🧠 Multi-Conversation Memory
+
+Chats are persisted to `data/conversations.json` and shown in the conversation bar at the top of the desktop UI. Say "new chat", "switch to chat 2", or use the **NEW CHAT** button / dropdown to jump between threads — each conversation keeps its own topic context for the AI.
+
+### 📂 Installed-App Auto-Discovery
+
+On startup the server scans your Start Menu, Desktop, and `App Paths` registry for real PC apps (joined with the built-in command list). Ask "open copilot app" or "open spotify" and JENNY resolves it even if it was never in the hardcoded list. `GET /api/apps` lists everything.
+
+### 🗔 Mini HUD Launch from the Chat
+
+The desktop chat bar has a **MINI HUD** button (and you can say "open the taskbar app") — it starts the tray Mini HUD on port 3005 without needing a console window. The tray writes a `data/tray.pid` file and a windowless `data/logs/jenny_tray.log` so the launcher never spawns duplicates.
+
 ### ✋ Gesture Control (ULTRON)
 
 `windows-version/gesture_controller.py` drives hand-tracking PC control via MediaPipe + PyAutoGUI:
