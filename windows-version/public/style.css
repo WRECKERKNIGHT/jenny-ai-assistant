@@ -352,10 +352,14 @@ body.mode-ultron .friday-dashboard { display:none; }
 }
 
 /* FRIDAY: the orb + dock now live in their own dedicated column, so the left
-   pane is free for the wingmate dashboard + sys-monitor. Let them fill the whole
-   panel (no caps) so no dead space is left behind and all content stays visible. */
-body.mode-friday .friday-dashboard { flex: 0 1 auto; max-height: none; }
-body.mode-friday .sys-monitor { flex: 1 1 auto; max-height: none; }
+   pane is free for the wingmate dashboard + sys-monitor. The whole pane splits
+   50-50: top half is FRIDAY's dashboard, bottom half is the system monitor. */
+body.mode-friday .friday-dashboard { flex: 1 1 50%; max-height: none; min-height:0; }
+body.mode-friday .sys-monitor { flex: 1 1 50%; max-height: none; min-height:0; }
+/* Inside the dashboard, gauges vs one-touch controls share the height evenly
+   now that the raw % strip is gone — a clean half-and-half, nothing crushed. */
+body.mode-friday .fd-gauges,
+body.mode-friday .fd-ctrl-grid { flex: 1 1 0; min-height:0; align-content:center; }
 
 /* SYSTEM MONITOR */
 .sys-monitor { flex:0 0 auto; padding:18px 24px; display:flex; flex-direction:column; gap:16px; border-bottom:1px solid rgba(139,104,255,0.15); overflow-y:auto; min-height:0; }
@@ -510,6 +514,34 @@ body.mode-friday .friday-orb-panel .dock-btn.jarvis-only { display:none; }
 .hdr-sep { color:rgba(255,255,255,0.12); font-size:11px; }
 .dot-pulse { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.5); animation:pulse-dot 2s ease-in-out infinite; }
 @keyframes pulse-dot { 0%,100% { opacity:0.3; } 50% { opacity:0.9; } }
+
+/* Conversation bar — multi-chat switcher + Mini HUD launcher button. */
+.conv-bar {
+  display:flex; align-items:center; gap:8px; flex-shrink:0;
+  padding:7px 24px; border-bottom:1px solid rgba(255,255,255,0.05);
+  background:rgba(8,8,14,0.5);
+}
+.conv-btn {
+  display:flex; align-items:center; gap:6px; cursor:pointer;
+  font-family:var(--mono); font-size:9px; letter-spacing:1px; font-weight:700;
+  color:var(--txt2); background:rgba(109,139,255,0.05);
+  border:1px solid rgba(109,139,255,0.14); border-radius:8px; padding:4px 10px;
+  transition:all 0.18s cubic-bezier(0.16, 1, 0.3, 1); white-space:nowrap;
+}
+.conv-btn:hover { color:var(--txt); background:rgba(109,139,255,0.12); border-color:rgba(109,139,255,0.35); }
+.conv-btn i { font-size:9px; color:var(--cyan); }
+.conv-new i { color:#4ade80; }
+.conv-tray i { color:#a855f7; }
+body.mode-friday .conv-tray i,
+body.mode-friday .conv-bar { border-bottom-color:rgba(168,85,247,0.12); }
+.conv-list {
+  flex:1; min-width:0; cursor:pointer;
+  font-family:var(--mono); font-size:9.5px; color:var(--txt2);
+  background:rgba(0,0,0,0.35); border:1px solid rgba(109,139,255,0.12);
+  border-radius:8px; padding:4px 8px; outline:none;
+  max-width:420px; text-overflow:ellipsis;
+}
+.conv-list option { background:#0d0d17; color:#cfd6ff; }
 
 .chat-ambient { display:flex; gap:6px; padding:6px 24px; border-bottom:1px solid rgba(255,255,255,0.025); flex-shrink:0; overflow-x:auto; }
 .ambient-chip { display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:9px; color:var(--txt2); background:rgba(109,139,255,0.04); border:1px solid rgba(109,139,255,0.08); border-radius:12px; padding:4px 10px; transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1); white-space:nowrap; }
@@ -3190,3 +3222,20 @@ body.mode-friday textarea:focus-visible {
   .agent-badge, .agent-live-dot { animation: none !important; }
   .agent-btn, .agent-btn:hover { transition: none; transform: none !important; }
 }
+
+/* JARVIS left pane visibility: compact the LIVE SYSTEMS block so DIRECTIVES
+   and the MEMORY ARCHIVE below stay on screen, and give every inner dashboard
+   a visible scroll affordance when the panel is shorter than its content. */
+body.mode-jarvis .jd-gauges { gap: 10px; }
+body.mode-jarvis .jd-gauges .viz-ring,
+body.mode-jarvis .jd-gauges .viz-arc { margin-bottom: 8px; }
+body.mode-jarvis .jd-trend canvas { width: 100% !important; height: 72px !important; }
+#jarvis-dashboard::-webkit-scrollbar,
+.friday-dashboard::-webkit-scrollbar,
+.sys-monitor::-webkit-scrollbar { width: 5px; }
+#jarvis-dashboard::-webkit-scrollbar-thumb,
+.friday-dashboard::-webkit-scrollbar-thumb,
+.sys-monitor::-webkit-scrollbar-thumb { background: rgba(109,139,255,0.35); border-radius: 4px; }
+#jarvis-dashboard::-webkit-scrollbar-track,
+.friday-dashboard::-webkit-scrollbar-track,
+.sys-monitor::-webkit-scrollbar-track { background: transparent; }
