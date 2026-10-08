@@ -395,6 +395,7 @@ async function runBoot() {
     try { initBootStars(); } catch(e) {}
     try { initDataStreams(); } catch(e) {}
     startAllSubsystems();
+    refreshConversations();
     await revealDashboard({ fresh: fromModes });
     return;
   }
@@ -453,6 +454,7 @@ async function runBoot() {
     bootScreen.classList.remove('exiting');
   }
   startAllSubsystems();
+  refreshConversations();
   await revealDashboard({ fresh: false });
 }
 
@@ -483,11 +485,10 @@ async function greetAfterBoot() {
   } catch(e) {}
   // Announce the mode coming up before the greeting itself, so the dashboard
   // opens by saying what it is now running instead of jumping into chat. The
-  // speech queue serialises, so the two come out in order.
+  // speech queue serialises, so the two come out in order. The activation
+  // line is SPOKEN but never written into the chat output box — entering a
+  // mode should leave the conversation area clean (no greeting clutter).
   const activation = modeName ? `Activating ${modeName} mode.` : '';
-  if (typeof addAIMessage === 'function') {
-    if (activation) addAIMessage(activation);
-  }
   if (window.__bootGreeted) return;
   window.__bootGreeted = true;
   // Single-voice rule: if the server's proactive thread already spoke the
@@ -3080,6 +3081,58 @@ sendBtn.addEventListener('click', () => {
 // ================================================
 // SEND MESSAGE
 // ================================================
+async function refreshConversations() {
+  const sel = document.getElementById('conv-list');
+  if (!sel) return;
+  try {
+    const res = await fetch('/api/conversations', { cache: 'no-store' });
+    const d = await res.json();
+    if (!d.success) return;
+    const cur = String(d.active_id || '');
+    sel.innerHTML = (d.conversations || []).map(c =>
+      `<option value="${c.id}">${escHtml(c.title || 'Untitled chat')} (${c.message_count})</option>`
+    ).join('');
+    if (d.conversations && d.conversations.length && cur) sel.value = cur;
+  } catch(e) {}
+}
+
+async function newConversation() {
+  if (typeof sendMessage === 'function' && confirm('Start a brand-new conversation?')) {
+    try { await fetch('/api/conversations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch(e) {}
+    refreshConversations();
+    const msgs = document.getElementById('msgs');
+    if (msgs) msgs.innerHTML = '';
+  }
+}
+
+async function switchConversation(id) {
+  if (!id) return;
+  try {
+    const r = await fetch('/api/conversations/' + encodeURIComponent(id) + '/switch', { method: 'POST' });
+    const d = await r.json();
+    if (d.success) {
+      const msgs = document.getElementById('msgs');
+      if (msgs) msgs.innerHTML = '';
+      (d.messages || []).forEach(m => {
+        if (m.role === 'user') { const u = document.createElement('div'); u.className = 'msg user'; u.innerHTML = '<div class="avatar">YOU</div><div class="bubble">' + escHtml(m.content) + '</div>'; msgs.appendChild(u); }
+        else if (escHtml && m.content) { addAIMessage(m.content); }
+      });
+      const hs = document.getElementById('chat-scroll');
+      if (hs) hs.scrollTop = hs.scrollHeight;
+      refreshConversations();
+    }
+  } catch(e) {}
+}
+
+async function launchTray() {
+  if (typeof toast !== 'function') return;
+  try {
+    const r = await fetch('/api/tray/launch', { method: 'POST' });
+    const d = await r.json();
+    toast(d && d.success ? 'MINI HUD OPENING' : ('TRAY FAILED: ' + (d && d.error || 'unknown')), d && d.success ? 'ok' : 'err');
+  } catch(e) { toast('TRAY FAILED', 'err'); }
+}
+
 async function sendMessage(text) {
   if (isSending) return;
   isSending = true;
@@ -3114,6 +3167,7 @@ async function sendMessage(text) {
       }
       setTimeout(() => addAIMessage(cmd.response), 300);
       speak(cmd.response);
+      refreshConversations();
       return;
     }
     addTyping();
@@ -3157,6 +3211,7 @@ async function sendMessage(text) {
       }
       else if (data.reply.command) { await fetch('/api/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data.reply.command) }); }
       speak(data.reply.speech || data.reply.text);
+      refreshConversations();
     } else { addAIMessage('Something went wrong, BOSS. Please try again.'); setOrbState('idle'); }
   } catch { removeTyping(); addAIMessage('Connection error, BOSS. Please try again.'); setOrbState('idle'); }
   } finally { isSending = false; }
@@ -4808,7 +4863,8 @@ async function refreshFridayCards() {
       fetch('/api/briefing', { cache: 'no-store' }).catch(() => null),
     ]);
     const sys = sysRes.ok ? await sysRes.json() : {};
-    const b = brief.briefing || {};
+    const b = (briefRes && briefRes.ok) ? await briefRes.json() : {};
+    b.briefing = b.briefing || {};
 
     // ---- gauges ----------------------------------------------------------
     // The four QUICK LOOK cards used to hold one bare number each. A ring says
