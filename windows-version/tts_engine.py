@@ -47,6 +47,38 @@ DEFAULT_RATE = "+8%"
 DEFAULT_PITCH = "+0Hz"
 DEFAULT_VOLUME = "+0%"
 
+# Hindi neural voices used when the STT language preference is 'hi'. Tuple:
+# (voice, rate, pitch, volume) — matching persona genders, slightly slower so
+# Hindi still sounds natural.
+HI_VOICES = {
+    "friday": ("hi-IN-SwaraNeural", "-6%", "+0Hz", "+0%"),
+    "jarvis": ("hi-IN-MadhurNeural", "-8%", "-2Hz", "+0%"),
+    "ultron": ("hi-IN-MadhurNeural", "-12%", "-5Hz", "-10%"),
+}
+
+
+def _stt_language() -> str:
+    """Mirror of the UI's STT language preference (en | hi)."""
+    try:
+        import json as _json
+        s = _json.loads((BASE_DIR / "data" / "settings.json").read_text(encoding="utf-8"))
+        return str(s.get("stt_language", "en") or "en").lower()
+    except Exception:
+        return "en"
+
+
+def voice_for(mode: str | None) -> tuple[str, str, str, str]:
+    """(voice, rate, pitch, volume) for a persona.
+
+    Uses a Hindi neural voice when the STT language preference is 'hi' (so the
+    assistant replies in the same language the Boss speaks into the mic),
+    otherwise the default English voice map per persona.
+    """
+    default = MODE_VOICES.get(mode, (DEFAULT_VOICE, DEFAULT_RATE, DEFAULT_PITCH, DEFAULT_VOLUME))
+    if _stt_language() == "hi":
+        return HI_VOICES.get(mode, HI_VOICES["friday"])
+    return default
+
 # Legacy SAPI fallback keyword profiles (prefer natural female / British male)
 SAPI_PROFILES = {
     "friday": (["jenny", "aria", "michelle", "natural", "female"], ["zira", "hazel", "susan", "female"], 0),
@@ -226,7 +258,7 @@ def prewarm(mode: str | None = None) -> None:
         return False
     modes = [mode] if mode else list(MODE_VOICES.keys())
     for m in modes:
-        voice, rate, pitch, volume = MODE_VOICES.get(m, (DEFAULT_VOICE, DEFAULT_RATE, DEFAULT_PITCH, DEFAULT_VOLUME))
+        voice, rate, pitch, volume = voice_for(m)
         probe = f"System {m} audio engine online."
         tmp = CACHE_DIR / f"_probe_{m}.wav"
         try:
@@ -325,8 +357,8 @@ def synthesize_wav(text: str, wav_path: str | Path, voice: str | None = None,
 
 
 def cached_wav(text: str, mode: str | None = None) -> Path | None:
-    """Return a cached WAV for (mode, text) if it exists, else None."""
-    key = f"{mode or 'default'}:{_clean_for_cache(text)}"
+    """Return a cached WAV for (voice, mode, text) if it exists, else None."""
+    key = f"{voice_for(mode)[0]}:{mode or 'default'}:{_clean_for_cache(text)}"
     h = hashlib.md5(key.encode()).hexdigest()
     p = CACHE_DIR / f"{h}.wav"
     return p if p.exists() else None
@@ -468,7 +500,7 @@ def _speak_bark(text: str, mode: str | None) -> str:
 def _fallback_once(text: str, mode: str | None) -> None:
     """Last-resort speak after a bark model failure (never loops)."""
     if edge_tts_available():
-        voice, rate, pitch, volume = MODE_VOICES.get(mode, (DEFAULT_VOICE, DEFAULT_RATE, DEFAULT_PITCH, DEFAULT_VOLUME))
+        voice, rate, pitch, volume = voice_for(mode)
         try:
             wav = CACHE_DIR / f"_barkfallback_{mode or 'default'}.wav"
             probe = split_sentences(text)[0] or text
@@ -515,7 +547,7 @@ def _speak_worker(text: str, mode: str | None, use_chime: bool) -> None:
         if _chosen_engine() == "bark":
             _speak_bark(text, mode)
         elif edge_tts_available():
-            voice, rate, pitch, volume = MODE_VOICES.get(mode, (DEFAULT_VOICE, DEFAULT_RATE, DEFAULT_PITCH, DEFAULT_VOLUME))
+            voice, rate, pitch, volume = voice_for(mode)
             cache = CACHE_DIR
             cache.mkdir(exist_ok=True)
             sentences = split_sentences(text)
@@ -524,7 +556,7 @@ def _speak_worker(text: str, mode: str | None, use_chime: bool) -> None:
                     break
                 wav = cached_wav(sent, mode)
                 if wav is None:
-                    key = f"{mode or 'default'}:{_clean_for_cache(sent)}"
+                    key = f"{voice}:{mode or 'default'}:{_clean_for_cache(sent)}"
                     h = hashlib.md5(key.encode()).hexdigest()
                     wav = cache / f"{h}.wav"
                     CACHE_DIR.mkdir(exist_ok=True, parents=True)
@@ -609,7 +641,8 @@ def voice_map() -> dict:
     """Describe the active neural voice per mode (used by /api/voice-info)."""
     active = _chosen_engine()
     out = {}
-    for m, (v, r, p, vol) in MODE_VOICES.items():
+    for m in MODE_VOICES:
+        v, r, p, vol = voice_for(m)
         out[m] = {"neural_voice": v, "rate": r, "pitch": p, "volume": vol,
                   "engine": active,
                   "cached": bool(CACHE_DIR.exists() and any(CACHE_DIR.glob("*.wav")))}
@@ -621,5 +654,6 @@ def voice_map() -> dict:
                            "reason": f"module error: {type(e).__name__}"}
     out["__engine_choice__"] = active
     out["__engine_setting__"] = _engine_setting()
+    out["__stt_language__"] = _stt_language()
     out["__ladder__"] = "bark -> edge-tts -> SAPI"
     return out

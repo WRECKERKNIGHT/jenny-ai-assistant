@@ -5533,7 +5533,7 @@ def api_speak():
     mode = get_mode()
     # Cache key is scoped by BOTH format and mode so each voice stays its own —
     # FRIDAY's female MP3 must never satisfy a JARVIS request (and vice-versa).
-    h = hashlib.md5((mode + ":" + ext + ":" + clean).encode()).hexdigest(); wav_path = cache_dir / f"{h}.{ext}"
+    h = hashlib.md5((mode + ":" + ext + ":" + tts_engine.voice_for(mode)[0] + ":" + clean).encode()).hexdigest(); wav_path = cache_dir / f"{h}.{ext}"
     if wav_path.exists() and wav_path.stat().st_size > 0:
         return send_from_directory(str(cache_dir), f"{h}.{ext}", mimetype=("audio/mpeg" if ext == "mp3" else "audio/wav"))
     # MP3 -> stream edge-tts live so the browser gets the first audio bytes in
@@ -5541,7 +5541,7 @@ def api_speak():
     # The full result is cached on completion so repeat phrases stay instant.
     if ext == "mp3" and tts_engine.edge_tts_available():
         try:
-            voice, rate, pitch, volume = tts_engine.MODE_VOICES.get(mode, (tts_engine.DEFAULT_VOICE, tts_engine.DEFAULT_RATE, tts_engine.DEFAULT_PITCH, tts_engine.DEFAULT_VOLUME))
+            voice, rate, pitch, volume = tts_engine.voice_for(mode)
         except Exception:
             voice, rate, pitch, volume = tts_engine.DEFAULT_VOICE, tts_engine.DEFAULT_RATE, tts_engine.DEFAULT_PITCH, tts_engine.DEFAULT_VOLUME
         def _stream_mp3():
@@ -5563,7 +5563,7 @@ def api_speak():
         return Response(_stream_mp3(), mimetype="audio/mpeg")
     ok = False
     try:
-        voice, rate, pitch, volume = tts_engine.MODE_VOICES.get(mode, (tts_engine.DEFAULT_VOICE, tts_engine.DEFAULT_RATE, tts_engine.DEFAULT_PITCH, tts_engine.DEFAULT_VOLUME))
+        voice, rate, pitch, volume = tts_engine.voice_for(mode)
         ok = tts_engine.synthesize_wav(clean, wav_path, voice, rate, pitch, volume)
     except Exception:
         ok = False
