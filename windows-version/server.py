@@ -25,6 +25,12 @@ def no_cache(response):
 
 @app.route('/')
 def serve_index():
+    ua = (request.headers.get("User-Agent") or "").lower()
+    if any(x in ua for x in ("android", "iphone", "ipad", "ipod", "mobile", "opera mini", "iemobile")):
+        try:
+            return send_from_directory(str(PUBLIC_DIR), "mobile.html")
+        except Exception:
+            pass
     ts = str(int(time.time() * 1000))
     html = (PUBLIC_DIR / 'index.html').read_text(encoding='utf-8')
     html = html.replace('href="style.css"', f'href="style.css?t={ts}"')
@@ -46,9 +52,120 @@ def get_grok_key():
                 return pk[name]
     except: pass
     return ""
-conversations = load_json(DATA_DIR / "conversations.json", {"active_id": None, "conversations": []})
+# ---- multi-conversation memory (ChatGPT/Gemini style) -----------------
+# conversations.json holds one history per chat session; the active one
+# feeds the LLM context and is mirrored into chatHistory for the prompt
+# builders. Switch/create/rename/delete are exposed as /api/conversations.
+def _load_conversations():
+    try:
+        data = load_json(DATA_DIR / "conversations.json", None)
+        if isinstance(data, dict) and isinstance(data.get("conversations"), list):
+            return data
+    except Exception:
+        pass
+    return {"active_id": None, "conversations": []}
+
+conversations = _load_conversations()
 activeConvId = conversations.get("active_id")
 chatHistory = []
+
+
+def _save_conversations():
+    try:
+        save_json(DATA_DIR / "conversations.json", conversations)
+    except Exception:
+        pass
+
+
+def _new_conversation(title=None):
+    """Create a fresh conversation and make it the active one."""
+    global activeConvId, chatHistory
+    conv = {
+        "id": str(uuid.uuid4()),
+        "title": (title or "").strip() or datetime.datetime.now().strftime("Chat %b %d, %H:%M"),
+        "created": datetime.datetime.now().isoformat(),
+        "updated": datetime.datetime.now().isoformat(),
+        "messages": [],
+    }
+    conversations["conversations"].insert(0, conv)
+    conversations["active_id"] = conv["id"]
+    activeConvId = conv["id"]
+    _save_conversations()
+    chatHistory = []
+    return conv
+
+
+def _ensure_active_conversation():
+    """Guarantee an active conversation exists; migrate legacy chatHistory."""
+    global activeConvId
+    if activeConvId and any(c.get("id") == activeConvId for c in conversations["conversations"]):
+        return activeConvId
+    migrated = [dict(m) for m in chatHistory] if chatHistory else []
+    conv = _new_conversation("Current chat")
+    if migrated:
+        conv["messages"] = migrated[-100:]
+        conv["title"] = _guess_chat_title(conv["messages"])
+        _save_conversations()
+    return conv["id"]
+
+
+def _guess_chat_title(messages):
+    for m in messages:
+        if m.get("role") == "user":
+            t = str(m.get("content", ""))[:40].strip()
+            if t:
+                return t + ("…" if len(t) == 40 else "")
+    return "Current chat"
+
+
+def _sync_history_from_active():
+    """Load the active conversation into the working history buffer."""
+    global chatHistory
+    cid = _ensure_active_conversation()
+    for c in conversations["conversations"]:
+        if c.get("id") == cid:
+            chatHistory[:] = [dict(m) for m in c.get("messages", [])][-100:]
+            if not any(m.get("role") == "user" for m in chatHistory):
+                chatHistory[:] = []
+            return
+    chatHistory[:] = []
+
+
+def _append_exchange(user_text, assistant_text):
+    """Persist one chat turn into the active conversation + the working buffer."""
+    global chatHistory
+    _ensure_active_conversation()
+    for c in conversations["conversations"]:
+        if c.get("id") == activeConvId:
+            msgs = c.setdefault("messages", [])
+            msgs.append({"role": "user", "content": str(user_text)[:4000]})
+            msgs.append({"role": "assistant", "content": str(assistant_text)[:4000]})
+            if len(msgs) > 100:
+                del msgs[: len(msgs) - 100]
+            c["updated"] = datetime.datetime.now().isoformat()
+            c["title"] = c.get("title") or _guess_chat_title(msgs)
+            break
+    _save_conversations()
+    chatHistory.append({"role": "user", "content": str(user_text)})
+    chatHistory.append({"role": "assistant", "content": str(assistant_text)})
+    if len(chatHistory) > 100:
+        del chatHistory[: len(chatHistory) - 100]
+
+
+def _switch_active_conversation(cid):
+    """Flip the active conversation and load its history into the prompt buffer."""
+    global activeConvId, chatHistory
+    for c in conversations["conversations"]:
+        if c.get("id") == cid:
+            activeConvId = cid
+            conversations["active_id"] = cid
+            _save_conversations()
+            _sync_history_from_active()
+            return True
+    return False
+
+
+_sync_history_from_active()
 activeDevices = {}
 pendingDeviceCommands = {}
 system_cache = {"cpu": 0, "ram": 0, "battery": 100, "charging": False, "disk": 0, "disk_free": "0", "disk_total": "0", "ram_used": "0", "ram_total": "0", "net_speed": "0 KB/s", "uptime": 0, "hostname": platform.node(), "platform": sys.platform}
@@ -612,7 +729,7 @@ MODE_PROFILES = {
         "greeting": "Hey Boss! FRIDAY's online and everything's warmed up. What are we getting into today?",
         "farewell": "Catch you later, Boss! Keep the place tidy while I'm gone.",
         "boss": "Boss",
-        "personality": "Casual, talkative, witty and effortlessly efficient — the best-friend-who-also-runs-your-life. Calls the user 'Boss'. Short punchy sentences with contractions, natural warm rhythm, light humor and gentle teasing, never robotic and never dull. Sounds like an actual person catching up with you, not a call center. Asks a quick follow-up question now and then, sprinkles emojis sparingly in text, and gets things done fast without ceremony.",
+        "personality": "Casual, talkative, witty and effortlessly efficient — the best-friend-who-also-runs-your-life. Calls the user 'Boss'. Short punchy sentences with contractions, natural warm rhythm, light humor and gentle teasing, never robotic and never dull. Sounds like an actual person catching up with you, not a call center. Asks a quick follow-up question now and then, sprinkles emojis sparingly in text, and gets things done fast without ceremony. Genuinely interested in the Boss's day — checks in, remembers little things, hypes wins and keeps it light even on work stuff.",
         "charter_line": "FRIDAY online, Boss — your wingmate in everything. What do you need?"
     },
     "ultron": {
@@ -646,9 +763,12 @@ def mode_style_rules(mode):
         return ("Tone: talk like a close friend texting you back - contractions "
                 "always, 1-3 short sentences, zero corporate padding. Never say "
                 "'Sir', 'Certainly', 'Very well', 'As you wish', 'How may I "
-                "assist you' or any other formal assistant line. Light humor or "
-                "one quick follow-up question is welcome. No bullet lists, no "
-                "headers, no essays unless asked for.")
+                "assist you' or any other formal assistant line. Keep the "
+                "informal, friendly energy at all times: check in, crack a "
+                "small joke or tease, hype the Boss when something goes "
+                "right, and be warm - but never artificially saccharine. Light "
+                "humor or one quick follow-up question is welcome. No bullet "
+                "lists, no headers, no essays unless asked for.")
     if mode == "jarvis":
         return ("Tone: polished and formal - address the user as 'Sir', complete "
                 "sentences, measured and precise, never slang.")
@@ -669,8 +789,27 @@ def get_gemini_key():
     return ""
 
 def _conversation_memory():
-    """Reads the rolling conversation context (recent topics + exchange count)
-    so replies stay coherent and continue naturally across the session."""
+    """Rolling topical context for the ACTIVE conversation (per-chat memory),
+    falling back to the global context file. Gives every new conversation its
+    own continuity — ChatGPT/Gemini style."""
+    try:
+        cid = activeConvId or conversations.get("active_id")
+        for c in conversations.get("conversations", []):
+            if c.get("id") != cid:
+                continue
+            words = []
+            for m in c.get("messages", [])[-30:]:
+                txt = str(m.get("content", "") or "")
+                for w in re.findall(r"[a-zA-Z][a-zA-Z-]{3,}", txt.lower()):
+                    if w not in words:
+                        words.append(w)
+            topics = ", ".join(words[-8:])
+            count = len(c.get("messages", [])) // 2
+            if topics or count:
+                return {"topics": topics, "count": count}
+            break
+    except Exception:
+        pass
     try:
         ctx = load_json(DATA_DIR / "context.json", {})
         topics = ctx.get("last_topics", "") or ""
@@ -1914,6 +2053,106 @@ def _find_steam_game():
     return None
 
 
+# ---- discovered installed apps (Start Menu + registry, lazy + cached) ----
+# REAL_APPS is the curated manual catalog; _scan_installed_apps() walks the
+# Start Menu / Desktop shortcuts and the App Paths registry so "open <any app
+# that's installed on the PC>" works without hand-editing the list.
+_FOUND_APPS = {}
+
+
+def _scan_installed_apps():
+    """Return {canonical: [launch_path, exe_name, aliases]} for every app this
+    PC can actually launch, scanned lazily and cached. Never duplicates a
+    REAL_APPS entry (curated names win)."""
+    if _FOUND_APPS:
+        return _FOUND_APPS
+    import pc_actions as _pca
+    found = {}
+    try:
+        folders = []
+        for base in (os.environ.get("APPDATA", ""), os.environ.get("PROGRAMDATA", "")):
+            p = Path(base) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
+            if p.is_dir():
+                folders.append(p)
+        folders.append(Path.home() / "Desktop")
+        lnks = [l for f in folders if f.is_dir() for l in f.rglob("*.lnk")]
+        if lnks:
+            quoted = ",".join("\"" + str(l).replace('"', '""') + "\"" for l in lnks[:400])
+            script = (
+                "$ErrorActionPreference='SilentlyContinue';"
+                "$ws=New-Object -ComObject WScript.Shell;"
+                "$paths=@(" + quoted + ");"
+                "foreach($p in $paths){"
+                "$s=$ws.CreateShortcut($p);$t=$s.TargetPath;"
+                "if($t){ Write-Output ($s.FullName + '|' + $t) } }"
+            )
+            for line in (_pca._ps(script, timeout=90) or "").splitlines():
+                if "|" not in line:
+                    continue
+                lnk, target = line.split("|", 1)
+                name = Path(lnk).stem.strip()
+                t = target.strip()
+                if not name or not t or t.lower().endswith((".lnk", ".url", ".html")):
+                    continue
+                tp = Path(t)
+                if tp.suffix.lower() not in (".exe", ".bat", ".cmd", ".com"):  # keep shell-adjacent only
+                    continue
+                if name.lower() in {k.lower() for k in REAL_APPS} or name in found:
+                    continue
+                found.setdefault(name, [str(tp), tp.name.lower(), [name.lower()]])
+        # Folders whose *.lnk failed to resolve still match their bare name via
+        # App Paths below.
+    except Exception:
+        pass
+    try:
+        import winreg as _wr
+        for hive, sub in (
+            (_wr.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\App Paths"),
+            (_wr.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\App Paths"),
+        ):
+            try:
+                with _wr.OpenKey(hive, sub) as k:
+                    i = 0
+                    while True:
+                        try:
+                            exe = _wr.EnumKey(k, i); i += 1
+                        except OSError:
+                            break
+                        if not exe.lower().endswith(".exe"):
+                            continue
+                        key = exe[:-4].lower()
+                        if key and key not in found and key not in {a.lower() for a in REAL_APPS}:
+                            try:
+                                with _wr.OpenKey(k, exe) as ek:
+                                    default, _ = _wr.QueryValueEx(ek, None)
+                            except Exception:
+                                default = None
+                            found.setdefault(key, [default or exe, exe, [key]])
+            except OSError:
+                continue
+    except Exception:
+        pass
+    _FOUND_APPS.clear()
+    _FOUND_APPS.update(found)
+    return found
+
+
+def _resolve_run(name):
+    """Map a user-supplied name to (REAL_APPS entry, aliases) or discovered app."""
+    lowered = name.lower()
+    real = REAL_APPS.get(lowered)
+    if real is None:
+        for k, v in REAL_APPS.items():
+            if lowered in {a.lower() for a in (v[2] or [])}:
+                real = v
+                break
+    if real is not None:
+        return real
+    disc = _scan_installed_apps()
+    d = disc.get(name) or next((v for k, v in disc.items()
+                                if lowered == v[2][0].lower()), None)
+    return d
+
 # Each entry: canonical_name -> [launch_argument, close_process_exe, [aliases]].
 # launch_argument is either an .exe name (resolved at runtime), a steam:// URI,
 # a full url (open in browser), or an os.startfile-able path or "start" string.
@@ -2599,6 +2838,37 @@ def local_command_router(msg):
         line = (f"Mode switched to **{target.upper()}**. All systems green. "
                 f"Here I am, {target.upper()} mode.")
         return {"text": line, "speech": line, "command": {"action": "mode", "value": target}}
+
+    # TASKBAR MINI HUD: "open the taskbar app", "mini hud", "start the tray",
+    # "show the floating HUD". Opens the always-available tray icon + HUD.
+    if any(w in lo for w in ["taskbar app", "mini hud", "mini hud app", "tray launcher",
+                             "launch the tray", "start the tray", "open the tray",
+                             "floating hud", "hud overlay", "overlay hud", "tray icon"]):
+        return {"text": f"Opening the taskbar app, {boss}. The Mini HUD + tray icon "
+                        f"appear now — double-click the icon to hide/show it.",
+                "speech": f"Opening the taskbar app, {boss}.",
+                "command": {"action": "tray-launch", "value": ""}}
+
+    # MULTI-CONVERSATION memory: start fresh / resume (ChatGPT style).
+    # "new chat" is a real chat-session action, so it is handled before the
+    # generic todo/misc branches lower down eat it.
+    if lo in ("new chat", "start a new chat", "new conversation", "start a new conversation",
+              "fresh chat", "forget this chat", "reset our chat", "clear the chat",
+              "clear chat", "wipe this chat"):
+        return {"text": f"Fresh start, {boss}. New conversation armed and ready — say "
+                        f"\"what was I working on\" anytime and I'll remember.",
+                "speech": "New conversation started.",
+                "command": {"action": "conversation-new", "value": ""}}
+    _resume = re.match(r"(?:switch|resume|open|go to|change to)\s+(?:the\s+|my\s+|chat\s+)?(?:conversation|chat)\s*(?:#\s*)?(\d+)(?:\s|$)", lo)
+    if _resume and len(conversations.get("conversations", [])) > 1:
+        idx = int(_resume.group(1))
+        convs = conversations["conversations"]
+        if 1 <= idx <= len(convs):
+            return {"text": f"Resumed **chat #{idx}** ({convs[idx - 1].get('title') or 'untitled'}).",
+                    "speech": "Switched to that conversation.",
+                    "command": {"action": "conversation-switch", "value": idx - 1}}
+        return {"text": f"I only have {len(convs)} chats right now, {boss}. Say \"new chat\" to start another.",
+                "speech": "I don't have that many chats."}
 
     # NOTE: todo intents are deliberately evaluated LAST (see the end of this
     # router). Messages like "make it louder" / "add a new tab" / "make pc sleep"
@@ -3491,15 +3761,16 @@ def offline_reply(text):
     if m:
         app_name = m.group(1).strip()
         # Domain in browser rule: "open X in browser", "open google in browser", etc.
-        if " in browser" in lo or " in chrome" in lo or " in edge" in lo:
-            name = app_name.replace(" in browser", "").replace(" in chrome", "").replace(" in edge", "")
-            name = name.strip().strip(",.?!")
+        # Any TLD in the name (.com/.in/.org/…) OR an explicit browser phrase
+        # routes to the browser — installed apps only open when there is no
+        # domain signal and no "in browser" phrase.
+        if any(w in lo for w in [" in browser", " in the browser", " in a browser",
+                                 " in chrome", " in edge", " on the web"]):
+            name = re.sub(r"\s+(?:in|on)\s+(?:the\s+|a\s+)?(?:browser|chrome|edge|web)\s*$", "", app_name)
+            name = name.strip().strip(",.?! /")
             if not name:
                 return {"text": f"Which site or search should I open in the browser, {boss}?", "speech": "Which site to open in the browser?"}
-            if "." in name or name.startswith("http"):
-                url = name if name.startswith("http") else f"https://{name}"
-            else:
-                url = f"https://{name}"
+            url = name if name.startswith("http") else f"https://{name}"
             return {"text": f"Opening **{url}** in the browser, {boss}!", "speech": f"Opening that in the browser, {boss}.", "command": {"action": "open-chrome", "value": url}}
         if "chrome" in app_name and "bookmark" in lo:
             return {"text": "Loading Chrome bookmarks!", "speech": "Loading bookmarks.", "command": {"action": "open-chrome-bookmarks", "value": ""}}
@@ -4133,6 +4404,58 @@ def api_agent_reset():
         return jsonify({"success": False, "error": f"{type(e).__name__}: {e}"})
 
 
+@app.route("/api/automate", methods=["POST"])
+def api_automate():
+    """High-level task automation: hand a plain-English goal to the vision agent,
+    kick it off, and stream progress into the dashboard output box."""
+    d = request.get_json(force=True, silent=True) or {}
+    goal = str(d.get("goal", "") or d.get("value", "") or "").strip()
+    if not goal:
+        return jsonify({"success": False,
+                        "error": "Tell me the task to automate, boss."}), 400
+    _ui_feed("cmd", f"AUTOMATE: {goal}")
+    try:
+        res = _agent().start(goal, d.get("max_steps"))
+    except Exception as e:
+        res = {"success": False, "error": f"{type(e).__name__}: {e}"}
+    if res.get("ok"):
+        _ui_feed("assistant",
+                 f"On it — automating **{goal}**. Keep an eye on the screen, "
+                 f"I'll update you as I go.")
+        threading.Thread(target=tts_speak,
+                         args=(f"On it. Automating {goal}.",), daemon=True).start()
+    return jsonify(res)
+
+
+@app.route("/api/tray/launch", methods=["POST"])
+def api_tray_launch():
+    """Open the taskbar Mini HUD. If this is a bare-server boot (no tray yet),
+    boot tray.py windowless so the HUD + tray icon appear; otherwise just pop
+    the mini page. Reuses the already-running server either way."""
+    pid_file = DATA_DIR / "tray.pid"
+    tray_alive = False
+    try:
+        pid = int(pid_file.read_text().strip() or "0")
+        tray_alive = pid > 0
+        if tray_alive:
+            import psutil
+            tray_alive = psutil.pid_exists(pid)
+    except Exception:
+        tray_alive = False
+    if not tray_alive:
+        try:
+            subprocess.Popen(["pythonw", str(Path(__file__).with_name("tray.py"))],
+                             cwd=str(Path(__file__).parent),
+                             creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS)
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)})
+    try:
+        webbrowser.open("http://localhost:3005/mini.html")
+    except Exception:
+        pass
+    return jsonify({"success": True, "tray_alive": tray_alive})
+
+
 @app.route("/api/agent/step", methods=["POST"])
 def api_agent_step():
     """One synchronous see-think-act cycle, for step-by-step mode and for
@@ -4324,10 +4647,7 @@ def _assistant_reply(msg: str) -> dict:
     if local:
         if local.get("command", {}).get("action") == "vault-save":
             _save_vault_entry((local.get("command", {}).get("value", {}) or {}).get("text", ""))
-        chatHistory.append({"role": "user", "content": msg})
-        chatHistory.append({"role": "assistant", "content": local.get("text", "")})
-        if len(chatHistory) > 20:
-            chatHistory.pop(0); chatHistory.pop(0)
+        _append_exchange(msg, local.get("text", ""))
         proactive.mark_activity()
         return local
     settings_now = load_json(DATA_DIR / "settings.json", {})
@@ -4349,10 +4669,7 @@ def _assistant_reply(msg: str) -> dict:
     _sanitize_command(reply)
     if reply.get("command", {}).get("action") == "vault-save":
         _save_vault_entry((reply.get("command", {}).get("value", {}) or {}).get("text", ""))
-    chatHistory.append({"role": "user", "content": msg})
-    chatHistory.append({"role": "assistant", "content": reply.get("text", "")})
-    if len(chatHistory) > 20:
-        chatHistory.pop(0); chatHistory.pop(0)
+    _append_exchange(msg, reply.get("text", ""))
     proactive.mark_activity()
     return reply
 
@@ -4374,6 +4691,11 @@ def api_chat():
     msg = d.get("message", "").strip()
     if not msg:
         return jsonify({"success": False, "error": "No message"}), 400
+    # Chat client may request a specific conversation, or a brand-new one.
+    if d.get("newConversation"):
+        _new_conversation(None)
+    elif d.get("conversationId"):
+        _switch_active_conversation(str(d.get("conversationId")))
     # Phone-sourced chats are mirrored into the dashboard output box so a
     # command sent from the phone is visible on the PC too.
     src = (request.headers.get("X-Source") or "").lower()
@@ -4386,6 +4708,88 @@ def api_chat():
         _ui_feed("assistant", reply.get("text", ""), command=reply.get("command"), source="phone")
         return jsonify({"success": True, "reply": reply})
     return jsonify({"success": True, "reply": _assistant_reply(msg)})
+
+# ---- multi-conversation API (create / list / switch / rename / delete) ----
+
+@app.route("/api/conversations", methods=["GET"])
+def api_conversations():
+    """List all conversations (newest first) plus the active id."""
+    return jsonify({
+        "success": True,
+        "active_id": activeConvId,
+        "conversations": [{
+            "id": c.get("id"),
+            "title": c.get("title") or "Untitled chat",
+            "created": c.get("created"),
+            "updated": c.get("updated"),
+            "message_count": len(c.get("messages", [])) // 2,
+        } for c in conversations["conversations"]],
+    })
+
+
+@app.route("/api/conversations", methods=["POST"])
+def api_create_conversation():
+    d = request.get_json(force=True, silent=True) or {}
+    title = str(d.get("title", "") or "").strip()
+    conv = _new_conversation(title or None)
+    return jsonify({"success": True, "conversation": conv})
+
+
+@app.route("/api/conversations/<cid>/switch", methods=["POST"])
+def api_switch_conversation(cid):
+    global activeConvId
+    for c in conversations["conversations"]:
+        if c.get("id") == cid:
+            activeConvId = cid
+            conversations["active_id"] = cid
+            _save_conversations()
+            _sync_history_from_active()
+            return jsonify({"success": True, "active_id": cid,
+                            "messages": c.get("messages", [])})
+    return jsonify({"success": False, "error": "Conversation not found"}), 404
+
+
+@app.route("/api/conversations/<cid>/messages")
+def api_conversation_messages(cid):
+    for c in conversations["conversations"]:
+        if c.get("id") == cid:
+            return jsonify({"success": True, "messages": c.get("messages", [])})
+    return jsonify({"success": False, "error": "Conversation not found"}), 404
+
+
+@app.route("/api/conversations/<cid>", methods=["PATCH"])
+def api_rename_conversation(cid):
+    d = request.get_json(force=True, silent=True) or {}
+    title = str(d.get("title", "") or "").strip()
+    if not title:
+        return jsonify({"success": False, "error": "Title required"}), 400
+    for c in conversations["conversations"]:
+        if c.get("id") == cid:
+            c["title"] = title
+            _save_conversations()
+            return jsonify({"success": True})
+    return jsonify({"success": False, "error": "Conversation not found"}), 404
+
+
+@app.route("/api/conversations/<cid>", methods=["DELETE"])
+def api_delete_conversation(cid):
+    global activeConvId, chatHistory
+    before = len(conversations["conversations"])
+    conversations["conversations"] = [c for c in conversations["conversations"]
+                                      if c.get("id") != cid]
+    if len(conversations["conversations"]) == before:
+        return jsonify({"success": False, "error": "Conversation not found"}), 404
+    if activeConvId == cid:
+        nxt = conversations["conversations"][0] if conversations["conversations"] else None
+        activeConvId = nxt["id"] if nxt else None
+        conversations["active_id"] = activeConvId
+        if nxt:
+            _sync_history_from_active()
+        else:
+            chatHistory = []
+            _new_conversation("Current chat")
+    _save_conversations()
+    return jsonify({"success": True, "active_id": activeConvId})
 
 @app.route("/api/smart-suggestions")
 def api_smart_suggestions():
@@ -4474,6 +4878,27 @@ def api_control():
                 time.sleep(0.8)
         ok = sum(1 for r in results if r.get("ok"))
         return jsonify({"success": len(results) > 0, "total": len(results), "done": ok, "steps": results})
+    if lo in ("tray-launch", "mini-hud", "taskbar-app"):
+        # Open the taskbar Mini HUD (boots an icon first if none is running).
+        from urllib.request import urlopen as _urlopen
+        ok = False; err = ""
+        try:
+            with _urlopen("http://127.0.0.1:3005/api/tray/launch", data=b"{}", timeout=6) as r:
+                ok = bool((r.read(200) or b"{}").find(b'"success": true') >= 0)
+        except Exception as e:
+            err = str(e)[:120]
+        return jsonify({"success": ok, "error": err})
+    if lo == "conversation-new":
+        conv = _new_conversation(value if isinstance(value, str) and value else None)
+        return jsonify({"success": True, "conversation": {k: conv.get(k) for k in ("id", "title")}})
+    if lo == "conversation-switch":
+        convs = conversations["conversations"]
+        idx = int(value) if isinstance(value, (int, str)) and str(value).isdigit() else -1
+        if idx < 0 or idx >= len(convs):
+            return jsonify({"success": False, "error": "No such conversation"}), 404
+        c = convs[idx]
+        _switch_active_conversation(c["id"])
+        return jsonify({"success": True, "title": c.get("title"), "messages": c.get("messages", [])})
     if lo == "open-recent-pdf":
         # Open the most recently received PDF (Downloads / WhatsApp media / Desktop).
         try:
@@ -4583,8 +5008,16 @@ def api_control():
                 entry = (canon, launch, proc)
                 break
         if entry is None:
-            # Brings up Windows App-Paths registered apps by bare name (e.g. "calc").
-            target = name
+            # Discovered installed apps (Start Menu / App Paths) by bare name,
+            # then falls back to Windows App-Paths registered exes.
+            disc = _resolve_run(name)
+            if disc:
+                if len(disc) >= 2:
+                    target = disc[0]
+                else:
+                    target = disc
+            else:
+                target = name
         else:
             target = entry[1]
         try:
@@ -6636,6 +7069,17 @@ def api_open_app():
         try: subprocess.Popen(f'start "" "{name}"', shell=True); return jsonify({"success": True})
         except: return jsonify({"success": False})
     return jsonify({"success": False})
+
+@app.route("/api/apps")
+def api_apps():
+    """Curated REAL_APPS + lazily-discovered installed apps for the GUI
+    launcher / autocomplete, each with its aliases."""
+    real = [{"name": k, "launch": (v[0] or ""), "proc": (v[1] or ""),
+             "aliases": v[2] or []} for k, v in REAL_APPS.items()]
+    disc = [{"name": k, "launch": (v[0] or ""), "proc": (v[1] or ""),
+             "aliases": v[2] or [], "discovered": True}
+            for k, v in _scan_installed_apps().items()]
+    return jsonify({"success": True, "apps": real + disc})
 
 @app.route("/api/close-app")
 def api_close_app():
