@@ -30,8 +30,46 @@ import pystray
 from PIL import Image
 
 BASE_DIR = Path(__file__).parent
+DATA_DIR = BASE_DIR / "data"
 PORT = 3005
 SERVER_URL = f"http://127.0.0.1:{PORT}"
+
+
+class _LogTee:
+    """Send print() output to both the console (if one exists) and a file, so
+    pc windowless owners still get a readable run log without a console box."""
+
+    def __init__(self, console, fh):
+        self.console = console
+        self.fh = fh
+
+    def write(self, text):
+        try:
+            if self.console and self.console is not sys.__stdout__:
+                self.console.write(text)
+            self.fh.write(text)
+            self.fh.flush()
+        except Exception:
+            pass
+
+    def flush(self):
+        try:
+            if self.console:
+                self.console.flush()
+            self.fh.flush()
+        except Exception:
+            pass
+
+
+def _tee_console_to_file():
+    try:
+        log_dir = DATA_DIR / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        fh = open(log_dir / "jenny_tray.log", "a", encoding="utf-8")
+        sys.stdout = _LogTee(sys.stdout, fh)
+        sys.stderr = _LogTee(sys.stderr, fh)
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -304,6 +342,10 @@ def _toggle_webview_hud():
 
 def _shutdown():
     set_wake_word(False)
+    try:
+        (DATA_DIR / 'tray.pid').unlink(missing_ok=True)
+    except Exception:
+        pass
     try:
         if _webview_window is not None:
             _webview_window.destroy()
@@ -657,6 +699,16 @@ def main():
     print("  J.E.N.N.Y v2.0 — Tray + Mini HUD (port 3005)")
     print("  Double-click the tray icon to show/hide the Mini HUD.")
     print("=" * 55)
+
+    _tee_console_to_file()
+
+    # The launcher button in the main app uses this pid file to know whether a
+    # tray already exists (and to avoid spawning duplicate icons).
+    try:
+        (DATA_DIR).mkdir(parents=True, exist_ok=True)
+        (DATA_DIR / "tray.pid").write_text(str(os.getpid()))
+    except Exception:
+        pass
 
     ensure_server()
 
