@@ -10,7 +10,7 @@
   <link rel="icon" href="logo.png">
   <link rel="apple-touch-icon" href="logo.png">
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -163,41 +163,6 @@
         </div>
 
         <div class="fd-greet" id="fd-greet">What are we doing today, Boss?</div>
-
-        <div class="fd-section-label"><i class="fa-solid fa-bolt"></i> QUICK LOOK</div>
-        <!-- Gauges instead of four flat numbers. Each card answers "how much of
-             what" rather than just restating a figure. -->
-        <div class="fd-gauges" id="fd-gauges">
-          <div class="fd-gauge glass-soft">
-            <div class="fd-gauge-slot" id="fd-gauge-weather"></div>
-            <div class="fd-gauge-lbl" id="fd-weather-lbl">Weather</div>
-          </div>
-          <div class="fd-gauge glass-soft">
-            <div class="fd-gauge-slot" id="fd-gauge-memory"></div>
-            <div class="fd-gauge-lbl">Memories</div>
-          </div>
-          <div class="fd-gauge glass-soft">
-            <div class="fd-gauge-slot" id="fd-gauge-uptime"></div>
-            <div class="fd-gauge-lbl">Uptime</div>
-          </div>
-          <div class="fd-gauge glass-soft">
-            <div class="fd-gauge-slot" id="fd-gauge-battery"></div>
-            <div class="fd-gauge-lbl" id="fd-battery-lbl">Battery</div>
-          </div>
-        </div>
-        <!-- Kept as text nodes so the existing refresh code and any assistive
-             tech still get a plain readable value, hidden from sight. -->
-        <div class="sr-only" aria-live="polite">
-          <span id="fd-weather-val">--</span>
-          <span id="fd-memory-val">--</span>
-          <span id="fd-uptime-val">--</span>
-          <span id="fd-battery-val">--</span>
-        </div>
-
-        <!-- QUICK STATS (CPU/RAM/DISK % strip + trend) removed by design:
-             the gauges above already say how full things are, and the system
-             monitor panel owns the live graphs. Removing it lets the wingmate
-             upper half sit in a clean 50-50 with the one-touch controls. -->
 
         <div class="fd-section-label"><i class="fa-solid fa-sliders"></i> ONE-TOUCH CONTROLS</div>
         <div class="fd-ctrl-grid" id="fd-ctrl-grid">

@@ -4704,9 +4704,6 @@ function applyMode(mode) {
 // switch cannot leave a poll loop running against a hidden panel.
 function stopFridayDashboard() {
   if (fdClockTimer) { clearInterval(fdClockTimer); fdClockTimer = null; }
-  if (fdRefreshTimer) { clearInterval(fdRefreshTimer); fdRefreshTimer = null; }
-  if (fdLoadTimer) { clearInterval(fdLoadTimer); fdLoadTimer = null; }
-  fdTrend = null;
 }
 
 function stopJarvisDashboard() {
@@ -4721,7 +4718,6 @@ function stopJarvisDashboard() {
 // top of the shared sys-monitor + orb.
 // ================================================
 let fdClockTimer = null;
-let fdRefreshTimer = null;
 
 const FD_RUNS = [
   { cmd: "briefing", icon: "fa-clipboard-list", label: "Briefing" },
@@ -4760,14 +4756,9 @@ function initFridayDashboard() {
     });
   }
 
-  refreshFridayCards();
-  if (fdRefreshTimer) clearInterval(fdRefreshTimer);
-  fdRefreshTimer = setInterval(refreshFridayCards, 6000);
-  // FRIDAY polls more often than the old 60s because the load strip and trend
-  // line are now on screen; a once-a-minute refresh made them look frozen.
-  if (fdLoadTimer) clearInterval(fdLoadTimer);
-  fdLoadTimer = setInterval(refreshFridayLoad, 4000);
-  refreshFridayLoad();
+  // Friday's systray/quiet buttons are the speedy controls; the usage gauges,
+  // quick-look cards and poll loops they drove were removed along with the
+  // QUICK LOOK block, leaving only the clock and the quick-run grid to run.
 
   // Casual greeting flavored by time of day.
   const greetEl = document.getElementById('fd-greet');
@@ -4789,32 +4780,6 @@ function initFridayDashboard() {
 }
 
 let fdMuted = false;
-let fdLoadTimer = null;
-
-// Feeds the shared load history and repaints FRIDAY's strip + trend. Separate
-// from refreshFridayCards because that one also does slow weather/vault calls.
-async function refreshFridayLoad() {
-  // Skip when FRIDAY is not the visible dashboard; JARVIS is already polling
-  // the same endpoint and the canvas will not be on screen anyway.
-  if (!document.body.classList.contains('mode-friday')) return;
-  try {
-    const res = await fetch('/api/system-status', { cache: 'no-store' });
-    if (!res.ok) return;
-    const d = await res.json();
-    pushLoadSample(d);
-    const setLoad = (id, pct, val) => {
-      const f = document.getElementById(id + '-fill');
-      const v = document.getElementById(id + '-val');
-      if (f) f.style.width = Math.min(100, Math.max(0, pct)) + '%';
-      if (v) v.textContent = val;
-    };
-    if (d.cpu) setLoad('fd-cpu', d.cpu.usage, Math.round(d.cpu.usage) + '%');
-    if (d.ram) setLoad('fd-ram', d.ram.usage, Math.round(d.ram.usage) + '%');
-    if (d.disk) setLoad('fd-disk', d.disk.usage, Math.round(d.disk.usage) + '%');
-    if (!fdTrend) fdTrend = drawLoadTrend('fd-trend-canvas', 'fd');
-    else fdTrend.draw();
-  } catch(e) {}
-}
 
 function refreshMuteBtn() {
   const btn = document.getElementById('fd-ctrl-mute');
@@ -4856,97 +4821,9 @@ async function fridayControl(btn, action, value) {
   }
 }
 
-async function refreshFridayCards() {
-  try {
-    const [sysRes, briefRes] = await Promise.all([
-      fetch('/api/system-status', { cache: 'no-store' }),
-      fetch('/api/briefing', { cache: 'no-store' }).catch(() => null),
-    ]);
-    const sys = sysRes.ok ? await sysRes.json() : {};
-    const b = (briefRes && briefRes.ok) ? await briefRes.json() : {};
-    b.briefing = b.briefing || {};
-
-    // ---- gauges ----------------------------------------------------------
-    // The four QUICK LOOK cards used to hold one bare number each. A ring says
-    // the same number plus how full it is, which is the part you actually read
-    // a dial for.
-    const gauge = (id, html) => {
-      const host = document.getElementById(id);
-      if (host) host.innerHTML = html;
-    };
-
-    const lvl = sys.battery?.level ?? b.battery?.replace('%', '');
-    const batteryPct = lvl != null && lvl !== '' && isFinite(+lvl) ? +lvl : null;
-    if (batteryPct != null) {
-      // Inverted thresholds: a battery at 20% is the urgent case, so the
-      // severity ramp has to run the other way.
-      gauge('fd-gauge-battery', Viz.ring(batteryPct, {
-        label: batteryPct <= 20 ? 'LOW' : batteryPct <= 40 ? 'FAIR' : 'GOOD',
-        labelText: Math.round(batteryPct) + '%',
-        color: batteryPct <= 20 ? '#ff5f56' : batteryPct <= 40 ? '#fbbf24' : '#4ade80',
-        warn: false, crit: false
-      }));
-    } else {
-      gauge('fd-gauge-battery', Viz.ring(0, { label: 'NO DATA', labelText: '--', color: 'rgba(255,255,255,0.22)', warn: false, crit: false }));
-    }
-    const batLbl = document.getElementById('fd-battery-lbl');
-    if (batLbl) batLbl.textContent = sys.battery?.charging ? 'Battery — charging' : 'Battery';
-
-    const up = sys.uptime || 0;
-    gauge('fd-gauge-uptime', Viz.ring(up ? Math.min(100, (up / 86400) * 100) : 0, {
-      label: up ? (up >= 86400 ? 'OVER A DAY' : 'TODAY') : 'UNKNOWN',
-      labelText: up ? `${Math.floor(up / 3600)}h ${Math.floor((up % 3600) / 60)}m` : '--',
-      warn: false, crit: false
-    }));
-
-    const vaultCount = b.vaultCount;
-    gauge('fd-gauge-memory', Viz.ring(vaultCount != null ? Math.min(100, vaultCount) : 0, {
-      label: vaultCount ? 'STORED' : 'EMPTY',
-      labelText: vaultCount != null ? String(vaultCount) : '--',
-      warn: false, crit: false
-    }));
-
-    // System load strip under the gauges.
-    const setLoad = (id, pct, val) => {
-      const f = document.getElementById(id + '-fill');
-      const v = document.getElementById(id + '-val');
-      if (f) f.style.width = Math.min(100, Math.max(0, pct)) + '%';
-      if (v) v.textContent = val;
-    };
-    if (sys.cpu) setLoad('fd-cpu', sys.cpu.usage, Math.round(sys.cpu.usage) + '%');
-    if (sys.ram) setLoad('fd-ram', sys.ram.usage, Math.round(sys.ram.usage) + '%');
-    if (sys.disk) setLoad('fd-disk', sys.disk.usage, Math.round(sys.disk.usage) + '%');
-
-    // Keep the plain text nodes in sync for anything still reading them.
-    const batteryEl = document.getElementById('fd-battery-val');
-    if (batteryEl) batteryEl.textContent = batteryPct != null ? Math.round(batteryPct) + '%' : '--';
-    const upEl = document.getElementById('fd-uptime-val');
-    if (upEl) upEl.textContent = up ? `${Math.floor(up / 3600)}h ${Math.floor((up % 3600) / 60)}m` : '--';
-    const memEl = document.getElementById('fd-memory-val');
-    if (memEl) memEl.textContent = vaultCount != null ? vaultCount : '--';
-  } catch(e) {}
-
-  try {
-    const w = await fetch('/api/weather', { cache: 'no-store' });
-    const d = await w.json();
-    const valEl = document.getElementById('fd-weather-val');
-    const lblEl = document.getElementById('fd-weather-lbl');
-    if (valEl && d.tempC != null) {
-      valEl.textContent = `${d.tempC}\u00b0`;
-      if (lblEl) lblEl.textContent = `${d.condition || 'Weather'}${d.city ? ' \u00b7 ' + d.city : ''}`;
-      // A temperature arc reads faster than a number, and the -20..50 window
-      // means 5 degrees and 35 degrees both sit recognisably off-centre.
-      const whost = document.getElementById('fd-gauge-weather');
-      if (whost) {
-        whost.innerHTML = Viz.arc(+d.tempC, {
-          min: -20, max: 50, size: 132,
-          labelText: Math.round(+d.tempC) + '\u00b0',
-          sub: d.city ? String(d.city).slice(0, 14) : ''
-        });
-      }
-    }
-  } catch(e) {}
-}
+// QUICK LOOK gauge cards + their refresh loop were removed together with the
+// markup they painted (see index.html): the sys-monitor owns every usage
+// reading now, and the one-touch controls / quick runs are the Friday surface.
 
 // ================================================
 // JARVIS EXECUTIVE COMMAND CENTER — dedicated
@@ -5139,7 +5016,6 @@ document.addEventListener('keydown', e => {
 const loadHistory = { cpu: [], ram: [], disk: [] };
 const LOAD_HISTORY_MAX = 60;
 let jdTrend = null;
-let fdTrend = null;
 
 function pushLoadSample(d) {
   const cpu = Viz.num(d.cpu && d.cpu.usage, 0);

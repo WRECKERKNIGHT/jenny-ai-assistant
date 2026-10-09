@@ -356,10 +356,9 @@ body.mode-ultron .friday-dashboard { display:none; }
    50-50: top half is FRIDAY's dashboard, bottom half is the system monitor. */
 body.mode-friday .friday-dashboard { flex: 1 1 50%; max-height: none; min-height:0; }
 body.mode-friday .sys-monitor { flex: 1 1 50%; max-height: none; min-height:0; }
-/* Inside the dashboard, gauges vs one-touch controls share the height evenly
-   now that the raw % strip is gone — a clean half-and-half, nothing crushed. */
-body.mode-friday .fd-gauges,
-body.mode-friday .fd-ctrl-grid { flex: 1 1 0; min-height:0; align-content:center; }
+/* Nothing inside the Friday dashboard is allowed to crush to fit — if the pane
+   is shorter than its content it scrolls, so the buttons are never cut. */
+body.mode-friday #friday-dashboard > * { flex-shrink: 0; }
 
 /* SYSTEM MONITOR */
 .sys-monitor { flex:0 0 auto; padding:18px 24px; display:flex; flex-direction:column; gap:16px; border-bottom:1px solid rgba(139,104,255,0.15); overflow-y:auto; min-height:0; }
@@ -3020,115 +3019,22 @@ body.mode-friday textarea:focus-visible {
 }
 
 /* ---- FRIDAY ---- */
-.fd-gauges {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  margin-bottom: 12px;
-}
-/* Two-up on a narrow rail: 4-across squeezed the ring labels into unreadable
-   ellipses below roughly 300px of column width. */
-@media (max-width: 900px) {
-  .fd-gauges { grid-template-columns: repeat(2, 1fr); }
-}
-.fd-gauge {
-  border-radius: 14px;
-  padding: 12px 6px 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  position: relative;
-  overflow: hidden;
-}
-.fd-gauge::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 20%; right: 20%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--accent, #a855f7), transparent);
-  opacity: 0.7;
-}
-.fd-gauge-slot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 92px;
-}
-.fd-gauge-lbl {
-  font-family: var(--mono);
-  font-size: 8px;
-  letter-spacing: 1px;
-  color: var(--txt3);
-  text-align: center;
-  margin-top: 6px;
-  max-width: 100%;
-  /* Long city names were pushing the label wider than its own card. */
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.fd-load {
-  border-radius: 14px;
-  padding: 12px 12px 8px;
-  margin-bottom: 12px;
-  position: relative;
-  overflow: hidden;
-}
-.fd-load-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 7px;
-  font-family: var(--mono);
-  font-size: 9px;
-  color: var(--txt2);
-}
-.fd-load-row > span { width: 34px; flex: 0 0 auto; letter-spacing: 1px; }
-.fd-load-track {
-  flex: 1 1 auto;
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.07);
-  overflow: hidden;
-  min-width: 0;
-}
-.fd-load-fill {
-  height: 100%;
-  width: 0;
-  border-radius: 3px;
-  background: linear-gradient(90deg, rgba(var(--accent-rgb, 168, 85, 247), 0.55), var(--accent, #a855f7));
-  box-shadow: 0 0 10px rgba(var(--accent-rgb, 168, 85, 247), 0.55);
-  transition: width 0.45s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.fd-load-row b {
-  width: 40px;
-  flex: 0 0 auto;
-  text-align: right;
-  color: var(--txt);
-  font-weight: 600;
-}
-#fd-trend-canvas {
-  display: block;
-  width: 100%;
-  height: 45px;
-  margin-top: 4px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.22);
-}
+/* The QUICK LOOK gauge + CPU/RAM/DISK load-strip blocks were removed from
+   index.html: the bottom-half sys-monitor already owns every usage reading,
+   and duplicating them squeezed the one-touch controls off-screen. Kept here
+   as a marker so a future re-add has a clean place to live. */
 
 /* No-blur / reduced-transparency: swap the new translucent surfaces for opaque
    ones so the telemetry stays readable instead of grey-on-grey. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .jd-gauges, .jd-trend, .fd-gauge, .fd-load {
+  .jd-gauges, .jd-trend {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     background: rgba(14, 18, 30, 0.96) !important;
   }
 }
 @media (prefers-reduced-transparency: reduce) {
-  .jd-gauges, .jd-trend, .fd-gauge, .fd-load {
+  .jd-gauges, .jd-trend {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     background: rgba(14, 18, 30, 0.96) !important;
@@ -3230,6 +3136,20 @@ body.mode-jarvis .jd-gauges { gap: 10px; }
 body.mode-jarvis .jd-gauges .viz-ring,
 body.mode-jarvis .jd-gauges .viz-arc { margin-bottom: 8px; }
 body.mode-jarvis .jd-trend canvas { width: 100% !important; height: 72px !important; }
+/* Nothing inside the Jarvis dashboard is allowed to shrink to fit — if the
+   panel is short it scrolls instead, so DIRECTIVES / MEMORY ARCHIVE are never
+   clipped mid-element. */
+#jarvis-dashboard > * { flex-shrink: 0; }
+body.mode-jarvis .jd-clock { font-size: 24px; }
+body.mode-jarvis #jd-gauges .viz-ring { --viz-size: 76px !important; }
+body.mode-jarvis #jd-gauges .viz-arc { --viz-size: 76px !important; }
+body.mode-jarvis .jd-trend { padding: 8px 10px 6px; }
+body.mode-jarvis .jd-ops { gap: 6px; }
+body.mode-jarvis .jd-op { padding: 8px 6px; }
+body.mode-jarvis .jd-cmds { gap: 6px; }
+body.mode-jarvis .jd-cmd { padding: 8px 10px; }
+body.mode-jarvis .jd-mem { padding: 6px 10px; }
+body.mode-jarvis .jd-top { padding-bottom: 6px; }
 #jarvis-dashboard::-webkit-scrollbar,
 .friday-dashboard::-webkit-scrollbar,
 .sys-monitor::-webkit-scrollbar { width: 5px; }
